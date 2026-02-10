@@ -1,0 +1,16 @@
+torch
+torchvision
+torchaudio
+opencv-python
+numpy
+pandas
+fastapi
+uvicorn
+python-multipart
+tqdm
+scipy
+pytest
+requests
+mediapipe
+google-generativeai
+python-dotenv
