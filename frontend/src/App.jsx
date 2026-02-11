@@ -367,30 +367,6 @@ export default function App() {
                                 </div>
                             )}
 
-                            {/* Confidence Breakdown */}
-                            {result.top_3_actions && (
-                                <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
-                                    <span className="text-xs text-neutral-500 block mb-3">Confidence Breakdown</span>
-                                    <div className="space-y-2.5">
-                                        {result.top_3_actions.map((action, idx) => (
-                                            <div key={idx} className="flex items-center gap-3">
-                                                <div className="w-28 text-sm text-neutral-300">{action.label.replace(/_/g, ' ')}</div>
-                                                <div className="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                                                    <motion.div
-                                                        initial={{ width: 0 }}
-                                                        animate={{ width: `${action.score * 100}%` }}
-                                                        transition={{ duration: 0.4, delay: idx * 0.1 }}
-                                                        className={`h-full rounded-full ${idx === 0 ? 'bg-emerald-500' : 'bg-neutral-600'}`}
-                                                    />
-                                                </div>
-                                                <span className="w-10 text-right text-xs font-mono text-neutral-500">
-                                                    {(action.score * 100).toFixed(0)}%
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-16 text-neutral-600">
