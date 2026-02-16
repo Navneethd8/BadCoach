@@ -45,4 +45,4 @@ backend/models/*
 frontend/node_modules
 
 *.mov
-.env.global
+.env.globalfrontend/.vite/
