@@ -125,7 +125,7 @@ export default function App() {
                 <header className="flex items-center gap-2 mb-8">
                     <Icon name="sports_tennis" size={24} className="text-emerald-500" />
                     <h1 className="text-xl font-semibold tracking-tight">
-                        Badminton<span className="text-emerald-500">Coach</span>
+                        Bad<span className="text-emerald-500">Coach</span>
                     </h1>
                 </header>
 

@@ -1,0 +1,19 @@
+{
+  "models": {
+    "badminton_model.pth": {
+      "accuracy": 43.37,
+      "epoch": 98,
+      "hidden_size": 128,
+      "timestamp": "2026-02-15T22:25:33.926822",
+      "script": "train_fast.py"
+    },
+    "badminton_model_full.pth": {
+      "accuracy": 24.1,
+      "epoch": 29,
+      "hidden_size": 128,
+      "timestamp": "2026-02-15T22:17:19.549077",
+      "script": "train_full.py"
+    }
+  },
+  "active_model": "badminton_model.pth"
+}

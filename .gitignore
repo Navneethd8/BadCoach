@@ -40,5 +40,8 @@ wheels/
 htmlcov/
 
 backend/data
-backend/models
+backend/models/*
+!backend/models/model_registry.json
 frontend/node_modules
+
+*.mov
