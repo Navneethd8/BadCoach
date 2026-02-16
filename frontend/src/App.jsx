@@ -253,22 +253,35 @@ export default function App() {
                                     {result.tactical_analysis && (
                                         <div className="pt-4 border-t border-neutral-800/50">
                                             <span className="text-xs text-neutral-500 block mb-3">Tactical Metrics</span>
-                                            <div className="flex flex-wrap gap-2 mb-3">
-                                                <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] font-medium text-blue-400 flex items-center gap-1">
+                                            <div className="flex flex-wrap gap-2">
+                                                <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] font-medium text-blue-400 flex items-center gap-1.5">
                                                     <Icon name="pan_tool_alt" size={12} />
-                                                    {result.tactical_analysis.handedness}
+                                                    {result.tactical_analysis.technique?.label || 'Unknown'}
+                                                    {result.tactical_analysis.technique?.confidence > 0 && (
+                                                        <span className="text-[9px] opacity-60">{(result.tactical_analysis.technique.confidence * 100).toFixed(0)}%</span>
+                                                    )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-purple-400 flex items-center gap-1">
+                                                <div className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-purple-400 flex items-center gap-1.5">
                                                     <Icon name="explore" size={12} />
-                                                    {result.tactical_analysis.direction}
+                                                    {result.tactical_analysis.placement?.label || 'Unknown'}
+                                                    {result.tactical_analysis.placement?.confidence > 0 && (
+                                                        <span className="text-[9px] opacity-60">{(result.tactical_analysis.placement.confidence * 100).toFixed(0)}%</span>
+                                                    )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400 flex items-center gap-1">
+                                                <div className="px-2 py-1 bg-rose-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-rose-400 flex items-center gap-1.5">
+                                                    <Icon name="location_on" size={12} />
+                                                    {result.tactical_analysis.position?.label || 'Unknown'}
+                                                    {result.tactical_analysis.position?.confidence > 0 && (
+                                                        <span className="text-[9px] opacity-60">{(result.tactical_analysis.position.confidence * 100).toFixed(0)}%</span>
+                                                    )}
+                                                </div>
+                                                <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400 flex items-center gap-1.5">
                                                     <Icon name="psychology" size={12} />
-                                                    {result.tactical_analysis.intent}
+                                                    {result.tactical_analysis.intent?.label || 'None'}
+                                                    {result.tactical_analysis.intent?.confidence > 0 && (
+                                                        <span className="text-[9px] opacity-60">{(result.tactical_analysis.intent.confidence * 100).toFixed(0)}%</span>
+                                                    )}
                                                 </div>
-                                            </div>
-                                            <div className="text-xs text-neutral-400 italic">
-                                                {result.tactical_analysis.specific_type}
                                             </div>
                                         </div>
                                     )}
@@ -296,38 +309,57 @@ export default function App() {
                             {/* Timeline Breakdown */}
                             {result.timeline && (
                                 <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
-                                    <span className="text-xs text-neutral-500 flex items-center gap-1.5 mb-3">
+                                    <span className="text-xs text-neutral-500 flex items-center gap-1.5 mb-4">
                                         <Icon name="timeline" size={14} />
                                         Play-by-Play Breakdown
                                     </span>
 
                                     {/* Mobile: vertical text timeline */}
-                                    <div className="block md:hidden relative border-l border-neutral-800 ml-2 space-y-3 py-1 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                                    <div className="block md:hidden relative border-l border-neutral-800 ml-2 space-y-6 py-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                         {result.timeline.map((event, idx) => (
                                             <div
                                                 key={idx}
                                                 onClick={() => handleTimelineClick(event.timestamp)}
-                                                className="relative pl-5 py-1.5 rounded hover:bg-neutral-900 transition-colors cursor-pointer group"
+                                                className="relative pl-6 py-2 rounded hover:bg-neutral-900 transition-colors cursor-pointer group"
                                             >
-                                                <div className={`absolute -left-[5px] top-3 w-2.5 h-2.5 rounded-full border-2 ${event.label === 'Other'
+                                                <div className={`absolute -left-[5.5px] top-4 w-2.5 h-2.5 rounded-full border-2 ${event.label === 'Other'
                                                     ? 'bg-neutral-950 border-neutral-600'
                                                     : 'bg-neutral-950 border-emerald-500'
                                                     }`} />
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                        <span className="text-xs font-mono text-neutral-500 block">{event.timestamp}</span>
-                                                        <span className={`text-sm font-medium ${event.label === 'Other' ? 'text-neutral-600' : 'text-neutral-200'}`}>
-                                                            {event.label.replace(/_/g, ' ')}
-                                                        </span>
-                                                        <span className="text-xs text-neutral-600 ml-2">{(event.confidence * 100).toFixed(0)}%</span>
+                                                <div className="flex flex-col gap-3">
+                                                    <div className="flex items-start justify-between">
+                                                        <div>
+                                                            <span className="text-xs font-mono text-neutral-500 block">{event.timestamp}</span>
+                                                            <span className={`text-base font-semibold ${event.label === 'Other' ? 'text-neutral-500' : 'text-neutral-100'}`}>
+                                                                {event.label.replace(/_/g, ' ')}
+                                                            </span>
+                                                            <span className="text-[10px] text-neutral-600 ml-2">{(event.confidence * 100).toFixed(0)}%</span>
+                                                        </div>
+                                                        {event.pose_image && (
+                                                            <div className="w-24 h-16 rounded overflow-hidden bg-black/50 border border-neutral-800 flex-shrink-0">
+                                                                <img
+                                                                    src={`data:image/jpeg;base64,${event.pose_image}`}
+                                                                    alt={event.label}
+                                                                    className="w-full h-full object-contain"
+                                                                />
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {event.pose_image && (
-                                                        <div className="w-20 h-14 rounded overflow-hidden bg-black/50 border border-neutral-800 flex-shrink-0">
-                                                            <img
-                                                                src={`data:image/jpeg;base64,${event.pose_image}`}
-                                                                alt={event.label}
-                                                                className="w-full h-full object-contain"
-                                                            />
+
+                                                    {event.metrics && (
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            <span className="px-1.5 py-0.5 bg-blue-500/5 text-blue-400/70 border border-blue-500/20 rounded text-[9px] uppercase tracking-wider font-semibold">
+                                                                {event.metrics.technique?.label || event.metrics.technique || 'Unknown'}
+                                                            </span>
+                                                            <span className="px-1.5 py-0.5 bg-purple-500/5 text-purple-400/70 border border-purple-500/20 rounded text-[9px] uppercase tracking-wider font-semibold">
+                                                                {event.metrics.placement?.label || event.metrics.placement || 'Unknown'}
+                                                            </span>
+                                                            <span className="px-1.5 py-0.5 bg-rose-500/5 text-rose-400/70 border border-rose-500/20 rounded text-[9px] uppercase tracking-wider font-semibold">
+                                                                {event.metrics.position?.label || event.metrics.position || 'Unknown'}
+                                                            </span>
+                                                            <span className="px-1.5 py-0.5 bg-amber-500/5 text-amber-400/70 border border-amber-500/20 rounded text-[9px] uppercase tracking-wider font-semibold">
+                                                                {event.metrics.intent?.label || event.metrics.intent || 'None'}
+                                                            </span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -336,14 +368,14 @@ export default function App() {
                                     </div>
 
                                     {/* Desktop: horizontal skeleton strip */}
-                                    <div className="hidden md:flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                                    <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-2 custom-scrollbar">
                                         {result.timeline.map((event, idx) => (
                                             <div
                                                 key={idx}
                                                 onClick={() => handleTimelineClick(event.timestamp)}
-                                                className="flex-shrink-0 cursor-pointer group w-40"
+                                                className="flex-shrink-0 cursor-pointer group w-44"
                                             >
-                                                <div className={`w-40 h-28 rounded overflow-hidden bg-black border transition-colors ${event.pose_image ? 'border-neutral-800 group-hover:border-emerald-600' : 'border-neutral-900 flex items-center justify-center'}`}>
+                                                <div className={`w-44 h-32 rounded overflow-hidden bg-black border transition-all duration-300 ${event.pose_image ? 'border-neutral-800 group-hover:border-emerald-600 group-hover:scale-[1.02]' : 'border-neutral-900 flex items-center justify-center'}`}>
                                                     {event.pose_image ? (
                                                         <img
                                                             src={`data:image/jpeg;base64,${event.pose_image}`}
@@ -354,12 +386,35 @@ export default function App() {
                                                         <Icon name="hide_image" size={24} className="text-neutral-800" />
                                                     )}
                                                 </div>
-                                                <div className="mt-2">
-                                                    <span className="text-[10px] font-mono text-neutral-500 block">{event.timestamp}</span>
-                                                    <span className={`text-xs block truncate ${event.label === 'Other' ? 'text-neutral-500' : 'text-neutral-300 font-medium'}`}>
+                                                <div className="mt-3 space-y-2 px-1">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-mono text-neutral-500">{event.timestamp}</span>
+                                                        <span className="text-[10px] text-neutral-600">{(event.confidence * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                    <span className={`text-sm block truncate group-hover:text-emerald-400 transition-colors ${event.label === 'Other' ? 'text-neutral-500' : 'text-neutral-200 font-semibold'}`}>
                                                         {event.label.replace(/_/g, ' ')}
                                                     </span>
-                                                    <span className="text-[10px] text-neutral-600">{(event.confidence * 100).toFixed(0)}%</span>
+
+                                                    {event.metrics && (
+                                                        <div className="grid grid-cols-2 gap-1 mt-2 border-t border-neutral-800/30 pt-2">
+                                                            <div className="flex items-center gap-1 text-[8px] text-neutral-500 uppercase font-bold tracking-tighter truncate">
+                                                                <Icon name="pan_tool_alt" size={10} className="text-blue-500/50" />
+                                                                {event.metrics.technique?.label || event.metrics.technique || '???'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 text-[8px] text-neutral-500 uppercase font-bold tracking-tighter truncate">
+                                                                <Icon name="explore" size={10} className="text-purple-500/50" />
+                                                                {event.metrics.placement?.label || event.metrics.placement || '???'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 text-[8px] text-neutral-500 uppercase font-bold tracking-tighter truncate">
+                                                                <Icon name="location_on" size={10} className="text-rose-500/50" />
+                                                                {event.metrics.position?.label || event.metrics.position || '???'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 text-[8px] text-neutral-500 uppercase font-bold tracking-tighter truncate">
+                                                                <Icon name="psychology" size={10} className="text-amber-500/50" />
+                                                                {event.metrics.intent?.label || event.metrics.intent || '???'}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}

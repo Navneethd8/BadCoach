@@ -1,33 +1,38 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
+from torchvision import models
+import os
+
+MODEL_VERSION = "V2.1_POOLING_MLP"
 
 class CNN_LSTM_Model(nn.Module):
-    def __init__(self, num_classes=11, num_quality_classes=3, hidden_size=256, num_layers=1, pretrained=True):
+    def __init__(self, task_classes=None, hidden_size=128, num_layers=1, pretrained=True):
         """
-        CNN + LSTM model for action recognition and quality assessment.
+        CNN + LSTM model for Multi-Task Stroke Recognition.
         
         Args:
-            num_classes (int): Number of action classes (default 11 for basic strokes).
-            num_quality_classes (int): Number of quality levels (default 3 or regression).
+            task_classes (dict): Map of task name to number of classes.
             hidden_size (int): Hidden size for LSTM.
             num_layers (int): Number of LSTM layers.
             pretrained (bool): Whether to use pretrained ResNet weights.
         """
         super(CNN_LSTM_Model, self).__init__()
         
-        # 1. CNN Backbone (ResNet50)
-        # We remove the last fc layer to get features
-        resnet = models.resnet50(pretrained=pretrained)
-        modules = list(resnet.children())[:-1] # Remove fc layer
-        self.cnn = nn.Sequential(*modules)
+        if task_classes is None:
+            # Default fallback matching the current dataset definition
+            task_classes = {
+                "stroke_type": 9, "stroke_subtype": 21, "technique": 4, 
+                "placement": 7, "position": 10, "intent": 10, "quality": 7
+            }
         
-        # Freeze CNN weights optionally
-        # for param in self.cnn.parameters():
-        #     param.requires_grad = False
-            
-        self.feature_dim = resnet.fc.in_features # 2048 for ResNet50
+        # 1. CNN Backbone (ResNet50)
+        # Using DEFAULT (V2) for consistency with current training runs
+        weights = models.ResNet50_Weights.DEFAULT if pretrained else None
+        resnet = models.resnet50(weights=weights)
+        modules = list(resnet.children())[:-1] 
+        self.cnn = nn.Sequential(*modules)
+        self.feature_dim = resnet.fc.in_features 
         
         # 2. LSTM Temporal Module
         self.lstm = nn.LSTM(
@@ -37,52 +42,66 @@ class CNN_LSTM_Model(nn.Module):
             batch_first=True
         )
         
-        # 3. Classification Heads
-        # Action Classification Head
-        self.fc_action = nn.Linear(hidden_size, num_classes)
-        
-        # Quality Assessment Head 
-        # (Could be classification or regression, let's assume classification for now)
-        self.fc_quality = nn.Linear(hidden_size, num_quality_classes) 
+        # 3. Multi-Task Classification Heads
+        # Enhanced heads with a hidden layer. 
+        # Using hidden_size * 2 because we concatenate Avg and Max pooling.
+        self.heads = nn.ModuleDict({
+            task: nn.Sequential(
+                nn.Linear(hidden_size * 2, hidden_size // 2),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(hidden_size // 2, num_c)
+            )
+            for task, num_c in task_classes.items()
+        })
 
     def forward(self, x):
         """
         Args:
             x (torch.Tensor): Input tensor of shape (batch, seq_len, C, H, W)
+                             Assumes input range [0, 1]
         Returns:
-            action_logits (torch.Tensor): (batch, num_classes)
-            quality_logits (torch.Tensor): (batch, num_quality_classes)
+            Dict[str, torch.Tensor]: Dictionary of logits for each task.
         """
         batch_size, seq_len, C, H, W = x.size()
         
-        # Flatten time dimension for CNN processing
+        # 1. Normalize (ImageNet stats)
+        # Reshape to (B*S, C, H, W) for efficient processing
         c_in = x.view(batch_size * seq_len, C, H, W)
         
-        # Extract features with CNN
-        # Output shape: (batch * seq_len, 2048, 1, 1) -> (batch * seq_len, 2048)
+        # Apply normalization
+        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+        c_in = (c_in - mean) / std
+        
+        # 2. CNN Feature Extraction
         features = self.cnn(c_in)
         features = features.view(batch_size, seq_len, -1) 
         
-        # Pass through LSTM
-        # Output shape: (batch, seq_len, hidden_size)
+        # 3. Temporal Modeling
         lstm_out, (h_n, c_n) = self.lstm(features)
         
-        # Use the hidden state of the last time step for classification
-        # h_n shape: (num_layers, batch, hidden_size). We take the last layer.
-        final_feature = h_n[-1] 
+        # 4. Temporal Global Pooling (Collapse Prevention)
+        # Instead of just taking the last state, we pool across all 16 frames.
+        # This captures the "peak" of the action (Max) and the "context" (Avg).
+        avg_pool = torch.mean(lstm_out, dim=1) # (batch, hidden_size)
+        max_pool, _ = torch.max(lstm_out, dim=1) # (batch, hidden_size)
         
-        # Predict Action
-        action_logits = self.fc_action(final_feature)
+        # Concatenate Avg and Max features
+        final_feature = torch.cat([avg_pool, max_pool], dim=1) # (batch, hidden_size * 2)
         
-        # Predict Quality
-        quality_logits = self.fc_quality(final_feature)
+        # 5. Predictions through task heads
+        logits = {task: head(final_feature) for task, head in self.heads.items()}
         
-        return action_logits, quality_logits
+        return logits
 
 if __name__ == "__main__":
-    # Test block
-    model = CNN_LSTM_Model(num_classes=11, num_quality_classes=3)
-    dummy_input = torch.randn(2, 16, 3, 224, 224) # Batch=2, Seq=16, C=3, H=224, W=224
-    actions, qualities = model(dummy_input)
-    print(f"Action Logits Shape: {actions.shape}") # Should be (2, 11)
-    print(f"Quality Logits Shape: {qualities.shape}") # Should be (2, 3)
+    task_classes = {
+        "stroke_type": 9, "stroke_subtype": 21, "technique": 4, 
+        "placement": 7, "position": 10, "intent": 10, "quality": 7
+    }
+    model = CNN_LSTM_Model(task_classes=task_classes)
+    dummy_input = torch.randn(2, 16, 3, 224, 224)
+    outputs = model(dummy_input)
+    for task, logits in outputs.items():
+        print(f"Task '{task}' Logits Shape: {logits.shape}")
