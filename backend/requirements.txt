@@ -1,6 +1,3 @@
-torch
-torchvision
-torchaudio
 opencv-python
 numpy
 pandas
