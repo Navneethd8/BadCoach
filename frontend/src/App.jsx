@@ -90,6 +90,12 @@ export default function App() {
                     error_message: response.data.error,
                     validation_details: response.data.validation_details
                 })
+                // Track validation failure
+                ReactGA.event({
+                    category: "Video",
+                    action: "Validation Failed",
+                    label: response.data.error
+                });
             } else {
                 // Track usage
                 ReactGA.event({
@@ -109,6 +115,12 @@ export default function App() {
                     error_message: error.response.data.error,
                     validation_details: error.response.data.validation_details
                 })
+                // Track validation failure
+                ReactGA.event({
+                    category: "Video",
+                    action: "Validation Failed",
+                    label: error.response.data.error
+                });
             } else {
                 const errorMessage = error.response?.data?.detail || error.message || "Error analyzing video"
                 alert(`Analysis failed: ${errorMessage}`)
