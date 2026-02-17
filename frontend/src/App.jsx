@@ -3,6 +3,8 @@ import Logo from './components/Logo';
 import { useDropzone } from 'react-dropzone'
 import axios from 'axios'
 import { motion } from 'framer-motion'
+// Analytics moved to main.jsx
+import { track } from "@vercel/analytics"
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -91,6 +93,13 @@ export default function App() {
                 })
             } else {
                 setResult(response.data)
+                // Track usage
+                track('Clip Analyzed', {
+                    quality_score: response.data.quality_numeric,
+                    quality_label: response.data.quality_label,
+                    stroke_type: response.data.stroke_type?.label || 'Unknown',
+                    duration: videoRef.current?.duration
+                });
             }
         } catch (error) {
             console.error("Error uploading file:", error)
