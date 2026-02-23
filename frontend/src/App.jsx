@@ -16,7 +16,7 @@ function Icon({ name, size = 20, className = '' }) {
     )
 }
 
-export default function App() {
+export default function App({ onBack }) {
     const [file, setFile] = useState(null)
     const [result, setResult] = useState(null)
     const [loading, setLoading] = useState(false)
@@ -176,6 +176,15 @@ export default function App() {
             <div className="max-w-2xl mx-auto">
 
                 <header className="flex items-center gap-2 mb-8">
+                    {onBack && (
+                        <button
+                            onClick={onBack}
+                            className="mr-1 -ml-1 p-1 rounded text-neutral-600 hover:text-neutral-300 transition-colors"
+                            aria-label="Back to home"
+                        >
+                            <Icon name="arrow_back" size={18} />
+                        </button>
+                    )}
                     <Logo size={24} className="text-emerald-500" />
                     <h1 className="text-xl font-semibold tracking-tight">
                         Iso<span className="text-emerald-500">Court</span>
