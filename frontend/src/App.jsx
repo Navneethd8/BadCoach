@@ -178,7 +178,7 @@ export default function App() {
                 <header className="flex items-center gap-2 mb-8">
                     <Logo size={24} className="text-emerald-500" />
                     <h1 className="text-xl font-semibold tracking-tight">
-                        Bad<span className="text-emerald-500">Coach</span>
+                        Iso<span className="text-emerald-500">Court</span>
                     </h1>
                 </header>
 

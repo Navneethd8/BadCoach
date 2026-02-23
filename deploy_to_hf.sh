@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configuration
-SOURCE_ROOT="/Volumes/NavDisk/BadCoach/backend"
-DEST_ROOT="/Volumes/NavDisk/BadCoachHf/BadCoach"
+SOURCE_ROOT="/Volumes/NavDisk/IsoCourt/backend"
+DEST_ROOT="/Volumes/NavDisk/IsoCourtHf/IsoCourt"
 
 echo "🚀 Starting Deployment to Hugging Face..."
 echo "Source: $SOURCE_ROOT"

@@ -1,6 +1,6 @@
-# 🏸 BadCoach: AI-Native Badminton Analysis
+# 🏸 IsoCourt: AI-Native Badminton Analysis
 
-BadCoach is a state-of-the-art action recognition and coaching platform designed to analyze badminton footage, provide play-by-play breakdowns, and deliver expert technical tips using deep learning and Large Language Models.
+IsoCourt is a state-of-the-art action recognition and coaching platform designed to analyze badminton footage, provide play-by-play breakdowns, and deliver expert technical tips using deep learning and Large Language Models.
 
 ---
 
@@ -16,7 +16,7 @@ BadCoach is a state-of-the-art action recognition and coaching platform designed
           Gemini
 ```
 
-BadCoach operates as a continuous **Sliding Window** pipeline. The backend loops through the video in 1.5s segments with a 0.75s overlap, ensuring every frame is processed with temporal context and high-fidelity coaching feedback.
+IsoCourt operates as a continuous **Sliding Window** pipeline. The backend loops through the video in 1.5s segments with a 0.75s overlap, ensuring every frame is processed with temporal context and high-fidelity coaching feedback.
 
 ### 1. The Frontend (React/Next.js)
 Users upload their badminton footage through a sleek, responsive interface. The frontend handles the large file transfers and provides a real-time **Match Timeline**. Once analysis is complete, it renders a synchronized view of action labels, confidence scores, and frame-by-frame **Skeleton Analysis**.
