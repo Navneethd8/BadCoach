@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import Logo from './components/Logo';
 import { useDropzone } from 'react-dropzone'
 import axios from 'axios'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import ReactGA from "react-ga4"
 
 function Icon({ name, size = 20, className = '' }) {
@@ -24,6 +24,7 @@ export default function App() {
     const [loadingStep, setLoadingStep] = useState(-1)
     const videoRef = useRef(null)
     const loadingTimers = useRef([])
+    const shouldReduceMotion = useReducedMotion()
 
     const loadingSteps = [
         { icon: 'movie_filter', label: 'Splitting clip into frames' },
@@ -349,9 +350,9 @@ export default function App() {
 
                                     <div className="w-full bg-neutral-800 h-1.5 rounded-full mb-6 overflow-hidden">
                                         <motion.div
-                                            initial={{ width: 0 }}
+                                            initial={{ width: shouldReduceMotion ? `${((result.quality_numeric || 0) / 10) * 100}%` : 0 }}
                                             animate={{ width: `${((result.quality_numeric || 0) / 10) * 100}%` }}
-                                            transition={{ duration: 0.8, ease: "easeOut" }}
+                                            transition={{ duration: shouldReduceMotion ? 0 : 0.8, ease: "easeOut" }}
                                             className={`h-full rounded-full ${getQualityBarColor(result.quality)}`}
                                         />
                                     </div>
