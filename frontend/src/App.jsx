@@ -99,6 +99,7 @@ export default function App() {
                 });
             } else {
                 // Track usage
+                setResult(response.data)
                 ReactGA.event({
                     category: "Video",
                     action: "Clip Analyzed",
