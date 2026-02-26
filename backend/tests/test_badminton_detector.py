@@ -4,7 +4,7 @@ Pure Python — no MediaPipe or OpenCV needed.
 """
 import pytest
 import numpy as np
-from badminton_detector import BadmintonPoseDetector
+from core.badminton_detector import BadmintonPoseDetector
 
 
 @pytest.fixture

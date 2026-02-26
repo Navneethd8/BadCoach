@@ -5,8 +5,8 @@ import os
 # Add parent dir to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from model import CNN_LSTM_Model
-from dataset import FineBadmintonDataset
+from core.model import CNN_LSTM_Model
+from core.dataset import FineBadmintonDataset
 
 def verify():
     model_path = "models/badminton_model.pth"

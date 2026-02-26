@@ -4,7 +4,7 @@ No GPU required — all tests run on CPU with random weights.
 """
 import pytest
 import torch
-from model import CNN_LSTM_Model
+from core.model import CNN_LSTM_Model
 
 
 TASK_CLASSES_FULL = {

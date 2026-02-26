@@ -2,7 +2,7 @@ import torch
 import cv2
 import numpy as np
 import os
-from model import CNN_LSTM_Model
+from core.model import CNN_LSTM_Model
 
 def verify_video(video_path):
     device = "cuda" if torch.cuda.is_available() else "cpu"

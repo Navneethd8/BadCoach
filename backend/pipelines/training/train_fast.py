@@ -7,8 +7,8 @@ import numpy as np
 import os
 import sys
 from tqdm import tqdm
-from dataset import FineBadmintonDataset
-from model import CNN_LSTM_Model
+from core.dataset import FineBadmintonDataset
+from core.model import CNN_LSTM_Model
 
 class CachedFeatureDataset(Dataset):
     def __init__(self, features, label_dict):
@@ -53,7 +53,7 @@ def extract_and_train(
         
         # Load the trained CNN backbone from badminton_model.pth
         print("Loading trained CNN backbone from badminton_model.pth...")
-        from model import CNN_LSTM_Model
+        from core.model import CNN_LSTM_Model
         
         # Load the full trained model
         model_path = os.path.join(os.path.dirname(cache_path), "badminton_model.pth")

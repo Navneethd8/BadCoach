@@ -9,7 +9,7 @@ def count_classes():
         data = json.load(f)
     
     # Matching dataset.py mappings
-    from dataset import FineBadmintonDataset
+    from core.dataset import FineBadmintonDataset
     temp_ds = FineBadmintonDataset(data_root="data", list_file=json_path)
     
     task_counts = {task: Counter() for task in temp_ds.classes.keys()}

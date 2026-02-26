@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
-from model import CNN_LSTM_Model
+from core.model import CNN_LSTM_Model
 
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -170,9 +170,9 @@ def app_client(monkeypatch):
     # We must patch BEFORE importing server to avoid startup loading the real model
     with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         # Patch model loading
-        with patch("model.CNN_LSTM_Model") as MockModel, \
-             patch("pose_utils.PoseEstimator") as MockPose, \
-             patch("badminton_detector.BadmintonPoseDetector") as MockDetector, \
+        with patch("api.server.CNN_LSTM_Model") as MockModel, \
+             patch("api.server.PoseEstimator") as MockPose, \
+             patch("api.server.BadmintonPoseDetector") as MockDetector, \
              patch("torch.load", return_value={}):
 
             # Setup mock model forward pass

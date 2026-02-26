@@ -7,8 +7,8 @@ import os
 import sys
 from tqdm import tqdm
 
-from dataset import FineBadmintonDataset
-from model import CNN_LSTM_Model
+from core.dataset import FineBadmintonDataset
+from core.model import CNN_LSTM_Model
 
 def fine_tune(
     data_root, 

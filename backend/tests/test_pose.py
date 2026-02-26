@@ -7,7 +7,7 @@ import os
 frame = np.zeros((224, 224, 3), dtype=np.uint8)
 
 try:
-    from pose_utils import PoseEstimator
+    from core.pose_utils import PoseEstimator
     estimator = PoseEstimator()
     print("Estimator initialized")
     

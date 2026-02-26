@@ -8,7 +8,7 @@ import sys
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
-from pose_utils import PoseEstimator
+from core.pose_utils import PoseEstimator
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

@@ -20,10 +20,10 @@ from cachetools import TTLCache
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from model import CNN_LSTM_Model
-from dataset import FineBadmintonDataset
-from pose_utils import PoseEstimator
-from badminton_detector import BadmintonPoseDetector
+from core.model import CNN_LSTM_Model
+from core.dataset import FineBadmintonDataset
+from core.pose_utils import PoseEstimator
+from core.badminton_detector import BadmintonPoseDetector
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
