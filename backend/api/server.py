@@ -186,7 +186,6 @@ def _run_analysis_sync(temp_file: str) -> dict:
             }
 
     all_frames_rgb = []
-    all_frames_raw = []
 
     print(f"Buffering video frames...")
     sys.stdout.flush()
@@ -194,15 +193,13 @@ def _run_analysis_sync(temp_file: str) -> dict:
         ret, frame = cap.read()
         if not ret:
             break
-        all_frames_raw.append(frame.copy())
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_resized = cv2.resize(frame_rgb, (224, 224))
         all_frames_rgb.append(frame_resized)
         if len(all_frames_rgb) % 60 == 0:
             print(f" -> Buffered {len(all_frames_rgb)} frames...")
             sys.stdout.flush()
-    cap.release()
-
+            
     total_frames = len(all_frames_rgb)
     print(f"Buffering complete. Total frames: {total_frames}")
     sys.stdout.flush()
@@ -218,13 +215,20 @@ def _run_analysis_sync(temp_file: str) -> dict:
     pose_landmarks_list = []
 
     for idx in sample_indices:
-        raw_frame = all_frames_raw[idx]
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, raw_frame = cap.read()
+        if not ret:
+            pose_landmarks_list.append([])
+            continue
+
         p_results = pose_estimator.process_frame(raw_frame)
         landmarks = pose_estimator.get_landmarks_as_list(p_results)
         if landmarks:
             pose_landmarks_list.append(landmarks[0])
         else:
             pose_landmarks_list.append([])
+
+    cap.release()
 
     is_badminton_pose, pose_confidence, pose_details = badminton_detector.is_badminton_video(
         pose_landmarks_list, threshold=0.05
@@ -280,12 +284,22 @@ def _run_analysis_sync(temp_file: str) -> dict:
         segment_tensor = segment_tensor.permute(0, 3, 1, 2).unsqueeze(0).to(device)
 
         middle_idx = indices[len(indices) // 2]
-        raw_frame = all_frames_raw[middle_idx]
-        p_results = pose_estimator.process_frame(raw_frame)
-        annotated = pose_estimator.draw_landmarks(raw_frame, p_results)
-        h, w = annotated.shape[:2]
+        
+        # Open video briefly to fetch the single raw frame for Gemini pose extraction
+        ext_cap = cv2.VideoCapture(temp_file)
+        ext_cap.set(cv2.CAP_PROP_POS_FRAMES, middle_idx)
+        ret, frame_for_pose = ext_cap.read()
+        ext_cap.release()
+        
+        p_results = None
+        annotated_frame = np.zeros((224, 224, 3), dtype=np.uint8) # Default blank frame
+        if ret:
+            p_results = pose_estimator.process_frame(frame_for_pose)
+            annotated_frame = pose_estimator.draw_landmarks(frame_for_pose, p_results)
+        
+        h, w = annotated_frame.shape[:2]
         scale = 320 / max(h, w)
-        pose_img = cv2.resize(annotated, (int(w * scale), int(h * scale)))
+        pose_img = cv2.resize(annotated_frame, (int(w * scale), int(h * scale)))
         _, buffer = cv2.imencode('.jpg', pose_img)
         pose_b64 = base64.b64encode(buffer).decode('utf-8')
 
@@ -587,29 +601,36 @@ async def analyze_video_stream(file: UploadFile = File(...)):
                     yield f"data: {msg}\n\n"
                     return
 
-            # Buffer frames (same as sync path — needed for pose images)
-            all_frames_rgb, all_frames_raw = [], []
+            # Buffer frames (only 224x224 to save memory)
+            all_frames_rgb = []
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                all_frames_raw.append(frame.copy())
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 all_frames_rgb.append(cv2.resize(frame_rgb, (224, 224)))
-            cap.release()
-
             total_frames = len(all_frames_rgb)
+
             if total_frames == 0:
-                yield f"data: {json.dumps({'event': 'error', 'error': 'Could not read video frames'})}\n\n"
+                cap.release()
+                yield f"data: {json.dumps({'event': 'error', 'error': 'Could not read video frames', 'validation_failed': True})}\n\n"
                 return
 
-            # Pose validation
+            # Stage 1: Pose Validation
             sample_indices = list(range(0, total_frames, max(1, total_frames // 30)))[:30]
             pose_landmarks_list = []
+
             for idx in sample_indices:
-                p_results = await asyncio.to_thread(pose_estimator.process_frame, all_frames_raw[idx])
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                ret, raw_frame = cap.read()
+                if not ret:
+                    pose_landmarks_list.append([])
+                    continue
+                p_results = pose_estimator.process_frame(raw_frame)
                 landmarks = pose_estimator.get_landmarks_as_list(p_results)
                 pose_landmarks_list.append(landmarks[0] if landmarks else [])
+
+            cap.release()
 
             is_badminton_pose, pose_confidence, pose_details = badminton_detector.is_badminton_video(
                 pose_landmarks_list, threshold=0.05
@@ -651,12 +672,21 @@ async def analyze_video_stream(file: UploadFile = File(...)):
                 segment_tensor = segment_tensor.permute(0, 3, 1, 2).unsqueeze(0).to(device)
 
                 middle_idx = indices[len(indices) // 2]
-                raw_frame = all_frames_raw[middle_idx]
-                p_results = await asyncio.to_thread(pose_estimator.process_frame, raw_frame)
-                annotated = pose_estimator.draw_landmarks(raw_frame, p_results)
-                h, w = annotated.shape[:2]
+                
+                ext_cap = cv2.VideoCapture(temp_file)
+                ext_cap.set(cv2.CAP_PROP_POS_FRAMES, middle_idx)
+                ret, frame_for_pose = ext_cap.read()
+                ext_cap.release()
+                
+                p_results = None
+                annotated_frame = np.zeros((224, 224, 3), dtype=np.uint8) # Default blank frame
+                if ret:
+                    p_results = await asyncio.to_thread(pose_estimator.process_frame, frame_for_pose)
+                    annotated_frame = pose_estimator.draw_landmarks(frame_for_pose, p_results)
+                
+                h, w = annotated_frame.shape[:2]
                 scale = 320 / max(h, w)
-                pose_img = cv2.resize(annotated, (int(w * scale), int(h * scale)))
+                pose_img = cv2.resize(annotated_frame, (int(w * scale), int(h * scale)))
                 _, buf = cv2.imencode('.jpg', pose_img)
                 pose_b64 = base64.b64encode(buf).decode('utf-8')
 
