@@ -34,7 +34,18 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan hf.co >> ~/.ssh/known_hosts
 
-      - name: Clone HuggingFace Space
+      # LFS blob transfers always use HTTPS even when git uses SSH.
+      # We configure git credentials so LFS can authenticate for push.
+      - name: Configure git credentials for LFS (HTTPS)
+        run: |
+          git config --global credential.helper store
+          echo "https://${{ secrets.HF_USERNAME }}:${{ secrets.HF_TOKEN }}@huggingface.co" >> ~/.git-credentials
+
+      # Clone HF repo but skip downloading LFS blobs — we have our own
+      # model files from the checkout above and will push them ourselves.
+      - name: Clone HuggingFace Space (skip LFS download)
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
         run: |
           git clone git@hf.co:spaces/navneethdg/BadCoach hf_space
           cd hf_space
@@ -52,13 +63,28 @@ jobs:
             --exclude='._*' \
             backend/ hf_space/
 
+      - name: Verify model files are LFS-tracked (not raw blobs)
+        run: |
+          cd hf_space
+          git add -A
+          echo "--- LFS-tracked files ---"
+          git lfs ls-files
+          # Fail if any model file is staged as a raw blob instead of LFS pointer
+          for f in models/*.pth models/*.pt models/*.task; do
+            [ -f "$f" ] || continue
+            if ! git lfs ls-files | grep -q "$(basename $f)"; then
+              echo "ERROR: $f is NOT tracked by LFS — check .gitattributes"
+              exit 1
+            fi
+          done
+          echo "All model files are properly LFS-tracked ✓"
+
       - name: Commit and push to HuggingFace
         run: |
           cd hf_space
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add -A
-          # Only commit if there are actual changes
           if git diff --cached --quiet; then
             echo "No changes to deploy."
           else
