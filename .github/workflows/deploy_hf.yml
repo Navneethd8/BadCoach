@@ -1,0 +1,67 @@
+name: Deploy to HuggingFace Spaces
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy_hf.yml"
+
+jobs:
+  deploy:
+    name: Push backend to HF Spaces
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Install git-lfs
+        run: |
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+      - name: Configure SSH for HuggingFace
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.HF_SSH_KEY }}
+
+      - name: Add hf.co to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan hf.co >> ~/.ssh/known_hosts
+
+      - name: Clone HuggingFace Space
+        run: |
+          git clone git@hf.co:spaces/navneethdg/BadCoach hf_space
+          cd hf_space
+          git lfs install
+
+      - name: Sync backend files into HF Space
+        run: |
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='venv/' \
+            --exclude='tests/' \
+            --exclude='.env' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            --exclude='._*' \
+            backend/ hf_space/
+
+      - name: Commit and push to HuggingFace
+        run: |
+          cd hf_space
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          # Only commit if there are actual changes
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+          else
+            git commit -m "Deploy: $(date -u '+%Y-%m-%d %H:%M UTC') — ${{ github.sha }}"
+            git push origin main
+          fi
