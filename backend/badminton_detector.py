@@ -68,7 +68,7 @@ class BadmintonPoseDetector:
         confidence = min(1.0, max_distance / (self.overhead_threshold * 3))
         
         is_overhead = left_overhead or right_overhead
-        return is_overhead, confidence if is_overhead else 0.0
+        return bool(is_overhead), confidence if is_overhead else 0.0
     
     def detect_wide_stance(self, landmarks: List[Dict]) -> Tuple[bool, float]:
         """
@@ -104,7 +104,7 @@ class BadmintonPoseDetector:
         # Confidence based on how wide the stance is
         confidence = min(1.0, (normalized_stance - 1.0) / 2.0)
         
-        return is_wide, max(0.0, confidence) if is_wide else 0.0
+        return bool(is_wide), max(0.0, confidence) if is_wide else 0.0
     
     def detect_racket_holding_pose(self, landmarks: List[Dict]) -> Tuple[bool, float]:
         """
@@ -136,7 +136,7 @@ class BadmintonPoseDetector:
         # Confidence based on degree of asymmetry
         confidence = min(1.0, asymmetry / (self.arm_asymmetry_threshold * 2))
         
-        return is_asymmetric, confidence if is_asymmetric else 0.0
+        return bool(is_asymmetric), confidence if is_asymmetric else 0.0
     
     def calculate_badminton_score(self, landmarks_list: List[List[Dict]]) -> float:
         """
@@ -223,4 +223,4 @@ class BadmintonPoseDetector:
             "frames_analyzed": len([l for l in landmarks_list if l])
         }
         
-        return score >= threshold, score, details
+        return bool(score >= threshold), score, details
