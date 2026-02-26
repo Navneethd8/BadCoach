@@ -7,7 +7,11 @@ python-multipart
 tqdm
 scipy
 pytest
+pytest-asyncio
+httpx
 requests
 mediapipe
 google-genai
 python-dotenv
+cachetools
+sse-starlette
