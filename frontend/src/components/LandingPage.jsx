@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import Logo from './Logo'
 
 function Icon({ name, size = 20, className = '' }) {
@@ -73,21 +74,22 @@ const stats = [
     { value: 'Free', label: 'To try', icon: 'card_giftcard' },
 ]
 
-export default function LandingPage({ onGetStarted }) {
+export default function LandingPage() {
+    const navigate = useNavigate()
     return (
         <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 overflow-x-hidden">
 
             {/* Navbar */}
             <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/80 backdrop-blur-md">
                 <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-                    <button onClick={onGetStarted} className="flex items-center gap-2 focus:outline-none" aria-label="IsoCourt home">
+                    <button onClick={() => navigate('/analyze')} className="flex items-center gap-2 focus:outline-none" aria-label="IsoCourt home">
                         <Logo size={22} className="text-emerald-500" />
                         <span className="text-base font-semibold tracking-tight">
                             Iso<span className="text-emerald-500">Court</span>
                         </span>
                     </button>
                     <motion.button
-                        onClick={onGetStarted}
+                        onClick={() => navigate('/analyze')}
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.97 }}
                         className="text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md transition-colors"
@@ -129,7 +131,7 @@ export default function LandingPage({ onGetStarted }) {
                     <FadeUp delay={0.22}>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                             <motion.button
-                                onClick={onGetStarted}
+                                onClick={() => navigate('/analyze')}
                                 whileHover={{ scale: 1.04 }}
                                 whileTap={{ scale: 0.97 }}
                                 className="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
@@ -307,7 +309,7 @@ export default function LandingPage({ onGetStarted }) {
                         No account needed. Drop a clip and get instant feedback.
                     </p>
                     <motion.button
-                        onClick={onGetStarted}
+                        onClick={() => navigate('/analyze')}
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.97 }}
                         className="inline-flex items-center gap-2 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"

@@ -1,24 +1,21 @@
-import React, { useState } from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
-import ReactGA from "react-ga4";
+import ReactGA from "react-ga4"
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import App from './App.jsx'
 import LandingPage from './components/LandingPage.jsx'
 import './index.css'
 
-ReactGA.initialize("G-TET6JN36Q4");
-
-function Root() {
-    const [showApp, setShowApp] = useState(false)
-
-    if (showApp) {
-        return <App onBack={() => setShowApp(false)} />
-    }
-
-    return <LandingPage onGetStarted={() => setShowApp(true)} />
-}
+ReactGA.initialize("G-TET6JN36Q4")
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <Root />
+        <BrowserRouter>
+            <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/analyze" element={<App />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </BrowserRouter>
     </React.StrictMode>,
 )

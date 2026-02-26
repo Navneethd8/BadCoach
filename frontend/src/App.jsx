@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import Logo from './components/Logo';
 import { useDropzone } from 'react-dropzone'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { motion, useReducedMotion } from 'framer-motion'
 import ReactGA from "react-ga4"
@@ -16,15 +17,18 @@ function Icon({ name, size = 20, className = '' }) {
     )
 }
 
-export default function App({ onBack }) {
+export default function App() {
+    const navigate = useNavigate()
     const [file, setFile] = useState(null)
     const [result, setResult] = useState(null)
     const [loading, setLoading] = useState(false)
     const [preview, setPreview] = useState(null)
     const [loadingStep, setLoadingStep] = useState(-1)
+    const [capacityError, setCapacityError] = useState(null)   // 503 at-capacity state
     const videoRef = useRef(null)
     const loadingTimers = useRef([])
     const shouldReduceMotion = useReducedMotion()
+    const retryTimerRef = useRef(null)
 
     const loadingSteps = [
         { icon: 'movie_filter', label: 'Splitting clip into frames' },
@@ -74,6 +78,7 @@ export default function App({ onBack }) {
         if (!file) return
 
         setLoading(true)
+        setCapacityError(null)
         startLoadingSteps()
         const formData = new FormData()
         formData.append('file', file)
@@ -84,21 +89,20 @@ export default function App({ onBack }) {
                 headers: { 'Content-Type': 'multipart/form-data' }
             })
 
-            // Check if validation failed
             if (response.data.validation_failed) {
+                const isOverDuration = response.data.over_duration_limit || false
                 setResult({
                     validation_error: true,
                     error_message: response.data.error,
+                    over_duration_limit: isOverDuration,
                     validation_details: response.data.validation_details
                 })
-                // Track validation failure
-                ReactGA.event({
-                    category: "Video",
-                    action: "Validation Failed",
-                    label: response.data.error
-                });
+                if (isOverDuration) {
+                    ReactGA.event({ category: "Video", action: "Clip Too Long", label: file?.name })
+                } else {
+                    ReactGA.event({ category: "Video", action: "Validation Failed", label: response.data.error })
+                }
             } else {
-                // Track usage
                 setResult(response.data)
                 ReactGA.event({
                     category: "Video",
@@ -110,23 +114,124 @@ export default function App({ onBack }) {
         } catch (error) {
             console.error("Error uploading file:", error)
 
-            // Check if it's a validation error from the backend
-            if (error.response?.data?.validation_failed) {
+            // 503 — server at capacity
+            if (error.response?.status === 503) {
+                const retryAfter = error.response?.data?.detail?.retry_after || 30
+                setCapacityError(retryAfter)
+                if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+                retryTimerRef.current = setTimeout(() => setCapacityError(null), retryAfter * 1000)
+                ReactGA.event({ category: "Video", action: "Server At Capacity", label: file?.name })
+            } else if (error.response?.data?.validation_failed) {
+                const isOverDuration = error.response.data.over_duration_limit || false
                 setResult({
                     validation_error: true,
                     error_message: error.response.data.error,
+                    over_duration_limit: isOverDuration,
                     validation_details: error.response.data.validation_details
                 })
-                // Track validation failure
-                ReactGA.event({
-                    category: "Video",
-                    action: "Validation Failed",
-                    label: error.response.data.error
-                });
+                if (isOverDuration) {
+                    ReactGA.event({ category: "Video", action: "Clip Too Long", label: file?.name })
+                } else {
+                    ReactGA.event({ category: "Video", action: "Validation Failed", label: error.response.data.error })
+                }
             } else {
                 const errorMessage = error.response?.data?.detail || error.message || "Error analyzing video"
+                ReactGA.event({ category: "Video", action: "Analysis Failed", label: errorMessage })
                 alert(`Analysis failed: ${errorMessage}`)
             }
+        } finally {
+            setLoading(false)
+            stopLoadingSteps()
+        }
+    }
+
+    // Stream-based analysis using /analyze/stream (SSE).
+    // Fires GA events for each key phase: start, each window received, done, error.
+    const handleStreamAnalysis = async () => {
+        if (!file) return
+
+        setLoading(true)
+        setCapacityError(null)
+        startLoadingSteps()
+
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+        const formData = new FormData()
+        formData.append('file', file)
+
+        ReactGA.event({ category: 'Video', action: 'Stream Started', label: file.name })
+
+        let windowCount = 0
+
+        try {
+            const response = await fetch(`${apiUrl}/analyze/stream`, {
+                method: 'POST',
+                body: formData,
+            })
+
+            if (response.status === 503) {
+                const body = await response.json().catch(() => ({}))
+                const retryAfter = body?.detail?.retry_after || 30
+                setCapacityError(retryAfter)
+                if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+                retryTimerRef.current = setTimeout(() => setCapacityError(null), retryAfter * 1000)
+                ReactGA.event({ category: 'Video', action: 'Server At Capacity', label: file.name })
+                return
+            }
+
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+            const streamedTimeline = []
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n\n')
+                buffer = lines.pop() // keep incomplete chunk
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue
+                    let parsed
+                    try { parsed = JSON.parse(line.slice(6)) } catch { continue }
+
+                    if (parsed.event === 'progress') {
+                        windowCount++
+                        streamedTimeline.push(parsed)
+                        // Fire GA every 5 windows to avoid flooding analytics
+                        if (windowCount % 5 === 1) {
+                            ReactGA.event({
+                                category: 'Video',
+                                action: 'Stream Window Received',
+                                label: parsed.label,
+                                value: windowCount,
+                            })
+                        }
+                    } else if (parsed.event === 'done') {
+                        const summary = parsed.summary || {}
+                        setResult({ ...summary, timeline: streamedTimeline })
+                        ReactGA.event({
+                            category: 'Video',
+                            action: 'Stream Complete',
+                            label: summary.action || 'Unknown',
+                            value: windowCount,
+                        })
+                    } else if (parsed.event === 'error') {
+                        const isOverDuration = parsed.over_duration_limit || false
+                        if (isOverDuration) {
+                            setResult({ validation_error: true, error_message: parsed.error, over_duration_limit: true })
+                            ReactGA.event({ category: 'Video', action: 'Clip Too Long', label: file.name })
+                        } else {
+                            ReactGA.event({ category: 'Video', action: 'Stream Error', label: parsed.error })
+                            setResult({ validation_error: true, error_message: parsed.error, over_duration_limit: false })
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Stream error:', err)
+            ReactGA.event({ category: 'Video', action: 'Analysis Failed', label: err.message })
         } finally {
             setLoading(false)
             stopLoadingSteps()
@@ -175,10 +280,24 @@ export default function App({ onBack }) {
         <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 p-6 md:p-10">
             <div className="max-w-2xl mx-auto">
 
+                {/* Capacity toast banner */}
+                {capacityError !== null && (
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-start gap-3 bg-amber-950/90 border border-amber-700/60 text-amber-200 text-sm px-5 py-3.5 rounded-xl shadow-2xl backdrop-blur-sm max-w-sm w-full">
+                        <Icon name="hourglass_top" size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-amber-300 mb-0.5">IsoCourt is fully loaded right now 🏸</p>
+                            <p className="text-xs text-amber-200/80">We're popular! Please try again in ~{capacityError}s. Your clip is worth the wait.</p>
+                        </div>
+                        <button onClick={() => setCapacityError(null)} className="ml-auto text-amber-400 hover:text-amber-200">
+                            <Icon name="close" size={16} />
+                        </button>
+                    </div>
+                )}
+
                 <header className="flex items-center gap-2 mb-8">
-                    {onBack && (
+                    {true && (
                         <button
-                            onClick={onBack}
+                            onClick={() => navigate('/')}
                             className="mr-1 -ml-1 p-1 rounded text-neutral-600 hover:text-neutral-300 transition-colors"
                             aria-label="Back to home"
                         >
@@ -287,18 +406,36 @@ export default function App({ onBack }) {
                         </div>
                     ) : result?.validation_error ? (
                         <div className="py-8 px-4">
-                            <div className="bg-red-950/30 border border-red-900/50 rounded-lg p-6">
+                            <div className={`border rounded-lg p-6 ${result.over_duration_limit
+                                ? 'bg-amber-950/30 border-amber-800/50'
+                                : 'bg-red-950/30 border-red-900/50'
+                                }`}>
                                 <div className="flex items-start gap-4">
                                     <div className="flex-shrink-0">
-                                        <Icon name="error" size={32} className="text-red-500" />
+                                        <Icon
+                                            name={result.over_duration_limit ? 'schedule' : 'error'}
+                                            size={32}
+                                            className={result.over_duration_limit ? 'text-amber-400' : 'text-red-500'}
+                                        />
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="text-lg font-semibold text-red-400 mb-2">Not a Badminton Video</h3>
+                                        <h3 className={`text-lg font-semibold mb-2 ${result.over_duration_limit ? 'text-amber-300' : 'text-red-400'
+                                            }`}>
+                                            {result.over_duration_limit ? 'Video Too Long' : 'Not a Badminton Video'}
+                                        </h3>
                                         <p className="text-sm text-neutral-300 mb-4">
                                             {result.error_message}
                                         </p>
 
-                                        {result.validation_details && (
+                                        {result.over_duration_limit && (
+                                            <div className="mt-2 mb-4 p-3 bg-amber-900/20 border border-amber-700/30 rounded-lg">
+                                                <p className="text-xs text-amber-200/80 leading-relaxed">
+                                                    <span className="font-semibold text-amber-300">💡 Tip:</span> For full-game analysis, upload each rally or quarter separately. This keeps analysis times fast and results more accurate for each play.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {!result.over_duration_limit && result.validation_details && (
                                             <div className="mt-4 p-3 bg-neutral-950/50 rounded border border-neutral-800">
                                                 <span className="text-xs text-neutral-500 block mb-2">Detection Details</span>
                                                 <div className="space-y-1.5 text-xs">
@@ -342,6 +479,13 @@ export default function App({ onBack }) {
                         </div>
                     ) : result ? (
                         <div className="space-y-4">
+                            {/* Cache hit badge */}
+                            {result.cache_hit && (
+                                <div className="flex items-center gap-2 text-[11px] text-emerald-400/70 font-medium px-1">
+                                    <Icon name="bolt" size={13} className="text-emerald-500" />
+                                    Instant result — same clip analyzed before
+                                </div>
+                            )}
                             <div className="space-y-3">
                                 {/* Performance & Tactical Analysis */}
                                 <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
