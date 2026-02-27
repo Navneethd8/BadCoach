@@ -131,3 +131,26 @@ class TestPoseEstimatorGetLandmarksAsList:
         for lm in result[0]:
             assert isinstance(lm["x"], float)
             assert isinstance(lm["y"], float)
+
+
+class TestPoseEstimatorInitialization:
+
+    @patch("core.pose_utils.vision.PoseLandmarker.create_from_options")
+    def test_default_model_path_resolution_not_local_to_core(self, mock_create):
+        """
+        Verify that the default model path correctly points to the `models` folder
+        alongside `core` and not a local `core/models` folder.
+        """
+        estimator = PoseEstimator()
+        
+        mock_create.assert_called_once()
+        args, _ = mock_create.call_args
+        options = args[0]
+        asset_path = options.base_options.model_asset_path
+        
+        # It must resolve to the models directory, independent of where the script runs from
+        expected_suffix = os.path.join("models", "pose_landmarker_lite.task")
+        assert asset_path.endswith(expected_suffix)
+        
+        # Crucially, it should NOT try to look inside 'core/models'
+        assert os.path.join("core", "models") not in asset_path

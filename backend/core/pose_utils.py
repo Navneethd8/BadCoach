@@ -10,7 +10,7 @@ class PoseEstimator:
         if model_path is None:
             # Default to ../models/pose_landmarker_lite.task relative to this file
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(current_dir, "models", "pose_landmarker_lite.task")
+            model_path = os.path.join(os.path.dirname(current_dir), "models", "pose_landmarker_lite.task")
 
         base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.PoseLandmarkerOptions(
