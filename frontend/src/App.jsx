@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import Logo from './components/Logo';
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
@@ -29,6 +29,29 @@ export default function App() {
     const loadingTimers = useRef([])
     const shouldReduceMotion = useReducedMotion()
     const retryTimerRef = useRef(null)
+
+    // Mobile detection
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768)
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
+
+    // Camera recording state (Laptop)
+    const [inputMode, setInputMode] = useState('upload') // 'upload' | 'record'
+    const [isRecording, setIsRecording] = useState(false)
+    const [cameraError, setCameraError] = useState(null)
+    const [recordingSeconds, setRecordingSeconds] = useState(0)
+    const cameraPreviewRef = useRef(null)
+    const mediaRecorderRef = useRef(null)
+    const cameraStreamRef = useRef(null)
+    const recordedChunksRef = useRef([])
+    const recordingTimerRef = useRef(null)
+    const [isFullScreen, setIsFullScreen] = useState(false)
+
+    // Native Camera Reference
+    const nativeVideoInputRef = useRef(null)
 
     const loadingSteps = [
         { icon: 'movie_filter', label: 'Splitting clip into frames' },
@@ -73,6 +96,148 @@ export default function App() {
         onDrop,
         accept: { 'video/*': [] }
     })
+
+    const handleNativeVideoSelect = (e) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            setFile(file)
+            setPreview(URL.createObjectURL(file))
+        }
+    }
+
+    // ── Laptop Camera helpers ──────────────────────────────────────────
+    const openCamera = async () => {
+        setCameraError(null)
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+            cameraStreamRef.current = stream
+            if (cameraPreviewRef.current) {
+                cameraPreviewRef.current.srcObject = stream
+                cameraPreviewRef.current.play().catch(e => console.error("Error playing camera stream:", e))
+            }
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                setCameraError('Camera permission denied. Please allow camera access and try again.')
+            } else if (err.name === 'NotFoundError') {
+                setCameraError('No camera found on this device.')
+            } else {
+                setCameraError('Could not access camera: ' + err.message)
+            }
+        }
+    }
+
+    const closeCamera = () => {
+        if (cameraStreamRef.current) {
+            cameraStreamRef.current.getTracks().forEach(t => t.stop())
+            cameraStreamRef.current = null
+        }
+        if (cameraPreviewRef.current) {
+            cameraPreviewRef.current.srcObject = null
+        }
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+        setIsRecording(false)
+        setRecordingSeconds(0)
+    }
+
+    const startRecording = () => {
+        if (!cameraStreamRef.current) return
+        recordedChunksRef.current = []
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+            ? 'video/webm;codecs=vp9'
+            : MediaRecorder.isTypeSupported('video/webm')
+                ? 'video/webm'
+                : 'video/mp4'
+        const recorder = new MediaRecorder(cameraStreamRef.current, { mimeType })
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data)
+        }
+        recorder.onstop = () => {
+            const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+            const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+            const recorded = new File([blob], `recording.${ext}`, { type: mimeType })
+            setFile(recorded)
+            setPreview(URL.createObjectURL(blob))
+            closeCamera()
+            ReactGA.event({ category: 'Video', action: 'Camera Recording Captured', label: `${recordingSeconds}s` })
+        }
+        mediaRecorderRef.current = recorder
+        recorder.start(250) // collect chunks every 250 ms
+        setIsRecording(true)
+        setRecordingSeconds(0)
+        recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
+    }
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop()
+        }
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+        setIsRecording(false)
+    }
+
+    const switchMode = (mode) => {
+        if (mode === inputMode) return
+        if (inputMode === 'record') {
+            stopRecording()
+            closeCamera()
+        }
+        setFile(null)
+        setPreview(null)
+        setResult(null)
+        setCameraError(null)
+        setInputMode(mode)
+    }
+
+    useEffect(() => {
+        if (!isMobile && inputMode === 'record') {
+            openCamera()
+        }
+        return () => {
+            if (!isMobile && inputMode === 'record') {
+                stopRecording()
+                closeCamera()
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inputMode, isMobile])
+
+    useEffect(() => {
+        if (isMobile) {
+            closeCamera()
+        }
+        return () => {
+            closeCamera()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isMobile])
+
+    const toggleFullScreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch((err) => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+            setIsFullScreen(true)
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+                setIsFullScreen(false)
+            }
+        }
+    }
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullScreen(!!document.fullscreenElement)
+        }
+        document.addEventListener('fullscreenchange', handleFullscreenChange)
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }, [])
+
+    const formatSeconds = (s) => {
+        const m = Math.floor(s / 60).toString().padStart(2, '0')
+        const sec = (s % 60).toString().padStart(2, '0')
+        return `${m}:${sec}`
+    }
 
     const handleSubmit = async () => {
         if (!file) return
@@ -310,44 +475,262 @@ export default function App() {
                     </h1>
                 </header>
 
-                {/* Upload */}
+                {/* Upload / Record */}
                 <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 mb-6">
-                    <h2 className="text-sm font-medium text-neutral-400 mb-4 flex items-center gap-2">
-                        <Icon name="upload" size={18} />
-                        Upload Clip
-                    </h2>
 
-                    <div
-                        {...getRootProps()}
-                        className={`
-                            border border-dashed rounded-md min-h-[220px] flex flex-col items-center justify-center cursor-pointer transition-colors
-                            ${isDragActive
-                                ? 'border-emerald-500 bg-emerald-500/5'
-                                : 'border-neutral-700 hover:border-neutral-500'
-                            }
-                        `}
-                    >
-                        <input {...getInputProps()} />
-                        {preview ? (
-                            <div className="w-full rounded-md overflow-hidden">
-                                <video
-                                    ref={videoRef}
-                                    src={preview}
-                                    className="w-full max-h-[300px] object-contain bg-black"
-                                    controls
-                                />
-                            </div>
-                        ) : (
-                            <div className="text-center text-neutral-500 p-6">
-                                <Icon name="video_file" size={36} className="block mx-auto mb-3 text-neutral-600" />
-                                <p className="text-sm font-medium text-neutral-300">Drag & drop video here</p>
-                                <p className="text-xs mt-1 text-neutral-500">or click to select file</p>
-                            </div>
-                        )}
+                    {/* Tab switcher */}
+                    <div className="flex items-center gap-1 mb-4 p-1 bg-neutral-800/60 rounded-lg w-fit">
+                        <button
+                            onClick={() => switchMode('upload')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${inputMode === 'upload'
+                                ? 'bg-neutral-700 text-neutral-100 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-300'
+                                }`}
+                        >
+                            <Icon name="upload" size={14} />
+                            Upload
+                        </button>
+                        <button
+                            onClick={() => switchMode('record')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${inputMode === 'record'
+                                ? 'bg-neutral-700 text-neutral-100 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-300'
+                                }`}
+                        >
+                            <Icon name="videocam" size={14} />
+                            Record
+                        </button>
                     </div>
 
+                    {inputMode === 'upload' ? (
+                        /* ── Upload mode ─── */
+                        <div
+                            {...getRootProps()}
+                            className={`
+                                border border-dashed rounded-md min-h-[220px] flex flex-col items-center justify-center cursor-pointer transition-colors
+                                ${isDragActive
+                                    ? 'border-emerald-500 bg-emerald-500/5'
+                                    : 'border-neutral-700 hover:border-neutral-500'
+                                }
+                            `}
+                        >
+                            <input {...getInputProps()} />
+                            {preview ? (
+                                <div className="w-full rounded-md overflow-hidden bg-black">
+                                    <video
+                                        ref={videoRef}
+                                        src={preview}
+                                        className="w-full max-h-[300px] object-contain bg-black"
+                                        controls
+                                    />
+                                    <div className="flex items-center justify-between px-3 py-2 bg-neutral-900 border-t border-neutral-800/50">
+                                        <span className="text-xs text-neutral-400 flex items-center gap-1.5">
+                                            <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                            Clip ready to analyze
+                                        </span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null) }}
+                                            className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
+                                        >
+                                            <Icon name="replay" size={13} /> Change Video
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center text-neutral-500 p-6">
+                                    <Icon name="video_file" size={36} className="block mx-auto mb-3 text-neutral-600" />
+                                    <p className="text-sm font-medium text-neutral-300">Drag &amp; drop video here</p>
+                                    <p className="text-xs mt-1 text-neutral-500">or click to select file</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        /* ── Record mode ─── */
+                        <div className="rounded-md overflow-hidden border border-neutral-800 min-h-[220px] flex flex-col bg-black relative">
+                            {isMobile ? (
+                                /* Native Mobile Camera Button View */
+                                preview ? (
+                                    /* Recorded clip preview */
+                                    <div className="w-full bg-black">
+                                        <video
+                                            ref={videoRef}
+                                            src={preview}
+                                            className="w-full max-h-[300px] object-contain bg-black"
+                                            controls
+                                        />
+                                        <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80 border-t border-neutral-800/50">
+                                            <span className="text-xs text-neutral-400 flex items-center gap-1.5">
+                                                <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                                Clip ready
+                                            </span>
+                                            <button
+                                                onClick={() => { setFile(null); setPreview(null); nativeVideoInputRef.current?.click() }}
+                                                className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
+                                            >
+                                                <Icon name="replay" size={13} /> Re-record
+                                            </button>
+                                        </div>
+                                        {/* Hidden Native Input */}
+                                        <input
+                                            type="file"
+                                            accept="video/*"
+                                            capture="environment"
+                                            ref={nativeVideoInputRef}
+                                            onChange={handleNativeVideoSelect}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8 bg-neutral-900/50 text-center min-h-[220px]">
+                                        <div className="text-neutral-400">
+                                            <Icon name="photo_camera" size={48} className="opacity-50 mb-2 block mx-auto" />
+                                            <p className="text-sm font-medium text-neutral-300 mb-1">Record on Device</p>
+                                            <p className="text-xs text-neutral-500 mb-4 max-w-[200px]">Use your device's native camera for the best quality and zoom.</p>
+                                        </div>
+
+                                        <button
+                                            onClick={() => nativeVideoInputRef.current?.click()}
+                                            className="flex items-center justify-center gap-2 w-full py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-md transition-colors shadow-sm"
+                                        >
+                                            <Icon name="videocam" size={18} />
+                                            <span className="text-sm font-medium">Open Camera</span>
+                                        </button>
+
+                                        {/* Hidden Native Input */}
+                                        <input
+                                            type="file"
+                                            accept="video/*"
+                                            capture="environment"
+                                            ref={nativeVideoInputRef}
+                                            onChange={handleNativeVideoSelect}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                )
+                            ) : (
+                                /* Custom Desktop Web Camera View */
+                                cameraError ? (
+                                    /* Permission / device error */
+                                    <div className="flex flex-col items-center justify-center flex-1 gap-3 p-6 text-center min-h-[220px]">
+                                        <Icon name="videocam_off" size={36} className="text-neutral-600" />
+                                        <p className="text-sm text-neutral-400">{cameraError}</p>
+                                        <button
+                                            onClick={openCamera}
+                                            className="mt-1 px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded-md transition-colors"
+                                        >
+                                            Try again
+                                        </button>
+                                    </div>
+                                ) : preview ? (
+                                    /* Recorded clip preview */
+                                    <div className="w-full">
+                                        <video
+                                            ref={videoRef}
+                                            src={preview}
+                                            className="w-full max-h-[300px] object-contain bg-black"
+                                            controls
+                                        />
+                                        <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80">
+                                            <span className="text-xs text-neutral-400 flex items-center gap-1.5">
+                                                <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                                Clip ready to analyze
+                                            </span>
+                                            <button
+                                                onClick={() => { setFile(null); setPreview(null); openCamera() }}
+                                                className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
+                                            >
+                                                <Icon name="replay" size={13} /> Re-record
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* Live camera preview */
+                                    <div className={`relative ${isFullScreen ? 'fixed inset-0 z-50 bg-black flex flex-col justify-center' : 'flex-1'}`}>
+
+                                        {isFullScreen && (
+                                            <button
+                                                onClick={toggleFullScreen}
+                                                className="absolute top-6 left-6 z-[60] p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-md"
+                                            >
+                                                <Icon name="close" size={24} />
+                                            </button>
+                                        )}
+
+                                        <video
+                                            ref={cameraPreviewRef}
+                                            autoPlay
+                                            muted
+                                            playsInline
+                                            onClick={toggleFullScreen}
+                                            className={`w-full object-contain bg-black cursor-pointer ${isFullScreen ? 'h-[100dvh]' : 'max-h-[300px] min-h-[180px]'}`}
+                                        />
+
+                                        {/* Fullscreen hint when not recording and not fullscreen */}
+                                        {!isRecording && !isFullScreen && cameraStreamRef.current?.active && (
+                                            <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 text-white/70 text-[10px] px-2 py-1 rounded-md backdrop-blur-sm pointer-events-none">
+                                                <Icon name="fullscreen" size={14} /> Tap to expand
+                                            </div>
+                                        )}
+
+                                        {/* Recording timer badge */}
+                                        {isRecording && (
+                                            <div className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/70 border border-rose-500/50 text-rose-400 font-mono px-3 py-1 rounded-full backdrop-blur-sm ${isFullScreen ? 'top-12 text-sm px-4 py-1.5' : 'top-3 text-xs px-2.5 py-1'}`}>
+                                                <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse" />
+                                                {formatSeconds(recordingSeconds)}
+                                            </div>
+                                        )}
+
+                                        {/* Fullscreen recording controls */}
+                                        {isFullScreen && (
+                                            <div className="absolute bottom-12 left-0 right-0 flex justify-center pb-safe">
+                                                {isRecording ? (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); stopRecording() }}
+                                                        className="flex items-center justify-center w-20 h-20 bg-rose-600/90 text-white rounded-full transition-transform active:scale-90 border-4 border-white/20"
+                                                    >
+                                                        <span className="w-6 h-6 bg-white rounded-sm" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); startRecording() }}
+                                                        className="flex items-center justify-center w-20 h-20 bg-rose-600/90 text-white rounded-full transition-transform active:scale-90 border-4 border-white/20"
+                                                    >
+                                                        <span className="w-6 h-6 bg-white rounded-full" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            )}
+
+                            {/* Standard Record / Stop button for Desktop (hidden if full screen) */}
+                            {!isMobile && !cameraError && !preview && !isFullScreen && (
+                                <div className="flex justify-center py-3 bg-neutral-900/90 border-t border-neutral-800">
+                                    {isRecording ? (
+                                        <button
+                                            onClick={stopRecording}
+                                            className="flex items-center gap-2 px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-full transition-colors shadow-lg"
+                                        >
+                                            <span className="w-2.5 h-2.5 bg-white rounded-sm" />
+                                            Stop
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={startRecording}
+                                            className="flex items-center gap-2 px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-full transition-colors shadow-lg"
+                                        >
+                                            <span className="w-2.5 h-2.5 bg-white rounded-full" />
+                                            Record
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <button
-                        onClick={handleSubmit}
+                        onClick={handleStreamAnalysis}
                         disabled={!file || loading}
                         className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-md transition-colors"
                     >
