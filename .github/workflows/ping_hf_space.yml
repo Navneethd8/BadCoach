@@ -1,0 +1,26 @@
+name: Ping HuggingFace Space
+
+on:
+  schedule:
+    # Runs every 24 hours at midnight UTC
+    - cron: "0 0 * * *"
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping HF Space
+        # We use a GET request and extract the HTTP status code. 
+        # A 405 for HEAD is common for spaces, so we use GET and output to /dev/null.
+        run: |
+          URL="https://navneethdg-badcoach.hf.space"
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          echo "Received status code: $STATUS_CODE"
+          
+          # A simple check to ensure we didn't get a 50x server error (optional, mostly for logging)
+          if [[ "$STATUS_CODE" =~ ^5 ]]; then
+            echo "Space seems to be down with a 5xx error."
+            exit 1
+          fi
+          echo "Successfully pinged HF Space, keeping it awake!"
