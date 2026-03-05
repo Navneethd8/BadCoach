@@ -6,9 +6,17 @@ import torchvision.models as models
 import numpy as np
 import os
 import sys
+
+# Ensure backend root is in sys.path
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_root = os.path.dirname(os.path.dirname(_current_dir))
+if _backend_root not in sys.path:
+    sys.path.insert(0, _backend_root)
+
 from tqdm import tqdm
 from core.dataset import FineBadmintonDataset
 from core.model import CNN_LSTM_Model
+from core.pose_utils import PoseEstimator
 
 class CachedFeatureDataset(Dataset):
     def __init__(self, features, label_dict):
@@ -33,10 +41,11 @@ def extract_and_train(
     cache_path=None
 ):
     _dir = os.path.dirname(os.path.abspath(__file__))
+    _backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(_dir, "models", "badminton_model.pth")
+        save_path = os.path.join(_backend_root, "models", "badminton_model.pth")
     if cache_path is None:
-        cache_path = os.path.join(_dir, "models", "feature_cache_mtl.pt")
+        cache_path = os.path.join(_backend_root, "models", "feature_cache_mtl.pt")
     # Step 1: Feature Extraction
     if os.path.exists(cache_path):
         print(f"Loading cached features from {cache_path}...")
@@ -53,7 +62,6 @@ def extract_and_train(
         
         # Load the trained CNN backbone from badminton_model.pth
         print("Loading trained CNN backbone from badminton_model.pth...")
-        from core.model import CNN_LSTM_Model
         
         # Load the full trained model
         model_path = os.path.join(os.path.dirname(cache_path), "badminton_model.pth")
@@ -74,8 +82,12 @@ def extract_and_train(
             cnn = full_model.cnn.to(device)
             cnn.eval()
             print("✓ Using trained CNN backbone for feature extraction")
+            
+        print("Initializing PoseEstimator for Two-Stream architecture...")
+        pose_estimator = PoseEstimator()
         
         all_features = []
+        all_poses = []
         # Initialize label storage
         all_labels = {k: [] for k in task_classes.keys()}
         
@@ -89,12 +101,18 @@ def extract_and_train(
             
             with torch.no_grad():
                 features = cnn(frames_norm.to(device)).squeeze(-1).squeeze(-1) # (16, 2048)
+                poses = pose_estimator.extract_tensor_poses(frames) # (16, 99)
             
             all_features.append(features.cpu())
+            all_poses.append(poses.cpu())
             for k, v in labels.items():
                 all_labels[k].append(v)
         
         all_features = torch.stack(all_features)
+        all_poses = torch.stack(all_poses)
+        
+        # Concatenate Features and Poses for Two-Stream
+        all_features = torch.cat([all_features, all_poses], dim=2) # (B, 16, 2147)
         
         # Filter out tasks with no labels
         tasks_to_remove = []
@@ -158,7 +176,7 @@ def extract_and_train(
     
     # Build a smaller model to prevent overfitting
     hidden_size = 128
-    lstm = nn.LSTM(input_size=2048, hidden_size=hidden_size, num_layers=1, batch_first=True).to(device)
+    lstm = nn.LSTM(input_size=2147, hidden_size=hidden_size, num_layers=1, batch_first=True).to(device)
     heads = nn.ModuleDict({
         task: nn.Sequential(
             nn.Linear(hidden_size * 2, hidden_size // 2),
@@ -249,7 +267,7 @@ def extract_and_train(
         if val_acc > best_acc:
             best_acc = val_acc
             # Save as full model
-            full_model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size)
+            full_model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size, use_pose=True)
             full_model.lstm.load_state_dict(lstm.state_dict())
             full_model.heads.load_state_dict(heads.state_dict())
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -282,8 +300,9 @@ def extract_and_train(
 
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_root = os.path.join(current_dir, "data")
-    list_file = os.path.join(current_dir, "data", "transformed_combined_rounds_output_en_evals_translated.json")
+    backend_root = os.path.dirname(os.path.dirname(current_dir))
+    data_root = os.path.join(backend_root, "data")
+    list_file = os.path.join(backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json")
     
     if torch.cuda.is_available():
         device = "cuda"

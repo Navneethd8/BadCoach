@@ -97,3 +97,38 @@ class PoseEstimator:
                     })
                 landmarks_list.append(person_landmarks)
         return landmarks_list
+
+    def extract_tensor_poses(self, frames_tensor):
+        """
+        Extract MediaPipe poses from a PyTorch tensor of frames.
+        
+        Args:
+            frames_tensor (torch.Tensor): Shape (B, C, H, W) or (seq_len, C, H, W)
+                                          Assuming values [0, 1] RGB.
+        Returns:
+            torch.Tensor: Shape (B, 99) flat pose coordinates. Zeros if no person is detected.
+        """
+        import torch
+        # Convert tensor to numpy BGR for MediaPipe
+        frames_np = frames_tensor.permute(0, 2, 3, 1).cpu().numpy()
+        frames_np = (frames_np * 255).astype(np.uint8)
+        
+        batch_size = frames_np.shape[0]
+        all_poses = np.zeros((batch_size, 33 * 3), dtype=np.float32)
+        
+        for i in range(batch_size):
+            frame_rgb = frames_np[i]
+            # MediaPipe expects RGB, but if the tensor was already RGB we don't need cvtColor
+            # If the inference pipeline inputs it as RGB, we just pass it in. Check standard orientation.
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
+            result = self.detector.detect(mp_image)
+            
+            if result.pose_landmarks and len(result.pose_landmarks) > 0:
+                # Take the first detected person
+                person = result.pose_landmarks[0]
+                flat_pose = []
+                for lm in person:
+                    flat_pose.extend([lm.x, lm.y, lm.z])
+                all_poses[i] = np.array(flat_pose, dtype=np.float32)
+                
+        return torch.from_numpy(all_poses).to(frames_tensor.device)

@@ -1,10 +1,16 @@
+import os
+import sys
+
+# Add backend directory to sys.path so we can import core and pipelines
+backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if backend_root not in sys.path:
+    sys.path.append(backend_root)
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision.transforms import v2
-import os
-import sys
 from tqdm import tqdm
 
 from core.dataset import FineBadmintonDataset
@@ -21,8 +27,9 @@ def train_full(
     save_path=None
 ):
     _dir = os.path.dirname(os.path.abspath(__file__))
+    _backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(_dir, "models", "badminton_model_full.pth")
+        save_path = os.path.join(_backend_root, "models", "badminton_model_full.pth")
     # Step 1: Augmentation Pipeline
     # Using v2 transforms which apply the same parameters to all frames in a list/tensor
     train_transform = v2.Compose([
@@ -204,8 +211,9 @@ def train_full(
 
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_root = os.path.join(current_dir, "data")
-    list_file = os.path.join(current_dir, "data", "transformed_combined_rounds_output_en_evals_translated.json")
+    backend_root = os.path.dirname(os.path.dirname(current_dir))
+    data_root = os.path.join(backend_root, "data")
+    list_file = os.path.join(backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json")
     
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -213,6 +221,6 @@ if __name__ == "__main__":
     train_full(
         data_root=data_root, 
         list_file=list_file, 
-        epochs=30, # End-to-end is slower, start with 30
+        epochs=100, # Full 100 epoch run
         device=device
     )

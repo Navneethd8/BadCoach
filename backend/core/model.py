@@ -7,7 +7,7 @@ import os
 MODEL_VERSION = "V2.3_TEMPORAL_OPTIMIZED"
 
 class CNN_LSTM_Model(nn.Module):
-    def __init__(self, task_classes=None, hidden_size=128, num_layers=1, pretrained=True):
+    def __init__(self, task_classes=None, hidden_size=128, num_layers=1, pretrained=True, use_pose=False):
         """
         CNN + LSTM model for Multi-Task Stroke Recognition.
         
@@ -16,8 +16,10 @@ class CNN_LSTM_Model(nn.Module):
             hidden_size (int): Hidden size for LSTM.
             num_layers (int): Number of LSTM layers.
             pretrained (bool): Whether to use pretrained ResNet weights.
+            use_pose (bool): Whether to include MediaPipe pose vectors (99-dim).
         """
         super(CNN_LSTM_Model, self).__init__()
+        self.use_pose = use_pose
         
         if task_classes is None:
             # Default fallback matching the current dataset definition
@@ -35,8 +37,9 @@ class CNN_LSTM_Model(nn.Module):
         self.feature_dim = resnet.fc.in_features 
         
         # 2. LSTM Temporal Module
+        lstm_input_size = self.feature_dim + 99 if self.use_pose else self.feature_dim
         self.lstm = nn.LSTM(
-            input_size=self.feature_dim,
+            input_size=lstm_input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True
@@ -55,11 +58,12 @@ class CNN_LSTM_Model(nn.Module):
             for task, num_c in task_classes.items()
         })
 
-    def forward(self, x):
+    def forward(self, x, poses=None):
         """
         Args:
             x (torch.Tensor): Input tensor of shape (batch, seq_len, C, H, W)
                              Assumes input range [0, 1]
+            poses (torch.Tensor, optional): Input tensor of shape (batch, seq_len, 99)
         Returns:
             Dict[str, torch.Tensor]: Dictionary of logits for each task.
         """
@@ -77,6 +81,10 @@ class CNN_LSTM_Model(nn.Module):
         # 2. CNN Feature Extraction
         features = self.cnn(c_in)
         features = features.view(batch_size, seq_len, -1) 
+        
+        # Add Poses if using Two-Stream
+        if self.use_pose and poses is not None:
+            features = torch.cat([features, poses], dim=2)
         
         # 3. Temporal Modeling
         lstm_out, (h_n, c_n) = self.lstm(features)
@@ -100,8 +108,9 @@ if __name__ == "__main__":
         "stroke_type": 9, "stroke_subtype": 21, "technique": 4,
         "placement": 7, "position": 10, "intent": 10, "quality": 7
     }
-    model = CNN_LSTM_Model(task_classes=task_classes)
+    model = CNN_LSTM_Model(task_classes=task_classes, use_pose=True)
     dummy_input = torch.randn(2, 16, 3, 224, 224)
-    outputs = model(dummy_input)
+    dummy_poses = torch.randn(2, 16, 99)
+    outputs = model(dummy_input, poses=dummy_poses)
     for task, logits in outputs.items():
         print(f"Task '{task}' Logits Shape: {logits.shape}")
