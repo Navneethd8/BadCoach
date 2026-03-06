@@ -7,7 +7,7 @@ import os
 MODEL_VERSION = "V2.3_TEMPORAL_OPTIMIZED"
 
 class CNN_LSTM_Model(nn.Module):
-    def __init__(self, task_classes=None, hidden_size=128, num_layers=1, pretrained=True, use_pose=False):
+    def __init__(self, task_classes=None, hidden_size=256, num_layers=1, pretrained=True, use_pose=False):
         """
         CNN + LSTM model for Multi-Task Stroke Recognition.
         
@@ -50,10 +50,10 @@ class CNN_LSTM_Model(nn.Module):
         # Using hidden_size * 2 because we concatenate Avg and Max pooling.
         self.heads = nn.ModuleDict({
             task: nn.Sequential(
-                nn.Linear(hidden_size * 2, hidden_size // 2),
+                nn.Linear(hidden_size * 2, hidden_size),
                 nn.ReLU(),
                 nn.Dropout(0.3),
-                nn.Linear(hidden_size // 2, num_c)
+                nn.Linear(hidden_size, num_c)
             )
             for task, num_c in task_classes.items()
         })

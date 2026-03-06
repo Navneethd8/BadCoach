@@ -46,3 +46,14 @@ frontend/node_modules
 *.mov
 .env.global
 frontend/.vite/
+
+# MLFlow & Logs
+mlruns/
+mlflow.db
+*.log
+training_output.txt
+
+# Training artifacts (keep only final models in LFS)
+backend/models/*_epoch_*.pth
+backend/models/feature_cache_mtl.pt
+backend/models/badminton_model_fast.pth

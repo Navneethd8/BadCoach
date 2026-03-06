@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision.transforms import v2
+import mlflow
+import mlflow.pytorch
 from tqdm import tqdm
 
 from core.dataset import FineBadmintonDataset
@@ -23,15 +25,30 @@ def train_full(
     batch_size=4, # End-to-end is memory heavy
     lr=1e-4,      # Lower LR for end-to-end
     device="cpu",
-    hidden_size=128,
-    save_path=None
+    hidden_size=256,
+    save_path=None,
+    resume_checkpoint=None,
+    start_epoch=0
 ):
     _dir = os.path.dirname(os.path.abspath(__file__))
     _backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(_backend_root, "models", "badminton_model_full.pth")
-    # Step 1: Augmentation Pipeline
-    # Using v2 transforms which apply the same parameters to all frames in a list/tensor
+        save_path = os.path.join(_backend_root, "models", "badminton_model.pth")
+
+    # Set up MLFlow tracking
+    mlflow.set_experiment("IsoCourt_Training_Full")
+    with mlflow.start_run():
+        # Log parameters
+        mlflow.log_params({
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "learning_rate": lr,
+            "hidden_size": hidden_size,
+            "device": device
+        })
+
+        # Step 1: Augmentation Pipeline
+        # Using v2 transforms which apply the same parameters to all frames in a list/tensor
     train_transform = v2.Compose([
         v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
         v2.RandomGrayscale(p=0.1),
@@ -95,12 +112,16 @@ def train_full(
             param.requires_grad = True
         else:
             param.requires_grad = False
+            
+    if resume_checkpoint and os.path.exists(resume_checkpoint):
+        print(f"Resuming training from checkpoint: {resume_checkpoint}")
+        model.load_state_dict(torch.load(resume_checkpoint, map_location=device, weights_only=True))
         
     # Optimizer: Differential Learning Rates
     optimizer = optim.Adam([
-        {'params': model.cnn.parameters(), 'lr': lr * 0.1},
-        {'params': model.lstm.parameters(), 'lr': lr * 5},
-        {'params': model.heads.parameters(), 'lr': lr * 5}
+        {'params': model.cnn.parameters(), 'lr': lr * 0.5},
+        {'params': model.lstm.parameters(), 'lr': lr * 10},
+        {'params': model.heads.parameters(), 'lr': lr * 10}
     ], weight_decay=1e-4)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
@@ -114,9 +135,9 @@ def train_full(
     accumulation_steps = 4
     
     print(f"\nStarting End-to-End Training ({epochs} epochs)...")
-    print(f"Differential LR: CNN={lr*0.1:.6f}, Heads={lr*5:.6f}")
+    print(f"Differential LR: CNN={lr*0.5:.6f}, Heads={lr*10:.6f}")
     
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         # --- Training Phase ---
         model.train()
         running_loss = 0.0
@@ -171,6 +192,14 @@ def train_full(
         
         val_acc = 100 * val_correct["stroke_type"] / val_total
         pos_acc = 100 * val_correct["position"] / val_total
+        
+        mlflow.log_metrics({
+            "train_loss": epoch_loss,
+            "val_type_acc": val_acc,
+            "val_pos_acc": pos_acc,
+            "learning_rate": optimizer.param_groups[0]['lr']
+        }, step=epoch)
+        
         print(f"Epoch {epoch+1:3d} | Loss: {epoch_loss:.4f} | Val Type Acc: {val_acc:.1f}% | Val Pos Acc: {pos_acc:.1f}% | LR: {optimizer.param_groups[0]['lr']:.6f}")
 
         # Save Checkpoint
@@ -178,6 +207,7 @@ def train_full(
             best_acc = val_acc
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             torch.save(model.state_dict(), save_path)
+            mlflow.pytorch.log_model(model, "best_model_full")
             print(f"  -> Saved best model (Type Acc: {best_acc:.1f}%)")
             
             # Update Model Registry
@@ -197,8 +227,7 @@ def train_full(
                 "timestamp": datetime.datetime.now().isoformat(),
                 "script": "train_full.py"
             }
-            # Don't override active_model if train_fast already set it
-            # train_full model is saved under a different name
+            registry["active_model"] = model_name
             with open(registry_path, "w") as f:
                 json.dump(registry, f, indent=2)
 
@@ -222,5 +251,7 @@ if __name__ == "__main__":
         data_root=data_root, 
         list_file=list_file, 
         epochs=100, # Full 100 epoch run
-        device=device
+        device=device,
+        # resume_checkpoint=os.path.join(backend_root, "models", "badminton_model.pth_epoch_60.pth"),
+        # start_epoch=60
     )

@@ -13,6 +13,8 @@ _backend_root = os.path.dirname(os.path.dirname(_current_dir))
 if _backend_root not in sys.path:
     sys.path.insert(0, _backend_root)
 
+import mlflow
+import mlflow.pytorch
 from tqdm import tqdm
 from core.dataset import FineBadmintonDataset
 from core.model import CNN_LSTM_Model
@@ -43,10 +45,22 @@ def extract_and_train(
     _dir = os.path.dirname(os.path.abspath(__file__))
     _backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(_backend_root, "models", "badminton_model.pth")
+        save_path = os.path.join(_backend_root, "models", "badminton_model_fast.pth")
     if cache_path is None:
         cache_path = os.path.join(_backend_root, "models", "feature_cache_mtl.pt")
-    # Step 1: Feature Extraction
+    
+    # Set up MLFlow tracking
+    mlflow.set_experiment("IsoCourt_Training_Fast")
+    with mlflow.start_run():
+        # Log parameters
+        mlflow.log_params({
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "learning_rate": lr,
+            "device": device
+        })
+        
+        # Step 1: Feature Extraction
     if os.path.exists(cache_path):
         print(f"Loading cached features from {cache_path}...")
         # Load to CPU first for compatibility with multiprocessing
@@ -65,7 +79,7 @@ def extract_and_train(
         
         # Load the full trained model
         model_path = os.path.join(os.path.dirname(cache_path), "badminton_model.pth")
-        full_model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=128)
+        full_model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=256)
         
         try:
             state_dict = torch.load(model_path, map_location=device, weights_only=False)
@@ -83,11 +97,7 @@ def extract_and_train(
             cnn.eval()
             print("✓ Using trained CNN backbone for feature extraction")
             
-        print("Initializing PoseEstimator for Two-Stream architecture...")
-        pose_estimator = PoseEstimator()
-        
         all_features = []
-        all_poses = []
         # Initialize label storage
         all_labels = {k: [] for k in task_classes.keys()}
         
@@ -101,18 +111,12 @@ def extract_and_train(
             
             with torch.no_grad():
                 features = cnn(frames_norm.to(device)).squeeze(-1).squeeze(-1) # (16, 2048)
-                poses = pose_estimator.extract_tensor_poses(frames) # (16, 99)
             
             all_features.append(features.cpu())
-            all_poses.append(poses.cpu())
             for k, v in labels.items():
                 all_labels[k].append(v)
         
         all_features = torch.stack(all_features)
-        all_poses = torch.stack(all_poses)
-        
-        # Concatenate Features and Poses for Two-Stream
-        all_features = torch.cat([all_features, all_poses], dim=2) # (B, 16, 2147)
         
         # Filter out tasks with no labels
         tasks_to_remove = []
@@ -174,15 +178,17 @@ def extract_and_train(
         num_workers=num_workers
     )
     
-    # Build a smaller model to prevent overfitting
+    # Build a smaller model to prevent overfitting on frozen features
     hidden_size = 128
-    lstm = nn.LSTM(input_size=2147, hidden_size=hidden_size, num_layers=1, batch_first=True).to(device)
+    mlflow.log_param("hidden_size", hidden_size)
+    
+    lstm = nn.LSTM(input_size=2048, hidden_size=hidden_size, num_layers=1, batch_first=True).to(device)
     heads = nn.ModuleDict({
         task: nn.Sequential(
-            nn.Linear(hidden_size * 2, hidden_size // 2),
+            nn.Linear(hidden_size * 2, hidden_size),
             nn.ReLU(),
             nn.Dropout(0.5), # Increased dropout
-            nn.Linear(hidden_size // 2, num_c)
+            nn.Linear(hidden_size, num_c)
         )
         for task, num_c in task_classes.items()
     }).to(device)
@@ -261,17 +267,25 @@ def extract_and_train(
         val_acc = 100 * val_correct["stroke_type"] / val_total
         val_pos = 100 * val_correct["position"] / val_total
         
+        mlflow.log_metrics({
+            "train_loss": epoch_loss,
+            "val_type_acc": val_acc,
+            "val_pos_acc": val_pos,
+            "learning_rate": optimizer.param_groups[0]['lr']
+        }, step=epoch)
+        
         if (epoch + 1) % 5 == 0 or val_acc > best_acc:
             print(f"Epoch {epoch+1:3d} | Loss: {epoch_loss:.4f} | Val Type Acc: {val_acc:.1f}% | Val Pos Acc: {val_pos:.1f}% | LR: {optimizer.param_groups[0]['lr']:.6f}")
 
         if val_acc > best_acc:
             best_acc = val_acc
             # Save as full model
-            full_model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size, use_pose=True)
+            full_model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size)
             full_model.lstm.load_state_dict(lstm.state_dict())
             full_model.heads.load_state_dict(heads.state_dict())
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             torch.save(full_model.state_dict(), save_path)
+            mlflow.pytorch.log_model(full_model, "best_model_fast")
             print(f"  -> Saved best model (Type Acc: {best_acc:.1f}%)")
             
             # Update Model Registry

@@ -1,18 +1,18 @@
 {
   "models": {
     "badminton_model.pth": {
-      "accuracy": 40.96,
+      "accuracy": 72.3,
       "epoch": 100,
-      "hidden_size": 128,
-      "timestamp": "2026-02-16T22:36:46.273846",
-      "script": "train_fast.py"
-    },
-    "badminton_model_full.pth": {
-      "accuracy": 24.1,
-      "epoch": 30,
-      "hidden_size": 128,
-      "timestamp": "2026-02-16T22:31:53.274303",
+      "hidden_size": 256,
+      "timestamp": "2026-03-05T23:05:03.000000",
       "script": "train_full.py"
+    },
+    "badminton_model_fast.pth": {
+      "accuracy": 36.14,
+      "epoch": 65,
+      "hidden_size": 128,
+      "timestamp": "2026-03-05T23:59:23.254628",
+      "script": "train_fast.py"
     }
   },
   "active_model": "badminton_model.pth"
