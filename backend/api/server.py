@@ -538,6 +538,57 @@ async def analyze_video(file: UploadFile = File(...)):
             _active_jobs -= 1
 
 
+# In-memory cache for frame tips (keyed by metrics hash)
+_frame_tip_cache: dict = {}
+
+
+@app.post("/frame-tip")
+async def frame_tip(body: dict):
+    """
+    Lightweight endpoint: given a frame's classification metrics,
+    return a single coaching tip from Gemini (cached).
+    """
+    stroke   = body.get("label", "Unknown")
+    subtype  = body.get("subtype", "None")
+    tech     = body.get("technique", "Unknown")
+    place    = body.get("placement", "Unknown")
+    position = body.get("position", "Unknown")
+    intent   = body.get("intent", "None")
+    quality  = body.get("quality", "Developing")
+    conf     = body.get("confidence", 0.0)
+
+    # Build a cache key from the metrics
+    cache_key = f"{stroke}|{subtype}|{tech}|{place}|{position}|{intent}|{quality}"
+    if cache_key in _frame_tip_cache:
+        return {"tip": _frame_tip_cache[cache_key], "cached": True}
+
+    if not gemini_enabled:
+        fallback = "Focus on early preparation and maintaining a balanced stance."
+        return {"tip": fallback, "cached": False}
+
+    try:
+        prompt = (
+            f"You are a professional badminton coach giving a quick tip to a player. "
+            f"Based on this single frame analysis, give ONE concise coaching sentence (max 20 words):\n"
+            f"Stroke: {stroke} ({subtype}), Technique: {tech}, Placement: {place}, "
+            f"Position: {position}, Intent: {intent}, Quality: {quality}, Confidence: {conf:.0%}\n"
+            f"Be specific and actionable. No preamble."
+        )
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=model_name,
+            contents=prompt
+        )
+        tip = response.text.strip().lstrip('*-•').strip()
+        # Take only the first sentence if multiple were returned
+        tip = tip.split('\n')[0].strip()
+        _frame_tip_cache[cache_key] = tip
+        return {"tip": tip, "cached": False}
+    except Exception as e:
+        print(f"Frame tip error: {e}")
+        return {"tip": "Maintain your ready position and prepare early for the next shot.", "cached": False}
+
+
 @app.post("/analyze/stream")
 async def analyze_video_stream(file: UploadFile = File(...)):
     """
@@ -729,11 +780,86 @@ async def analyze_video_stream(file: UploadFile = File(...)):
                 await asyncio.sleep(0)  # yield control to event loop
                 window_index += 1
 
-            # Cache and send final summary
+            # Build full summary matching /analyze endpoint
+            clean_timeline = [{k: v for k, v in t.items() if k != "event"} for t in timeline]
+
+            best_event = None
+            valid_events = [t for t in timeline if t.get("label") != "Other"]
+            if valid_events:
+                best_event = max(valid_events, key=lambda x: x.get("confidence", 0))
+            elif timeline:
+                best_event = max(timeline, key=lambda x: x.get("confidence", 0))
+
+            if best_event:
+                action_label = best_event.get("label", "Other")
+                confidence = best_event.get("confidence", 0.0)
+                metrics = best_event.get("metrics", {})
+                quality_label = metrics.get("quality", "Developing")
+                q_rev = {
+                    "Beginner": 1, "Beginner+": 2, "Developing": 3,
+                    "Competent": 4, "Competent+": 5, "Proficient": 6,
+                    "Advanced": 7, "Advanced+": 8, "Expert": 9, "Elite": 10
+                }
+                numeric_quality = q_rev.get(quality_label, 5)
+
+                pose_rating = pose_confidence * 10
+                weighted_quality = (numeric_quality * 0.9) + (pose_rating * 0.1)
+                numeric_quality = int(round(weighted_quality))
+
+                if confidence < 0.3:
+                    numeric_quality = min(numeric_quality, 4)
+                elif confidence < 0.5:
+                    numeric_quality = min(numeric_quality, 7)
+            else:
+                action_label, confidence, quality_label, numeric_quality = "Other", 0.0, "Developing", 3
+                metrics = {k: {"label": "Unknown", "confidence": 0.0} for k in ["subtype", "technique", "placement", "position", "intent"]}
+                metrics["quality"] = "Developing"
+
+            reco_subtype = metrics.get('subtype', {}).get('label', 'None') if isinstance(metrics.get('subtype'), dict) else 'None'
+            reco_tech    = metrics.get('technique', {}).get('label', 'Unknown') if isinstance(metrics.get('technique'), dict) else 'Unknown'
+            reco_place   = metrics.get('placement', {}).get('label', 'Unknown') if isinstance(metrics.get('placement'), dict) else 'Unknown'
+            reco_pos     = metrics.get('position', {}).get('label', 'Unknown') if isinstance(metrics.get('position'), dict) else 'Unknown'
+            reco_intent  = metrics.get('intent', {}).get('label', 'None') if isinstance(metrics.get('intent'), dict) else 'None'
+
+            recommendations = []
+            if gemini_enabled:
+                try:
+                    tactical_context = (
+                        f"- Stroke: {action_label} ({reco_subtype})\n"
+                        f"- Technique: {reco_tech}\n"
+                        f"- Placement: {reco_place}\n"
+                        f"- Court Position: {reco_pos}\n"
+                        f"- Tactical Intent: {reco_intent}\n"
+                        f"- Quality: {numeric_quality}/10 ({quality_label})"
+                    )
+                    prompt = (
+                        f"You are a professional badminton coach. Analyze this stroke data and provide 3 concise technical tips:\n"
+                        f"{tactical_context}\n\n"
+                        f"Format as single-line bullet points."
+                    )
+                    gemini_resp = await asyncio.to_thread(
+                        client.models.generate_content, model='gemini-3-flash-preview', contents=prompt
+                    )
+                    recommendations = [t.strip().lstrip('*-•').strip() for t in gemini_resp.text.strip().split('\n') if t.strip()][:3]
+                except Exception:
+                    recommendations = ["Keep your eye on the shuttle.", "Maintain a low center of gravity.", "Prepare your racket early."]
+            else:
+                recommendations = ["Focus on early preparation.", "Maintain a balanced ready position."]
+
             summary_result = {
-                "action": timeline[0]["label"] if timeline else "Other",
-                "confidence": max((t["confidence"] for t in timeline), default=0.0),
-                "timeline": [{k: v for k, v in t.items() if k != "event"} for t in timeline],
+                "action": action_label,
+                "confidence": confidence,
+                "subtype": reco_subtype,
+                "quality": quality_label,
+                "quality_numeric": numeric_quality,
+                "recommendations": recommendations,
+                "tactical_analysis": {
+                    "technique": metrics.get("technique", {}),
+                    "placement": metrics.get("placement", {}),
+                    "position":  metrics.get("position", {}),
+                    "intent":    metrics.get("intent", {}),
+                },
+                "timeline": clean_timeline,
                 "cache_hit": False,
             }
             _result_cache[video_hash] = summary_result

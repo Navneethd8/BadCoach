@@ -3,7 +3,7 @@ import Logo from './components/Logo';
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import ReactGA from "react-ga4"
 
 function Icon({ name, size = 20, className = '' }) {
@@ -28,6 +28,10 @@ export default function App() {
     const videoRef = useRef(null)
     const loadingTimers = useRef([])
     const shouldReduceMotion = useReducedMotion()
+    const [lightboxEvent, setLightboxEvent] = useState(null)
+    const [frameTip, setFrameTip] = useState(null)
+    const [frameTipLoading, setFrameTipLoading] = useState(false)
+    const frameTipCacheRef = useRef({})
     const retryTimerRef = useRef(null)
 
     // Mobile detection
@@ -232,6 +236,51 @@ export default function App() {
         document.addEventListener('fullscreenchange', handleFullscreenChange)
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }, [])
+
+    // Close lightbox on ESC
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') setLightboxEvent(null) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [])
+
+    // Fetch per-frame Gemini tip when lightbox opens
+    useEffect(() => {
+        if (!lightboxEvent) { setFrameTip(null); return }
+
+        const m = lightboxEvent.metrics || {}
+        const cacheKey = `${lightboxEvent.label}|${m.subtype?.label || m.subtype || ''}|${m.technique?.label || m.technique || ''}|${m.placement?.label || m.placement || ''}|${m.position?.label || m.position || ''}|${m.intent?.label || m.intent || ''}|${m.quality || ''}`
+
+        if (frameTipCacheRef.current[cacheKey]) {
+            setFrameTip(frameTipCacheRef.current[cacheKey])
+            return
+        }
+
+        setFrameTip(null)
+        setFrameTipLoading(true)
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+        fetch(`${apiUrl}/frame-tip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                label: lightboxEvent.label,
+                subtype: m.subtype?.label || m.subtype || 'None',
+                technique: m.technique?.label || m.technique || 'Unknown',
+                placement: m.placement?.label || m.placement || 'Unknown',
+                position: m.position?.label || m.position || 'Unknown',
+                intent: m.intent?.label || m.intent || 'None',
+                quality: m.quality || 'Developing',
+                confidence: lightboxEvent.confidence || 0,
+            })
+        })
+            .then(r => r.json())
+            .then(data => {
+                frameTipCacheRef.current[cacheKey] = data.tip
+                setFrameTip(data.tip)
+            })
+            .catch(() => setFrameTip(null))
+            .finally(() => setFrameTipLoading(false))
+    }, [lightboxEvent])
 
     const formatSeconds = (s) => {
         const m = Math.floor(s / 60).toString().padStart(2, '0')
@@ -443,6 +492,136 @@ export default function App() {
 
     return (
         <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 p-6 md:p-10">
+            {/* Pose Image Lightbox Modal */}
+            <AnimatePresence>
+                {lightboxEvent && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8"
+                        onClick={() => setLightboxEvent(null)}
+                    >
+                        {/* Backdrop */}
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+
+                        {/* Modal Content */}
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ duration: 0.25, ease: 'easeOut' }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative z-10 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden"
+                        >
+                            {/* Close button */}
+                            <button
+                                onClick={() => setLightboxEvent(null)}
+                                className="absolute top-3 right-3 z-20 p-1.5 rounded-full bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors backdrop-blur-sm"
+                            >
+                                <Icon name="close" size={18} />
+                            </button>
+
+                            {/* Pose Image */}
+                            {lightboxEvent.pose_image && (
+                                <div className="w-full bg-black flex items-center justify-center">
+                                    <img
+                                        src={`data:image/jpeg;base64,${lightboxEvent.pose_image}`}
+                                        alt={lightboxEvent.label}
+                                        className="w-full max-h-[50vh] object-contain"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Event Details */}
+                            <div className="p-5 space-y-4">
+                                {/* Header */}
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <span className="text-xs font-mono text-neutral-500 block">{lightboxEvent.timestamp}</span>
+                                        <span className={`text-lg font-bold ${lightboxEvent.label === 'Other' ? 'text-neutral-400' : 'text-white'}`}>
+                                            {lightboxEvent.label?.replace(/_/g, ' ')}
+                                        </span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-xs text-neutral-500 block">Confidence</span>
+                                        <span className="text-lg font-semibold text-emerald-400">
+                                            {(lightboxEvent.confidence * 100).toFixed(0)}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Metrics Grid */}
+                                {lightboxEvent.metrics && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="px-2.5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                            <span className="text-[9px] text-blue-400/60 uppercase tracking-wider font-semibold block mb-0.5">Technique</span>
+                                            <span className="text-xs text-blue-300 font-medium flex items-center gap-1.5">
+                                                <Icon name="pan_tool_alt" size={12} />
+                                                {lightboxEvent.metrics.technique?.label || lightboxEvent.metrics.technique || 'Unknown'}
+                                            </span>
+                                        </div>
+                                        <div className="px-2.5 py-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                            <span className="text-[9px] text-purple-400/60 uppercase tracking-wider font-semibold block mb-0.5">Placement</span>
+                                            <span className="text-xs text-purple-300 font-medium flex items-center gap-1.5">
+                                                <Icon name="explore" size={12} />
+                                                {lightboxEvent.metrics.placement?.label || lightboxEvent.metrics.placement || 'Unknown'}
+                                            </span>
+                                        </div>
+                                        <div className="px-2.5 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                                            <span className="text-[9px] text-rose-400/60 uppercase tracking-wider font-semibold block mb-0.5">Position</span>
+                                            <span className="text-xs text-rose-300 font-medium flex items-center gap-1.5">
+                                                <Icon name="location_on" size={12} />
+                                                {lightboxEvent.metrics.position?.label || lightboxEvent.metrics.position || 'Unknown'}
+                                            </span>
+                                        </div>
+                                        <div className="px-2.5 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                            <span className="text-[9px] text-amber-400/60 uppercase tracking-wider font-semibold block mb-0.5">Intent</span>
+                                            <span className="text-xs text-amber-300 font-medium flex items-center gap-1.5">
+                                                <Icon name="psychology" size={12} />
+                                                {lightboxEvent.metrics.intent?.label || lightboxEvent.metrics.intent || 'None'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Quality */}
+                                {lightboxEvent.metrics?.quality && (
+                                    <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
+                                        <Icon name="star" size={14} className="text-amber-500" />
+                                        <span className="text-xs text-neutral-400">Quality:</span>
+                                        <span className={`text-xs font-semibold ${getQualityColor(lightboxEvent.metrics.quality)}`}>
+                                            {lightboxEvent.metrics.quality}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Per-Frame Gemini Coaching Tip */}
+                                <div className="pt-3 border-t border-neutral-800">
+                                    <span className="text-[9px] text-emerald-500/70 uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
+                                        <Icon name="tips_and_updates" size={12} />
+                                        AI Coach Tip
+                                    </span>
+                                    {frameTipLoading ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3 h-3 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+                                            <span className="text-xs text-neutral-500 italic">Generating tip...</span>
+                                        </div>
+                                    ) : frameTip ? (
+                                        <p className="text-sm text-neutral-300 leading-relaxed">
+                                            {frameTip}
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-neutral-600 italic">Tip unavailable</p>
+                                    )}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="max-w-2xl mx-auto">
 
                 {/* Capacity toast banner */}
@@ -980,12 +1159,18 @@ export default function App() {
                                                             <span className="text-[10px] text-neutral-600 ml-2">{(event.confidence * 100).toFixed(0)}%</span>
                                                         </div>
                                                         {event.pose_image && (
-                                                            <div className="w-24 h-16 rounded overflow-hidden bg-black/50 border border-neutral-800 flex-shrink-0">
+                                                            <div
+                                                                onClick={(e) => { e.stopPropagation(); setLightboxEvent(event) }}
+                                                                className="w-24 h-16 rounded overflow-hidden bg-black/50 border border-neutral-800 flex-shrink-0 cursor-zoom-in hover:border-emerald-600 transition-colors relative group/pose"
+                                                            >
                                                                 <img
                                                                     src={`data:image/jpeg;base64,${event.pose_image}`}
                                                                     alt={event.label}
                                                                     className="w-full h-full object-contain"
                                                                 />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover/pose:bg-black/30 transition-colors flex items-center justify-center">
+                                                                    <Icon name="zoom_in" size={16} className="text-white opacity-0 group-hover/pose:opacity-80 transition-opacity" />
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1019,13 +1204,21 @@ export default function App() {
                                                 onClick={() => handleTimelineClick(event.timestamp)}
                                                 className="flex-shrink-0 cursor-pointer group w-44"
                                             >
-                                                <div className={`w-44 h-32 rounded overflow-hidden bg-black border transition-all duration-300 ${event.pose_image ? 'border-neutral-800 group-hover:border-emerald-600 group-hover:scale-[1.02]' : 'border-neutral-900 flex items-center justify-center'}`}>
+                                                <div
+                                                    onClick={(e) => { if (event.pose_image) { e.stopPropagation(); setLightboxEvent(event) } }}
+                                                    className={`w-44 h-32 rounded overflow-hidden bg-black border transition-all duration-300 relative ${event.pose_image ? 'border-neutral-800 group-hover:border-emerald-600 group-hover:scale-[1.02] cursor-zoom-in' : 'border-neutral-900 flex items-center justify-center'}`}
+                                                >
                                                     {event.pose_image ? (
-                                                        <img
-                                                            src={`data:image/jpeg;base64,${event.pose_image}`}
-                                                            alt={event.label}
-                                                            className="w-full h-full object-contain"
-                                                        />
+                                                        <>
+                                                            <img
+                                                                src={`data:image/jpeg;base64,${event.pose_image}`}
+                                                                alt={event.label}
+                                                                className="w-full h-full object-contain"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                                                <Icon name="zoom_in" size={20} className="text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+                                                            </div>
+                                                        </>
                                                     ) : (
                                                         <Icon name="hide_image" size={24} className="text-neutral-800" />
                                                     )}
