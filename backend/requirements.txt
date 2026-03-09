@@ -15,4 +15,5 @@ google-genai
 python-dotenv
 cachetools
 sse-starlette
+sendgrid
 mlflow

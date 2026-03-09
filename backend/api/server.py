@@ -17,6 +17,8 @@ import uuid
 from google import genai
 from dotenv import load_dotenv
 from cachetools import TTLCache
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -27,6 +29,8 @@ from core.badminton_detector import BadmintonPoseDetector
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+FEEDBACK_TO_EMAIL = os.getenv("FEEDBACK_TO_EMAIL", "")
 
 # Concurrency config — env-overridable for different deployment sizes
 MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "4"))
@@ -875,3 +879,43 @@ async def analyze_video_stream(file: UploadFile = File(...)):
                 _active_jobs -= 1
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.post("/feedback")
+async def send_feedback(body: dict):
+    """
+    Accept user feedback and email it via SendGrid.
+    Body: { "name": str, "email": str, "message": str }
+    """
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip()
+    message = (body.get("message") or "").strip()
+
+    if not name or not email or not message:
+        raise HTTPException(status_code=422, detail="Name, email, and message are all required.")
+
+    if not SENDGRID_API_KEY or not FEEDBACK_TO_EMAIL:
+        print("WARNING: SENDGRID_API_KEY or FEEDBACK_TO_EMAIL not set. Feedback not sent.")
+        raise HTTPException(status_code=503, detail="Feedback service is not configured yet.")
+
+    mail = Mail(
+        from_email=FEEDBACK_TO_EMAIL,  # Must be a verified sender in SendGrid
+        to_emails=FEEDBACK_TO_EMAIL,
+        subject=f"[IsoCourt Feedback] from {name}",
+        html_content=(
+            f"<h3>New feedback from IsoCourt</h3>"
+            f"<p><strong>Name:</strong> {name}</p>"
+            f"<p><strong>Email:</strong> {email}</p>"
+            f"<hr/>"
+            f"<p>{message}</p>"
+        ),
+    )
+
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(mail)
+        print(f"SendGrid response: {response.status_code}")
+        return {"ok": True}
+    except Exception as e:
+        print(f"SendGrid error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send feedback. Please try again later.")

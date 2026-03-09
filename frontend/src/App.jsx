@@ -1267,6 +1267,19 @@ export default function App() {
                         </div>
                     )}
                 </section>
+
+                {/* Feedback nudge — only after results */}
+                {result && !result.validation_error && (
+                    <div className="mt-4 text-center">
+                        <a
+                            href="/#feedback"
+                            className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-emerald-400 transition-colors"
+                        >
+                            <Icon name="chat" size={14} />
+                            Have feedback? Let us know
+                        </a>
+                    </div>
+                )}
             </div>
         </div>
     )
