@@ -1273,6 +1273,7 @@ export default function App() {
                     <div className="mt-4 text-center">
                         <a
                             href="/#feedback"
+                            onClick={() => ReactGA.event({ category: 'Feedback', action: 'feedback_link_clicked', label: 'analyze_page' })}
                             className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-emerald-400 transition-colors"
                         >
                             <Icon name="chat" size={14} />

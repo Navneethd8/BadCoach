@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import ReactGA from 'react-ga4'
 import Logo from './Logo'
 
 function Icon({ name, size = 20, className = '' }) {
@@ -103,6 +104,7 @@ export default function LandingPage() {
             setFbName('')
             setFbEmail('')
             setFbMessage('')
+            ReactGA.event({ category: 'Feedback', action: 'feedback_sent', label: 'landing_page' })
         } catch (err) {
             setFbStatus('error')
             setFbError(err?.response?.data?.detail || 'Something went wrong. Please try again.')
