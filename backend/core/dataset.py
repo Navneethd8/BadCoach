@@ -5,10 +5,68 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from typing import List, Tuple, Dict, Any, Optional
+from collections import Counter
+
+
+def get_class_weights(
+    data_root: str,
+    list_file: str,
+    task: str = "stroke_type",
+    cap_unseen: float = 2.0,
+    inverse_freq_max: float = 5.0,
+    normalize_mean_one: bool = True,
+) -> Tuple[List[float], Dict[str, float]]:
+    """
+    Compute per-class loss weights from annotation counts (inverse frequency).
+    Uses the same loading and mapping as FineBadmintonDataset so counts match training.
+
+    Args:
+        data_root: Same as for the dataset.
+        list_file: Path to the annotations JSON.
+        task: Task name (e.g. 'stroke_type', 'position').
+        cap_unseen: Weight for classes with 0 count (avoids huge weights).
+        inverse_freq_max: Cap on 1/(count+1) before normalization.
+        normalize_mean_one: If True, scale weights so mean is 1.
+
+    Returns:
+        weights_list: List of length num_classes, same order as dataset.classes[task].
+        name_to_weight: Dict mapping class name -> weight.
+    """
+    if not os.path.exists(list_file):
+        return [], {}
+    ds = FineBadmintonDataset(data_root, list_file, transform=None)
+    if task not in ds.classes:
+        return [], {}
+    class_list = ds.classes[task]
+    counts = Counter()
+    for sample in ds.samples:
+        labels = ds._map_labels(sample)
+        counts[labels[task]] += 1
+    weights = []
+    for i in range(len(class_list)):
+        c = counts.get(i, 0)
+        if c == 0:
+            w = cap_unseen
+        else:
+            w = min(1.0 / (c + 1.0), inverse_freq_max)
+        weights.append(w)
+    if normalize_mean_one and weights:
+        mean_w = sum(weights) / len(weights)
+        if mean_w > 0:
+            weights = [w / mean_w for w in weights]
+    name_to_weight = {class_list[i]: weights[i] for i in range(len(class_list))}
+    return weights, name_to_weight
+
 
 class FineBadmintonDataset(Dataset):
     """
     Dataset class for FineBadminton data.
+
+    Multiclass setup: each task is single-label multiclass. Each sample has one
+    true class index per task (e.g. stroke_type in 0..8). Labels are class indices
+    (long); CrossEntropyLoss(logits, labels) with optional per-class weights
+    handles imbalance. Use get_class_weights() for data-driven weights.
+
     Supports Multi-Task training for:
     - stroke_type (Main hit_type)
     - stroke_subtype (Detailed variation)

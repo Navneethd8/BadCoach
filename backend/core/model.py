@@ -44,6 +44,7 @@ class CNN_LSTM_Model(nn.Module):
             num_layers=num_layers,
             batch_first=True
         )
+        self.lstm_dropout = nn.Dropout(0.5)
         
         # 3. Multi-Task Classification Heads
         # Enhanced heads with a hidden layer. 
@@ -52,7 +53,7 @@ class CNN_LSTM_Model(nn.Module):
             task: nn.Sequential(
                 nn.Linear(hidden_size * 2, hidden_size),
                 nn.ReLU(),
-                nn.Dropout(0.3),
+                nn.Dropout(0.5), # Increased from 0.3
                 nn.Linear(hidden_size, num_c)
             )
             for task, num_c in task_classes.items()
@@ -88,6 +89,7 @@ class CNN_LSTM_Model(nn.Module):
         
         # 3. Temporal Modeling
         lstm_out, (h_n, c_n) = self.lstm(features)
+        lstm_out = self.lstm_dropout(lstm_out)
         
         # 4. Temporal Global Pooling (Collapse Prevention)
         # Instead of just taking the last state, we pool across all 16 frames.

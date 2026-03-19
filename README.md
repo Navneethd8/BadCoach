@@ -73,6 +73,6 @@ A single pass provides 7 distinct layers of analysis:
 
 | Script | Purpose | Focus | Use Case |
 | :--- | :--- | :--- | :--- |
-| `train_fast.py` | Logic Tuning | LSTM/Heads | Hyperparameter optimization (3-5 mins) |
-| `train_full.py` | Visual Robustness | Full CNN-LSTM | Domain shift & court color invariance (Overnight) |
+| `train_staeformer.py` | STAEformer | CNN + Spatio-Temporal Transformer | Comparable baseline; same data/setup as `train_full` |
+| `train_full.py` | Baseline | CNN-LSTM | Domain shift & court color invariance (Overnight) |
 | `fine_tune.py` | Domain Adaptation | Heads-Only | Custom court floor & lighting (20 mins) |
