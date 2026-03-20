@@ -34,4 +34,4 @@ EXPOSE 7860
 
 # Run the FastAPI application using uvicorn
 # Hugging Face Spaces expects the app to run on port 7860
-CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]
