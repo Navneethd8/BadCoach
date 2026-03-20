@@ -245,7 +245,7 @@ export default function LiveSession() {
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-100">
             <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/80 backdrop-blur-md">
-                <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+                <div className="mx-auto flex h-14 max-w-[min(1920px,calc(100vw-1.25rem))] items-center justify-between px-3 sm:px-5">
                     <button onClick={() => navigate('/')} className="flex items-center gap-2 focus:outline-none">
                         <Logo size={22} className="text-emerald-500" />
                         <span className="text-base font-semibold tracking-tight">Iso<span className="text-emerald-500">Court</span></span>
@@ -256,7 +256,7 @@ export default function LiveSession() {
                 </div>
             </nav>
 
-            <div className="max-w-7xl mx-auto px-6 py-6">
+            <div className="mx-auto max-w-[min(1920px,calc(100vw-1.25rem))] px-3 py-6 sm:px-5">
                 <h1 className="text-2xl font-bold mb-1 tracking-tight">Live <span className="text-emerald-500">Session</span></h1>
                 <p className="text-sm text-neutral-500 mb-5">Point your camera at the court and get real-time feedback.</p>
 
@@ -282,12 +282,10 @@ export default function LiveSession() {
                     </div>
                 )}
 
-                {/* Two-column: video+metrics | coach chat */}
-                <div className="flex flex-col lg:flex-row gap-5">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-4 xl:gap-5 min-[1700px]:gap-6">
 
-                    {/* Left: camera + metrics */}
-                    <div className="flex-1 min-w-0">
-                        <div className="relative aspect-video bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                        <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-lg shadow-black/20">
                             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                             <canvas ref={canvasRef} className="hidden" />
 
@@ -409,9 +407,9 @@ export default function LiveSession() {
                         </div>
                     </div>
 
-                    {/* Right: coach commentary feed — fixed-height scroll view */}
-                    <div className="w-full lg:w-96 flex-shrink-0 lg:sticky lg:top-[4.5rem] lg:self-start flex flex-col bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden"
-                         style={{ height: 'calc(100vh - 8rem)' }}>
+                    <div
+                        className="flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 sm:h-[min(20rem,44vh)] lg:h-auto lg:min-h-0 lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
+                    >
                         <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800 flex-shrink-0">
                             <Icon name="smart_toy" size={16} className="text-emerald-500" />
                             <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">AI Coach</span>
@@ -425,9 +423,9 @@ export default function LiveSession() {
                                 </button>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 scroll-smooth">
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 scroll-smooth">
                             {chatLog.length === 0 && (
-                                <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-12">
+                                <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
                                     <Icon name="sports" size={28} className="text-neutral-800" />
                                     <p className="text-xs text-neutral-600">Start a game to see live coaching commentary here.</p>
                                 </div>

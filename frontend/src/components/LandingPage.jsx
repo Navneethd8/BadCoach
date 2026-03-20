@@ -123,14 +123,28 @@ export default function LandingPage() {
                             Iso<span className="text-emerald-500">Court</span>
                         </span>
                     </button>
-                    <motion.button
-                        onClick={() => navigate('/analyze')}
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md transition-colors"
-                    >
-                        Try it free
-                    </motion.button>
+                    <div className="flex items-center gap-4 sm:gap-5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_nav' })
+                                navigate('/live')
+                            }}
+                            className="text-sm font-medium text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5"
+                        >
+                            <Icon name="sensors" size={18} className="text-emerald-500/90" />
+                            <span className="hidden sm:inline">Live coaching</span>
+                            <span className="sm:hidden">Live</span>
+                        </button>
+                        <motion.button
+                            onClick={() => navigate('/analyze')}
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.97 }}
+                            className="text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md transition-colors"
+                        >
+                            Try it free
+                        </motion.button>
+                    </div>
                 </div>
             </nav>
 
@@ -164,7 +178,7 @@ export default function LandingPage() {
                     </FadeUp>
 
                     <FadeUp delay={0.22}>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
                             <motion.button
                                 onClick={() => navigate('/analyze')}
                                 whileHover={{ scale: 1.04 }}
@@ -172,6 +186,19 @@ export default function LandingPage() {
                                 className="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
                             >
                                 Start Analyzing for Free
+                            </motion.button>
+                            <motion.button
+                                type="button"
+                                onClick={() => {
+                                    ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_hero' })
+                                    navigate('/live')
+                                }}
+                                whileHover={{ scale: 1.04 }}
+                                whileTap={{ scale: 0.97 }}
+                                className="w-full sm:w-auto px-8 py-3 border border-emerald-600/40 hover:border-emerald-500/70 bg-emerald-950/20 text-emerald-100 hover:text-white font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Icon name="sensors" size={18} className="text-emerald-400" />
+                                Live coaching
                             </motion.button>
                             <a
                                 href="#how-it-works"
@@ -352,6 +379,19 @@ export default function LandingPage() {
                         <Icon name="videocam" size={18} />
                         Analyze My Stroke
                     </motion.button>
+                    <p className="mt-8 text-sm text-neutral-500">
+                        Want tips while you play?{' '}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_footer_cta' })
+                                navigate('/live')
+                            }}
+                            className="text-emerald-400 hover:text-emerald-300 font-medium underline-offset-2 hover:underline"
+                        >
+                            Open live coaching
+                        </button>
+                    </p>
                 </FadeUp>
             </section>
 
