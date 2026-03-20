@@ -1,7 +1,7 @@
 """
 Unit tests for PoseEstimator (pose_utils.py).
-Uses real OpenCV frames but mocks the MediaPipe detector to avoid
-needing the pose_landmarker_lite.task model file in CI.
+Uses real OpenCV frames but mocks the MediaPipe detector (and mp.Image in
+process_frame tests) so CI does not need the task model or GLES libraries.
 """
 import os
 import sys
@@ -47,8 +47,7 @@ def random_frame():
 class TestPoseEstimatorProcessFrame:
 
     def test_process_frame_returns_result_object(self, black_frame, mock_detector_no_landmarks):
-        with patch("mediapipe.tasks.python.vision.PoseLandmarker.create_from_options",
-                   return_value=mock_detector_no_landmarks):
+        with patch("core.pose_utils.mp.Image", return_value=MagicMock(name="mp_image")):
             estimator = PoseEstimator.__new__(PoseEstimator)
             estimator.detector = mock_detector_no_landmarks
             estimator.POSE_CONNECTIONS = []
@@ -57,11 +56,12 @@ class TestPoseEstimatorProcessFrame:
             mock_detector_no_landmarks.detect.assert_called_once()
 
     def test_process_frame_handles_random_frame(self, random_frame, mock_detector_no_landmarks):
-        estimator = PoseEstimator.__new__(PoseEstimator)
-        estimator.detector = mock_detector_no_landmarks
-        estimator.POSE_CONNECTIONS = []
-        result = estimator.process_frame(random_frame)
-        assert result is not None
+        with patch("core.pose_utils.mp.Image", return_value=MagicMock(name="mp_image")):
+            estimator = PoseEstimator.__new__(PoseEstimator)
+            estimator.detector = mock_detector_no_landmarks
+            estimator.POSE_CONNECTIONS = []
+            result = estimator.process_frame(random_frame)
+            assert result is not None
 
 
 class TestPoseEstimatorDrawLandmarks:
