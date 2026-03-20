@@ -6,8 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # Install system dependencies for OpenCV, MediaPipe, and cryptography (sendgrid)
+# MediaPipe tasks load libGLESv2.so.2 (Mesa GLES + EGL) even for CPU inference.
 RUN apt-get update && apt-get install -y \
     libgl1 \
+    libgles2-mesa \
+    libegl1-mesa \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
