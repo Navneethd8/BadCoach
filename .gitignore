@@ -41,6 +41,11 @@ htmlcov/
 
 backend/data
 
+# Ephemeral uploaded clips written under backend/ (legacy paths; API uses OS temp via temp_video.py)
+backend/temp_clipjob_*
+backend/temp_stream_*
+backend/temp_*.mp4
+
 frontend/node_modules
 
 *.mov

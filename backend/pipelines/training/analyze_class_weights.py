@@ -117,7 +117,7 @@ def main():
                 print(f"  {task}: {names}")
     else:
         print("  None — every class has at least one sample.")
-    print("\nDone. train_full.py and train_staeformer.py use get_class_weights() from core.dataset for stroke_type.")
+    print("\nDone. get_class_weights() is available in core.dataset for optional use.")
 
 
 if __name__ == "__main__":

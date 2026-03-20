@@ -13,6 +13,7 @@ import importlib
 import threading
 import numpy as np
 import pytest
+import api.state as state_module
 import api.server as server_module
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
@@ -24,13 +25,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_video_bytes(n_frames=30, fps=30, width=64, height=64) -> bytes:
-    """Return bytes of a small synthetic MP4."""
+def _make_video_bytes(n_frames=30, fps=30, width=64, height=64, seed=0) -> bytes:
+    """Return bytes of a small synthetic MP4. Use a unique seed to avoid _result_cache hits."""
     tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     tmp.close()
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(tmp.name, fourcc, fps, (width, height))
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(seed)
     for _ in range(n_frames):
         out.write((rng.random((height, width, 3)) * 255).astype(np.uint8))
     out.release()
@@ -145,8 +146,8 @@ class TestAnalyzeValidationFailures:
         When pose/model confidence is forced low, server returns validation_failed=True.
         The mock in conftest gives high confidence by default; we patch it low for this test.
         """
-        original = server_module.badminton_detector.is_badminton_video
-        server_module.badminton_detector.is_badminton_video = MagicMock(
+        original = state_module.badminton_detector.is_badminton_video
+        state_module.badminton_detector.is_badminton_video = MagicMock(
             return_value=(False, 0.02, {"overhead_score": 0.01, "stance_score": 0.01,
                                         "racket_score": 0.01})
         )
@@ -160,7 +161,7 @@ class TestAnalyzeValidationFailures:
                 # (model classification also runs — result depends on mock)
                 assert "validation_failed" in body or "action" in body
         finally:
-            server_module.badminton_detector.is_badminton_video = original
+            state_module.badminton_detector.is_badminton_video = original
 
     def test_empty_body_returns_422(self, app_client):
         """Missing file field → 422 Unprocessable Entity."""
@@ -186,8 +187,8 @@ class TestAnalyzeValidationFailures:
 
     def test_error_response_has_error_field(self, app_client):
         """Validation error responses must include an 'error' string."""
-        original = server_module.badminton_detector.is_badminton_video
-        server_module.badminton_detector.is_badminton_video = MagicMock(
+        original = state_module.badminton_detector.is_badminton_video
+        state_module.badminton_detector.is_badminton_video = MagicMock(
             return_value=(False, 0.01, {"overhead_score": 0.0, "stance_score": 0.0,
                                         "racket_score": 0.0})
         )
@@ -197,7 +198,7 @@ class TestAnalyzeValidationFailures:
             if r.status_code == 200 and r.json().get("validation_failed"):
                 assert "error" in r.json()
         finally:
-            server_module.badminton_detector.is_badminton_video = original
+            state_module.badminton_detector.is_badminton_video = original
 
 
 # ---------------------------------------------------------------------------
@@ -298,3 +299,72 @@ class TestStreamingEndpoint:
         if r.status_code == 200:
             text = r.text
             assert "done" in text, "Stream did not include a 'done' event"
+
+
+# ---------------------------------------------------------------------------
+# /clips/jobs — queued clip API
+# ---------------------------------------------------------------------------
+
+class TestClipJobsAPI:
+
+    def test_post_clip_job_returns_202_with_job_id(self, app_client):
+        video = _make_video_bytes(n_frames=8, seed=91001)
+        r = app_client.post(
+            "/clips/jobs",
+            files={"file": ("clip.mp4", io.BytesIO(video), "video/mp4")},
+        )
+        assert r.status_code == 202
+        body = r.json()
+        assert "job_id" in body
+        assert body.get("status") == "queued"
+        assert "queue_ahead" in body
+
+    def test_clip_job_status_after_post(self, app_client):
+        """Job exists and /status returns a consistent payload (queue pipeline wired)."""
+        video = _make_video_bytes(n_frames=30, seed=91002)
+        r = app_client.post(
+            "/clips/jobs",
+            files={"file": ("clip.mp4", io.BytesIO(video), "video/mp4")},
+        )
+        assert r.status_code == 202
+        job_id = r.json()["job_id"]
+        st = app_client.get(f"/clips/jobs/{job_id}/status")
+        assert st.status_code == 200
+        body = st.json()
+        assert body["job_id"] == job_id
+        assert body["status"] in ("queued", "running", "done", "failed")
+
+    def test_clip_queue_full_returns_503(self, app_client, monkeypatch):
+        import api.clip_jobs as cj
+        monkeypatch.setattr(cj, "MAX_QUEUED_JOBS", 0)
+        video = _make_video_bytes(n_frames=5, seed=91003)
+        r = app_client.post(
+            "/clips/jobs",
+            files={"file": ("clip.mp4", io.BytesIO(video), "video/mp4")},
+        )
+        assert r.status_code == 503
+        detail = r.json().get("detail", {})
+        assert "error" in detail or isinstance(detail, str)
+
+
+# ---------------------------------------------------------------------------
+# /live/sessions — stub capacity
+# ---------------------------------------------------------------------------
+
+class TestLiveSessionsAPI:
+
+    def test_start_live_session_returns_ready(self, app_client):
+        r = app_client.post("/live/sessions")
+        assert r.status_code == 200
+        body = r.json()
+        assert body.get("status") == "ready"
+        assert "session_id" in body
+        app_client.delete(f"/live/sessions/{body['session_id']}")
+
+    def test_second_live_session_503_when_cap_is_one(self, app_client):
+        r1 = app_client.post("/live/sessions")
+        assert r1.status_code == 200
+        r2 = app_client.post("/live/sessions")
+        assert r2.status_code == 503
+        sid = r1.json()["session_id"]
+        app_client.delete(f"/live/sessions/{sid}")

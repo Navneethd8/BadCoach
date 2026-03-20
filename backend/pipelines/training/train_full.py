@@ -9,26 +9,79 @@ if backend_root not in sys.path:
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 import mlflow
 import mlflow.pytorch
 from tqdm import tqdm
 
-from core.dataset import FineBadmintonDataset, get_class_weights
+from core.dataset import FineBadmintonDataset
 from core.model import CNN_LSTM_Model
+from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
+
+
+class FramePoseDataset(Dataset):
+    """Wraps a frame dataset and attaches pre-cached pose tensors."""
+
+    def __init__(self, frame_dataset, pose_cache):
+        self.frame_dataset = frame_dataset
+        self.pose_cache = pose_cache  # (N, 16, 33, 3)
+
+    def __len__(self):
+        return len(self.frame_dataset)
+
+    def __getitem__(self, idx):
+        frames, labels = self.frame_dataset[idx]
+        pose = self.pose_cache[idx].clone()
+        # Flatten (T, 33, 3) -> (T, 99) for CNN-LSTM's pose input
+        pose_flat = pose.view(pose.shape[0], -1)
+        return frames, pose_flat, labels
+
+
+def _build_pose_cache(dataset, list_file, cache_path, seed=42):
+    """Build or load cached pose tensors aligned to dataset indices."""
+    if os.path.exists(cache_path):
+        print(f"Loading pose cache from {cache_path}...")
+        out = torch.load(cache_path, map_location="cpu", weights_only=False)
+        return out["pose_cache"]
+
+    set_seed(seed)
+    pose_estimator = PoseEstimator()
+    dataset_raw = FineBadmintonDataset(
+        dataset.data_root,
+        list_file,
+        transform=None,
+        sequence_length=dataset.sequence_length,
+        frame_interval=dataset.frame_interval,
+    )
+
+    pose_list = []
+    for i in tqdm(range(len(dataset_raw)), desc="Building pose cache"):
+        frames, _ = dataset_raw[i]
+        with torch.no_grad():
+            p = pose_estimator.extract_tensor_poses(frames)  # (T, 99)
+        if p.dim() == 2:
+            p = p.view(-1, 33, 3)
+        pose_list.append(p.cpu())
+    pose_cache = torch.stack(pose_list)
+
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    torch.save({"pose_cache": pose_cache}, cache_path)
+    print(f"Saved pose cache to {cache_path}")
+    return pose_cache
 
 def train_full(
     data_root,
     list_file,
     epochs=50,
-    batch_size=4,  # End-to-end is memory heavy
-    lr=1e-4,       # Lower LR for end-to-end
+    batch_size=4,
+    lr=1e-4,
     device="cpu",
     hidden_size=128,
     save_path=None,
+    pose_cache_path=None,
     resume_checkpoint=None,
     start_epoch=0,
     seed=42,
@@ -39,6 +92,8 @@ def train_full(
     _backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
         save_path = os.path.join(_backend_root, "models", "badminton_model.pth")
+    if pose_cache_path is None:
+        pose_cache_path = os.path.join(_backend_root, "models", "pose_cache_staeformer.pt")
 
     # Set up MLFlow tracking
     mlflow.set_experiment("IsoCourt_Training_Full")
@@ -62,7 +117,11 @@ def train_full(
 
         print(f"Loading dataset from {data_root}...")
         dataset = FineBadmintonDataset(data_root, list_file, transform=train_transform)
-        
+
+        # Build or load pose cache (aligned to dataset indices)
+        pose_cache = _build_pose_cache(dataset, list_file, pose_cache_path, seed=seed)
+        wrapper = FramePoseDataset(dataset, pose_cache)
+
         # --- WeightedRandomSampler for Class Balance ---
         st_labels = []
         print("Pre-calculating class weights for balanced sampling...")
@@ -71,11 +130,10 @@ def train_full(
             st_labels.append(labels['stroke_type'])
 
         # --- Video-Level Train/Val Split ---
-        from torch.utils.data import Subset
         train_indices, val_indices = video_level_split(dataset.samples)
         
-        train_subset = Subset(dataset, train_indices)
-        val_subset = Subset(dataset, val_indices)
+        train_subset = Subset(wrapper, train_indices)
+        val_subset = Subset(wrapper, val_indices)
         
         # WeightedRandomSampler on train split only
         train_st_labels = torch.tensor([st_labels[i] for i in train_indices])
@@ -103,11 +161,10 @@ def train_full(
             pin_memory=True if device == "cuda" else False
         )
         
-        # Step 3: Model & Loss
         task_classes = {k: len(v) for k, v in dataset.classes.items()}
         task_classes["quality"] = 7
         del task_classes["stroke_subtype"]
-        model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size, pretrained=True).to(device)
+        model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size, pretrained=True, use_pose=True).to(device)
         
         # Partial freeze: only layer4 is trainable for domain adaptation
         print("Freezing CNN backbone (layer4 unfrozen for domain adaptation)...")
@@ -127,8 +184,7 @@ def train_full(
         
         scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
 
-        weights_st_list, _ = get_class_weights(data_root, list_file, task="stroke_type", cap_unseen=2.0)
-        weights_st = torch.tensor(weights_st_list, dtype=torch.float32, device=device)
+        weights_st = torch.tensor([1.0, 1.5, 1.3, 2.0, 1.5, 1.5, 1.5, 2.0, 5.0], dtype=torch.float32, device=device)
         criterion_st = nn.CrossEntropyLoss(weight=weights_st, label_smoothing=0.1)
         criterion_default = nn.CrossEntropyLoss(label_smoothing=0.1)
 
@@ -148,11 +204,12 @@ def train_full(
             optimizer.zero_grad()
             
             pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
-            for batch_idx, (frames, labels) in enumerate(pbar):
+            for batch_idx, (frames, poses, labels) in enumerate(pbar):
                 frames = frames.to(device)
+                poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}
                 
-                outputs = model(frames)
+                outputs = model(frames, poses=poses)
                 
                 batch_loss = torch.tensor(0.0, device=device)
                 loss_weights = {
@@ -197,10 +254,11 @@ def train_full(
             val_total = 0
             
             with torch.no_grad():
-                for frames, labels in val_loader:
+                for frames, poses, labels in val_loader:
                     frames = frames.to(device)
+                    poses = poses.to(device)
                     labels = {k: v.to(device) for k, v in labels.items()}
-                    outputs = model(frames)
+                    outputs = model(frames, poses=poses)
                     
                     val_total += frames.size(0)
                     for task, logits in outputs.items():

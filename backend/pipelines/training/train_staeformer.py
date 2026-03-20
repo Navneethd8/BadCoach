@@ -1,7 +1,12 @@
 """
-STAEformer training: CNN (embedding) + STAEformer trained together on frames.
+STAEformer training script.
+
+Two modes controlled by --pose-only / use_cnn flag:
+  use_cnn=True  (default)  – CNN backbone provides 2048-dim features as node 34.
+  use_cnn=False (pose-only) – 33 pose joints only; no CNN, no frames at training time.
+
 Same data, split, and training setup as train_full.py so results are comparable.
-Pose is cached once (from unaugmented frames); CNN sees augmented frames and is trained.
+Pose is cached once (from unaugmented frames).
 """
 import os
 import sys
@@ -21,7 +26,7 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 import mlflow
-from core.dataset import FineBadmintonDataset, get_class_weights
+from core.dataset import FineBadmintonDataset
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
@@ -113,23 +118,27 @@ def train_staeformer(
     resume_checkpoint=None,
     start_epoch=0,
     seed=42,
+    use_cnn=True,
 ):
     set_seed(seed)
 
     _dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(_dir))
+    suffix = "staeformer" if use_cnn else "staeformer_pose_only"
     if save_path is None:
-        save_path = os.path.join(backend_root, "models", "badminton_model_staeformer.pth")
+        save_path = os.path.join(backend_root, "models", f"badminton_model_{suffix}.pth")
     if pose_cache_path is None:
         pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
 
-    mlflow.set_experiment("IsoCourt_Training_STAEformer")
+    experiment_name = "IsoCourt_Training_STAEformer" if use_cnn else "IsoCourt_Training_STAEformer_PoseOnly"
+    mlflow.set_experiment(experiment_name)
     with mlflow.start_run():
         mlflow.log_params({
             "epochs": epochs,
             "batch_size": batch_size,
             "lr": lr,
             "seed": seed,
+            "use_cnn": use_cnn,
             "script": "train_staeformer.py",
         })
 
@@ -189,35 +198,35 @@ def train_staeformer(
             pin_memory=(device == "cuda"),
         )
 
-        # CNN backbone (same as baseline: ResNet50, freeze except layer4)
-        weights = models.ResNet50_Weights.DEFAULT
-        resnet = models.resnet50(weights=weights)
-        cnn = nn.Sequential(*list(resnet.children())[:-1]).to(device)
-        cnn.eval()
-        for name, param in cnn.named_parameters():
-            param.requires_grad = "7" in name
-        if resume_checkpoint and os.path.exists(resume_checkpoint):
-            ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
-            if "cnn" in ckpt:
-                cnn.load_state_dict(ckpt["cnn"], strict=True)
-                print("Loaded CNN from checkpoint")
+        cnn = None
+        if use_cnn:
+            weights = models.ResNet50_Weights.DEFAULT
+            resnet = models.resnet50(weights=weights)
+            cnn = nn.Sequential(*list(resnet.children())[:-1]).to(device)
+            cnn.eval()
+            for name, param in cnn.named_parameters():
+                param.requires_grad = "7" in name
+            if resume_checkpoint and os.path.exists(resume_checkpoint):
+                ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
+                if "cnn" in ckpt:
+                    cnn.load_state_dict(ckpt["cnn"], strict=True)
+                    print("Loaded CNN from checkpoint")
 
-        staeformer = STAEformerModel(task_classes=task_classes, embed_dim=128).to(device)
+        staeformer = STAEformerModel(task_classes=task_classes, embed_dim=128, use_cnn=use_cnn).to(device)
         if resume_checkpoint and os.path.exists(resume_checkpoint):
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
             if "staeformer" in ckpt:
                 staeformer.load_state_dict(ckpt["staeformer"], strict=False)
                 print("Loaded STAEformer from checkpoint")
 
-        cnn_layer4 = [p for n, p in cnn.named_parameters() if "7" in n]
-        optimizer = optim.AdamW([
-            {"params": cnn_layer4, "lr": lr * 0.5},
-            {"params": staeformer.parameters(), "lr": lr * 5},
-        ], weight_decay=1e-2)
+        param_groups = [{"params": staeformer.parameters(), "lr": lr * 5}]
+        if use_cnn:
+            cnn_layer4 = [p for n, p in cnn.named_parameters() if "7" in n]
+            param_groups.insert(0, {"params": cnn_layer4, "lr": lr * 0.5})
+        optimizer = optim.AdamW(param_groups, weight_decay=1e-2)
         scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
 
-        weights_st_list, _ = get_class_weights(data_root, list_file, task="stroke_type", cap_unseen=2.0)
-        weights_st = torch.tensor(weights_st_list, dtype=torch.float32, device=device)
+        weights_st = torch.tensor([1.0, 1.5, 1.3, 2.0, 1.5, 1.5, 1.5, 2.0, 5.0], dtype=torch.float32, device=device)
         criterion_st = nn.CrossEntropyLoss(weight=weights_st, label_smoothing=0.1)
         criterion_default = nn.CrossEntropyLoss(label_smoothing=0.1)
         loss_weights = {
@@ -227,11 +236,16 @@ def train_staeformer(
         accumulation_steps = 4
         best_acc = 0.0
 
-        print("\nStarting STAEformer training (CNN + STAEformer)...")
-        print(f"Layer4 LR: {lr*0.5:.6f} | STAEformer LR: {lr*5:.6f}")
+        mode_label = "CNN + STAEformer" if use_cnn else "Pose-Only STAEformer"
+        print(f"\nStarting {mode_label} training...")
+        if use_cnn:
+            print(f"Layer4 LR: {lr*0.5:.6f} | STAEformer LR: {lr*5:.6f}")
+        else:
+            print(f"STAEformer LR: {lr*5:.6f}")
 
         for epoch in range(start_epoch, epochs):
-            cnn.train()
+            if cnn is not None:
+                cnn.train()
             staeformer.train()
             running_loss = 0.0
             train_correct = {k: 0 for k in task_classes}
@@ -240,12 +254,15 @@ def train_staeformer(
 
             pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
             for batch_idx, (frames, poses, labels) in enumerate(pbar):
-                frames = frames.to(device)
                 poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}
 
-                cnn_seq = _cnn_sequence(cnn, frames, device)
-                logits_dict = staeformer(poses, cnn_seq)
+                if use_cnn:
+                    frames = frames.to(device)
+                    cnn_seq = _cnn_sequence(cnn, frames, device)
+                    logits_dict = staeformer(poses, cnn_seq)
+                else:
+                    logits_dict = staeformer(poses)
 
                 batch_loss = torch.tensor(0.0, device=device)
                 for task, logits in logits_dict.items():
@@ -257,15 +274,17 @@ def train_staeformer(
                         train_total += labels[task].size(0)
 
                 (batch_loss / accumulation_steps).backward()
+                all_params = list(cnn.parameters()) + list(staeformer.parameters()) if cnn is not None else list(staeformer.parameters())
                 if (batch_idx + 1) % accumulation_steps == 0:
-                    torch.nn.utils.clip_grad_norm_(list(cnn.parameters()) + list(staeformer.parameters()), max_norm=1.0)
+                    torch.nn.utils.clip_grad_norm_(all_params, max_norm=1.0)
                     optimizer.step()
                     optimizer.zero_grad()
                 running_loss += batch_loss.item()
                 pbar.set_postfix(loss=running_loss / (batch_idx + 1))
 
             if (batch_idx + 1) % accumulation_steps != 0:
-                torch.nn.utils.clip_grad_norm_(list(cnn.parameters()) + list(staeformer.parameters()), max_norm=1.0)
+                all_params = list(cnn.parameters()) + list(staeformer.parameters()) if cnn is not None else list(staeformer.parameters())
+                torch.nn.utils.clip_grad_norm_(all_params, max_norm=1.0)
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -273,18 +292,22 @@ def train_staeformer(
             train_acc = 100.0 * train_correct["stroke_type"] / train_total
             scheduler.step(epoch)
 
-            cnn.eval()
+            if cnn is not None:
+                cnn.eval()
             staeformer.eval()
             val_correct = {k: 0 for k in task_classes}
             val_total = 0
             with torch.no_grad():
                 for frames, poses, labels in val_loader:
-                    frames = frames.to(device)
                     poses = poses.to(device)
                     labels = {k: v.to(device) for k, v in labels.items()}
-                    cnn_seq = _cnn_sequence(cnn, frames, device)
-                    logits_dict = staeformer(poses, cnn_seq)
-                    val_total += frames.size(0)
+                    if use_cnn:
+                        frames = frames.to(device)
+                        cnn_seq = _cnn_sequence(cnn, frames, device)
+                        logits_dict = staeformer(poses, cnn_seq)
+                    else:
+                        logits_dict = staeformer(poses)
+                    val_total += poses.size(0)
                     for task, logits in logits_dict.items():
                         _, pred = logits.max(1)
                         val_correct[task] += (pred == labels[task]).sum().item()
@@ -303,11 +326,14 @@ def train_staeformer(
             if val_acc > best_acc:
                 best_acc = val_acc
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                torch.save({
-                    "cnn": cnn.state_dict(),
+                ckpt_data = {
                     "staeformer": staeformer.state_dict(),
                     "task_classes": task_classes,
-                }, save_path)
+                    "use_cnn": use_cnn,
+                }
+                if cnn is not None:
+                    ckpt_data["cnn"] = cnn.state_dict()
+                torch.save(ckpt_data, save_path)
                 print(f"  -> Saved best ({best_acc:.1f}%)")
                 registry_path = os.path.join(os.path.dirname(save_path), "model_registry.json")
                 try:
@@ -326,16 +352,27 @@ def train_staeformer(
                 with open(registry_path, "w") as f:
                     json.dump(registry, f, indent=2)
             if (epoch + 1) % 10 == 0:
-                torch.save({
-                    "cnn": cnn.state_dict(),
+                periodic_ckpt = {
                     "staeformer": staeformer.state_dict(),
                     "task_classes": task_classes,
-                }, f"{save_path}_epoch_{epoch+1}.pth")
+                    "use_cnn": use_cnn,
+                }
+                if cnn is not None:
+                    periodic_ckpt["cnn"] = cnn.state_dict()
+                torch.save(periodic_ckpt, f"{save_path}_epoch_{epoch+1}.pth")
 
         print(f"\nTraining finished! Best stroke_type accuracy: {best_acc:.1f}%")
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pose-only", action="store_true", help="Train on pose only (no CNN backbone)")
+    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    args = parser.parse_args()
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
     data_root = os.path.join(backend_root, "data")
@@ -345,8 +382,9 @@ if __name__ == "__main__":
     train_staeformer(
         data_root=data_root,
         list_file=list_file,
-        epochs=60,
-        batch_size=4,
-        lr=1e-4,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
         device=device,
+        use_cnn=not args.pose_only,
     )

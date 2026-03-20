@@ -167,16 +167,14 @@ def app_client(monkeypatch):
     FastAPI TestClient with model, pose estimator, and Gemini mocked out.
     This avoids needing GPU, model weights, or MediaPipe model files.
     """
-    # We must patch BEFORE importing server to avoid startup loading the real model
     with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
-        # Patch model loading
-        with patch("api.server.CNN_LSTM_Model") as MockModel, \
-             patch("api.server.PoseEstimator") as MockPose, \
-             patch("api.server.BadmintonPoseDetector") as MockDetector, \
+        with patch("api.lifespan.CNN_LSTM_Model") as MockModel, \
+             patch("api.lifespan.PoseEstimator") as MockPose, \
+             patch("api.lifespan.BadmintonPoseDetector") as MockDetector, \
              patch("torch.load", return_value={}):
 
-            # Setup mock model forward pass
             mock_model_instance = MagicMock()
+
             def _fake_forward(tensor):
                 b = tensor.shape[0]
                 return {
@@ -189,17 +187,15 @@ def app_client(monkeypatch):
                     "quality": torch.zeros(b, 7),
                     "is_badminton": torch.tensor([[0.2, 0.8]] * b),
                 }
-            mock_model_instance.side_effect = _fake_forward  # side_effect calls the fn; return_value would return the fn itself
+            mock_model_instance.side_effect = _fake_forward
             MockModel.return_value = mock_model_instance
 
-            # Setup mock pose estimator
             mock_pose = MagicMock()
             mock_pose.process_frame.return_value = MagicMock(pose_landmarks=[])
             mock_pose.draw_landmarks.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
             mock_pose.get_landmarks_as_list.return_value = []
             MockPose.return_value = mock_pose
 
-            # Setup mock badminton detector
             mock_detector = MagicMock()
             mock_detector.is_badminton_video.return_value = (
                 True, 0.75,
@@ -207,18 +203,15 @@ def app_client(monkeypatch):
             )
             MockDetector.return_value = mock_detector
 
-            from fastapi.testclient import TestClient
-            # Import server fresh in this patched context
-            import importlib
-            import api.server as server_module
-            importlib.reload(server_module)
+            import api.state as state_module
+            import api.main as main_module
 
-            # Inject mocks into the reloaded module
-            server_module.model = mock_model_instance
-            server_module.pose_estimator = mock_pose
-            server_module.badminton_detector = mock_detector
-            server_module.gemini_enabled = False
-            server_module.dataset_metadata = {
+            state_module.model = mock_model_instance
+            state_module.pose_estimator = mock_pose
+            state_module.badminton_detector = mock_detector
+            state_module.gemini_enabled = False
+            state_module.gemini_client = None
+            state_module.dataset_metadata = {
                 "stroke_type": ["Serve", "Clear", "Smash", "Drop", "Drive",
                                 "Net_Shot", "Lob", "Defensive_Shot", "Other"],
                 "stroke_subtype": ["None"] * 21,
@@ -233,5 +226,5 @@ def app_client(monkeypatch):
                            "Hesitation", "Seamlessly", "None"],
             }
 
-            client = TestClient(server_module.app, raise_server_exceptions=False)
+            client = TestClient(main_module.app, raise_server_exceptions=False)
             yield client

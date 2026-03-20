@@ -16,25 +16,25 @@ class STAE_Embedding(nn.Module):
         return x + self.spatial_emb + self.temporal_emb
 
 class STAEformerModel(nn.Module):
-    def __init__(self, task_classes, num_nodes=34, num_steps=16, embed_dim=128, num_heads=4, num_layers=2, dropout=0.1):
+    def __init__(self, task_classes, num_joints=33, num_steps=16, embed_dim=128, num_heads=4, num_layers=2, dropout=0.1, use_cnn=True):
         """
-        STAEformer implementation for Badminton Stroke Recognition.
-        Nodes: 33 pose joints + 1 global CNN feature = 34 nodes.
-        Steps: 16 frames.
+        STAEformer for Badminton Stroke Recognition.
+
+        When use_cnn=True  -> 33 pose joints + 1 CNN node = 34 spatial nodes.
+        When use_cnn=False -> 33 pose joints only (pose-only ablation).
         """
         super(STAEformerModel, self).__init__()
-        self.num_nodes = num_nodes
+        self.use_cnn = use_cnn
+        self.num_joints = num_joints
+        self.num_nodes = num_joints + 1 if use_cnn else num_joints
         self.num_steps = num_steps
         self.embed_dim = embed_dim
 
-        # 1. Feature Projection
-        # 33 joints (x, y, z)
         self.joint_proj = nn.Linear(3, embed_dim)
-        # 1 CNN global feature (2048-dim)
-        self.cnn_proj = nn.Linear(2048, embed_dim)
+        if use_cnn:
+            self.cnn_proj = nn.Linear(2048, embed_dim)
 
-        # 2. Spatio-Temporal Adaptive Embedding
-        self.stae_emb = STAE_Embedding(num_nodes, num_steps, embed_dim)
+        self.stae_emb = STAE_Embedding(self.num_nodes, num_steps, embed_dim)
 
         # 3. Temporal Transformer Layers (pre-norm for stability)
         encoder_layer_temp = nn.TransformerEncoderLayer(
@@ -69,21 +69,22 @@ class STAEformerModel(nn.Module):
             for task, num_c in task_classes.items()
         })
 
-    def forward(self, joint_seq, cnn_seq):
+    def forward(self, joint_seq, cnn_seq=None):
         """
         Args:
             joint_seq: (B, T, 33, 3)
-            cnn_seq: (B, T, 2048)
+            cnn_seq:   (B, T, 2048) — required when use_cnn=True, ignored otherwise.
         """
-        B, T, N_j, D_j = joint_seq.shape
-        _, _, D_c = cnn_seq.shape
+        B, T = joint_seq.shape[:2]
 
-        # 1. Project to common embed_dim
-        e_joints = self.joint_proj(joint_seq) # (B, T, 33, D)
-        e_cnn = self.cnn_proj(cnn_seq).unsqueeze(2) # (B, T, 1, D)
-        
-        # Combine into (B, T, 34, D)
-        x = torch.cat([e_joints, e_cnn], dim=2)
+        e_joints = self.joint_proj(joint_seq)  # (B, T, 33, D)
+
+        if self.use_cnn:
+            assert cnn_seq is not None, "cnn_seq required when use_cnn=True"
+            e_cnn = self.cnn_proj(cnn_seq).unsqueeze(2)  # (B, T, 1, D)
+            x = torch.cat([e_joints, e_cnn], dim=2)      # (B, T, 34, D)
+        else:
+            x = e_joints                                  # (B, T, 33, D)
 
         # 2. Add STAE
         x = self.stae_emb(x)
@@ -114,11 +115,17 @@ class STAEformerModel(nn.Module):
 
 if __name__ == "__main__":
     task_classes = {"stroke_type": 9, "position": 10}
-    model = STAEformerModel(task_classes)
-    
     dummy_joints = torch.randn(2, 16, 33, 3)
     dummy_cnn = torch.randn(2, 16, 2048)
-    
+
+    print("--- use_cnn=True (33 joints + 1 CNN = 34 nodes) ---")
+    model = STAEformerModel(task_classes, use_cnn=True)
     out = model(dummy_joints, dummy_cnn)
     for k, v in out.items():
-        print(f"{k}: {v.shape}")
+        print(f"  {k}: {v.shape}")
+
+    print("--- use_cnn=False (33 joints, pose-only) ---")
+    model_pose = STAEformerModel(task_classes, use_cnn=False)
+    out = model_pose(dummy_joints)
+    for k, v in out.items():
+        print(f"  {k}: {v.shape}")
