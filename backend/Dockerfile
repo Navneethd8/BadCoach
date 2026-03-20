@@ -2,15 +2,18 @@
 FROM python:3.10-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies for OpenCV, MediaPipe, and cryptography (sendgrid)
-# MediaPipe tasks load libGLESv2.so.2 (Mesa GLES + EGL) even for CPU inference.
-RUN apt-get update && apt-get install -y \
+# MediaPipe loads libGLESv2.so.2. Debian Trixie (python:3.10-slim) uses vendor-neutral
+# libgles2/libegl1 + libegl-mesa0; bookworm names libgles2-mesa / libegl1-mesa are gone.
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
-    libgles2-mesa \
-    libegl1-mesa \
+    libgles2 \
+    libegl1 \
+    libegl-mesa0 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \

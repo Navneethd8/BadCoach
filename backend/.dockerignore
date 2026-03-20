@@ -1,0 +1,18 @@
+# macOS / exFAT AppleDouble — Docker Desktop fails on xattr when these are in the context
+._*
+.DS_Store
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.env
+*.mp4
+
+# Local MLflow / experiment data — huge (often multi‑GB); never belongs in the image
+mlruns/
+mlflow.db
+wandb/
+
+# Dev / scratch
+temp_clipjob_*
