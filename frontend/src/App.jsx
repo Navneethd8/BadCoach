@@ -25,6 +25,7 @@ export default function App() {
     const [preview, setPreview] = useState(null)
     const [loadingStep, setLoadingStep] = useState(-1)
     const [capacityError, setCapacityError] = useState(null)   // 503 at-capacity state
+    const [queueAhead, setQueueAhead] = useState(null)          // clip queue position (SSE event:queue)
     const videoRef = useRef(null)
     const loadingTimers = useRef([])
     const shouldReduceMotion = useReducedMotion()
@@ -359,13 +360,13 @@ export default function App() {
         }
     }
 
-    // Stream-based analysis using /analyze/stream (SSE).
-    // Fires GA events for each key phase: start, each window received, done, error.
+    // Stream-based analysis: POST /clips/jobs then GET /clips/jobs/{id}/stream (queued SSE + progress).
     const handleStreamAnalysis = async () => {
         if (!file) return
 
         setLoading(true)
         setCapacityError(null)
+        setQueueAhead(null)
         startLoadingSteps()
 
         const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
@@ -376,22 +377,7 @@ export default function App() {
 
         let windowCount = 0
 
-        try {
-            const response = await fetch(`${apiUrl}/analyze/stream`, {
-                method: 'POST',
-                body: formData,
-            })
-
-            if (response.status === 503) {
-                const body = await response.json().catch(() => ({}))
-                const retryAfter = body?.detail?.retry_after || 30
-                setCapacityError(retryAfter)
-                if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
-                retryTimerRef.current = setTimeout(() => setCapacityError(null), retryAfter * 1000)
-                ReactGA.event({ category: 'Video', action: 'Server At Capacity', label: file.name })
-                return
-            }
-
+        const readSseStream = async (response) => {
             const reader = response.body.getReader()
             const decoder = new TextDecoder()
             let buffer = ''
@@ -403,17 +389,19 @@ export default function App() {
 
                 buffer += decoder.decode(value, { stream: true })
                 const lines = buffer.split('\n\n')
-                buffer = lines.pop() // keep incomplete chunk
+                buffer = lines.pop() || ''
 
                 for (const line of lines) {
                     if (!line.startsWith('data: ')) continue
                     let parsed
                     try { parsed = JSON.parse(line.slice(6)) } catch { continue }
 
-                    if (parsed.event === 'progress') {
+                    if (parsed.event === 'queue') {
+                        const ahead = typeof parsed.ahead === 'number' ? parsed.ahead : null
+                        setQueueAhead(ahead)
+                    } else if (parsed.event === 'progress') {
                         windowCount++
                         streamedTimeline.push(parsed)
-                        // Fire GA every 5 windows to avoid flooding analytics
                         if (windowCount % 5 === 1) {
                             ReactGA.event({
                                 category: 'Video',
@@ -423,6 +411,7 @@ export default function App() {
                             })
                         }
                     } else if (parsed.event === 'done') {
+                        setQueueAhead(null)
                         const summary = parsed.summary || {}
                         setResult({ ...summary, timeline: streamedTimeline })
                         ReactGA.event({
@@ -432,6 +421,7 @@ export default function App() {
                             value: windowCount,
                         })
                     } else if (parsed.event === 'error') {
+                        setQueueAhead(null)
                         const isOverDuration = parsed.over_duration_limit || false
                         if (isOverDuration) {
                             setResult({ validation_error: true, error_message: parsed.error, over_duration_limit: true })
@@ -443,12 +433,62 @@ export default function App() {
                     }
                 }
             }
+        }
+
+        try {
+            const jobRes = await fetch(`${apiUrl}/clips/jobs`, {
+                method: 'POST',
+                body: formData,
+            })
+
+            if (jobRes.status === 503) {
+                const body = await jobRes.json().catch(() => ({}))
+                const d = body?.detail
+                const retryAfter = typeof d === 'object' && d != null && d.retry_after != null ? d.retry_after : 60
+                setCapacityError(retryAfter)
+                if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+                retryTimerRef.current = setTimeout(() => setCapacityError(null), retryAfter * 1000)
+                ReactGA.event({ category: 'Video', action: 'Clip Queue Full', label: file.name })
+                return
+            }
+
+            if (!jobRes.ok) {
+                const errText = await jobRes.text().catch(() => '')
+                ReactGA.event({ category: 'Video', action: 'Job Create Failed', label: String(jobRes.status) })
+                alert(`Could not start analysis (${jobRes.status}): ${errText.slice(0, 120)}`)
+                return
+            }
+
+            const jobJson = await jobRes.json()
+            const jobId = jobJson.job_id
+            if (!jobId) {
+                ReactGA.event({ category: 'Video', action: 'Job Create Failed', label: 'no job_id' })
+                alert('Invalid response from server (missing job_id).')
+                return
+            }
+
+            const streamRes = await fetch(`${apiUrl}/clips/jobs/${jobId}/stream`)
+            if (streamRes.status === 404) {
+                setQueueAhead(null)
+                alert('Analysis job not found. Please try uploading again.')
+                return
+            }
+            if (!streamRes.ok) {
+                setQueueAhead(null)
+                const t = await streamRes.text().catch(() => '')
+                alert(`Stream failed (${streamRes.status}): ${t.slice(0, 120)}`)
+                return
+            }
+
+            await readSseStream(streamRes)
         } catch (err) {
             console.error('Stream error:', err)
+            setQueueAhead(null)
             ReactGA.event({ category: 'Video', action: 'Analysis Failed', label: err.message })
         } finally {
             setLoading(false)
             stopLoadingSteps()
+            setQueueAhead(null)
         }
     }
 
@@ -635,6 +675,20 @@ export default function App() {
                         <button onClick={() => setCapacityError(null)} className="ml-auto text-amber-400 hover:text-amber-200">
                             <Icon name="close" size={16} />
                         </button>
+                    </div>
+                )}
+
+                {queueAhead !== null && loading && (
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-start gap-3 bg-sky-950/90 border border-sky-700/50 text-sky-100 text-sm px-5 py-3 rounded-xl shadow-2xl backdrop-blur-sm max-w-sm w-full mt-[4.5rem]">
+                        <Icon name="pending_actions" size={18} className="text-sky-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-sky-200 mb-0.5">You&apos;re in the queue</p>
+                            <p className="text-xs text-sky-100/85">
+                                {queueAhead === 0
+                                    ? 'Starting your analysis shortly…'
+                                    : `${queueAhead} video${queueAhead === 1 ? '' : 's'} ahead of yours.`}
+                            </p>
+                        </div>
                     </div>
                 )}
 
