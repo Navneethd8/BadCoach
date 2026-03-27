@@ -1,0 +1,20 @@
+# Optional: use a dedicated venv for VLM fine-tuning.
+# CUDA: follow https://unsloth.ai/docs/get-started/install — often:
+#   pip install unsloth
+# Then:
+#   pip install -r requirements-unsloth-vlm.txt
+#
+# Versions align with Unsloth Qwen3-VL notebooks (transformers 4.57+).
+
+unsloth
+transformers>=4.57.0
+trl>=0.22.0
+datasets>=2.16.0
+accelerate>=0.34.0
+bitsandbytes>=0.43.0
+peft>=0.12.0
+sentencepiece
+protobuf
+pillow
+mediapipe
+opencv-python
