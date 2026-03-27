@@ -12,7 +12,30 @@
       "epoch": 58,
       "timestamp": "2026-03-19T20:20:32.746799",
       "script": "train_staeformer.py"
+    },
+    "badminton_model_timesformer.pth": {
+      "accuracy": 46.32,
+      "epoch": 56,
+      "timestamp": "2026-03-26T03:47:46.944521",
+      "script": "train_timesformer.py"
+    },
+    "badminton_model_videomae.pth": {
+      "accuracy": 16.84,
+      "epoch": 42,
+      "timestamp": "2026-03-26T15:37:13.007645",
+      "script": "train_videomae.py",
+      "hf_model_id": "MCG-NJU/videomae-base"
+    },
+    "badminton_model_videomae_timesformer.pth": {
+      "accuracy": 5.26,
+      "val_loss": 9.645,
+      "epoch": 1,
+      "timestamp": "2026-03-27T11:26:01.518653",
+      "script": "train_videomae_timesformer.py",
+      "hf_model_id": "MCG-NJU/videomae-base",
+      "checkpoint_metric": "val_type_acc",
+      "best_val_type_acc": 5.26
     }
   },
-  "active_model": "badminton_model_staeformer.pth"
+  "active_model": "badminton_model_videomae_timesformer.pth"
 }

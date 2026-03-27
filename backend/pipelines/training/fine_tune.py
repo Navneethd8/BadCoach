@@ -5,9 +5,8 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 import os
 import sys
-from tqdm import tqdm
-
 from core.dataset import FineBadmintonDataset
+from core.training_progress import tqdm_train_batches
 from core.model import CNN_LSTM_Model
 
 def fine_tune(
@@ -58,7 +57,7 @@ def fine_tune(
         model.train()
         running_loss = 0.0
         
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
+        pbar = tqdm_train_batches(dataloader, epoch + 1, epochs)
         for batch_idx, (frames, labels) in enumerate(pbar):
             frames = frames.to(device)
             labels = {k: v.to(device) for k, v in labels.items()}

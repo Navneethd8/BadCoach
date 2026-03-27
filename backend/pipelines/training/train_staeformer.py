@@ -23,14 +23,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 from torchvision import models
 from torchvision.transforms import v2
-from tqdm import tqdm
-
 import mlflow
 from core.dataset import FineBadmintonDataset
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.staeformer import STAEformerModel
+from core.training_progress import tqdm_pose_cache_build, tqdm_train_batches
 
 
 # ImageNet normalization (same as CNN_LSTM_Model)
@@ -86,7 +85,7 @@ def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
     )
 
     pose_list = []
-    for i in tqdm(range(len(dataset_raw)), desc="Building pose cache"):
+    for i in tqdm_pose_cache_build(len(dataset_raw)):
         frames, _ = dataset_raw[i]
         with torch.no_grad():
             p = pose_estimator.extract_tensor_poses(frames)  # (T, 99)
@@ -252,7 +251,7 @@ def train_staeformer(
             train_total = 0
             optimizer.zero_grad()
 
-            pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            pbar = tqdm_train_batches(train_loader, epoch + 1, epochs)
             for batch_idx, (frames, poses, labels) in enumerate(pbar):
                 poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}

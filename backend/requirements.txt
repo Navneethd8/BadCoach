@@ -17,3 +17,6 @@ cachetools
 sse-starlette
 sendgrid
 mlflow
+timm>=0.9.0
+transformers>=4.38.0
+safetensors>=0.4.0

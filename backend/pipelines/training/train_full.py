@@ -13,9 +13,8 @@ from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 import mlflow
 import mlflow.pytorch
-from tqdm import tqdm
-
 from core.dataset import FineBadmintonDataset
+from core.training_progress import tqdm_pose_cache_build, tqdm_train_batches
 from core.model import CNN_LSTM_Model
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
@@ -58,7 +57,7 @@ def _build_pose_cache(dataset, list_file, cache_path, seed=42):
     )
 
     pose_list = []
-    for i in tqdm(range(len(dataset_raw)), desc="Building pose cache"):
+    for i in tqdm_pose_cache_build(len(dataset_raw)):
         frames, _ = dataset_raw[i]
         with torch.no_grad():
             p = pose_estimator.extract_tensor_poses(frames)  # (T, 99)
@@ -203,7 +202,7 @@ def train_full(
             
             optimizer.zero_grad()
             
-            pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            pbar = tqdm_train_batches(train_loader, epoch + 1, epochs)
             for batch_idx, (frames, poses, labels) in enumerate(pbar):
                 frames = frames.to(device)
                 poses = poses.to(device)
