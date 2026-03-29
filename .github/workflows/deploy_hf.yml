@@ -97,7 +97,7 @@ jobs:
           cd hf_space
           git lfs install
 
-      - name: Sync backend files into HF Space (inference-only, no training bulk)
+      - name: Sync backend files into HF Space (minimal inference tree)
         run: |
           rsync -av --delete \
             --exclude='.git' \
@@ -108,8 +108,17 @@ jobs:
             --exclude='*.pyc' \
             --exclude='._*' \
             --exclude='.gitignore' \
+            --exclude='requirements.txt' \
             --exclude='pipelines/' \
-            --exclude='data/FineBadminton-master/' \
+            --exclude='data/' \
+            --exclude='mlruns/' \
+            --exclude='wandb/' \
+            --exclude='.pytest_cache/' \
+            --exclude='.mypy_cache/' \
+            --exclude='.ruff_cache/' \
+            --exclude='htmlcov/' \
+            --exclude='*.egg-info/' \
+            --exclude='*.ipynb' \
             --exclude='models/*_epoch_*.pth' \
             --exclude='models/pose_cache_staeformer.pt' \
             --exclude='core/training_progress.py' \
@@ -117,6 +126,11 @@ jobs:
             --exclude='core/seed_utils.py' \
             --exclude='core/split.py' \
             backend/ hf_space/
+
+      - name: Copy dataset metadata JSON only (no bulk data/)
+        run: |
+          mkdir -p hf_space/data
+          cp backend/data/transformed_combined_rounds_output_en_evals_translated.json hf_space/data/
 
       - name: Strip per-epoch checkpoints from Space (keep final *.pth only)
         run: |

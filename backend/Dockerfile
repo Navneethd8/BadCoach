@@ -25,12 +25,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
-# Note: Using torch-cpu to save space/RAM in the container
-COPY requirements.txt .
+# Inference-only deps (smaller image than full backend/requirements.txt)
+COPY requirements-inference.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements-inference.txt
 
 # Copy the rest of the application code
 COPY . .

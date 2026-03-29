@@ -1,0 +1,17 @@
+# Runtime-only deps for Hugging Face Spaces / production (no training, tests, or experiment tracking)
+opencv-python
+numpy
+pandas
+fastapi
+uvicorn
+python-multipart
+requests
+mediapipe
+google-genai
+python-dotenv
+cachetools
+sse-starlette
+sendgrid
+timm>=0.9.0
+transformers>=4.38.0
+safetensors>=0.4.0
