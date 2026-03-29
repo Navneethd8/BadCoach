@@ -29,8 +29,8 @@ MODEL_PATH: str = ""
 
 def _pick_best_cnn_lstm_model() -> tuple[str, int]:
     """
-    Read model_registry.json, pick the highest-accuracy CNN_LSTM checkpoint
-    (script == 'train_full.py' or no 'staeformer' in the filename).
+    Read model_registry.json, pick the highest-accuracy checkpoint whose file exists,
+    skipping filenames containing ``staeformer`` (different forward signature).
     Returns (abs_path, hidden_size).
     """
     registry_path = os.path.join(MODELS_DIR, "model_registry.json")
@@ -48,7 +48,6 @@ def _pick_best_cnn_lstm_model() -> tuple[str, int]:
 
     best_name, best_acc, best_hidden = None, -1.0, 128
     for name, meta in registry.get("models", {}).items():
-        # STAEformer has a different forward signature — skip it
         if "staeformer" in name.lower():
             continue
         path = os.path.join(MODELS_DIR, name)

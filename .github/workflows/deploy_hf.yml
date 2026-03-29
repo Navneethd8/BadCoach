@@ -97,7 +97,7 @@ jobs:
           cd hf_space
           git lfs install
 
-      - name: Sync backend files into HF Space
+      - name: Sync backend files into HF Space (inference-only, no training bulk)
         run: |
           rsync -av --delete \
             --exclude='.git' \
@@ -108,7 +108,22 @@ jobs:
             --exclude='*.pyc' \
             --exclude='._*' \
             --exclude='.gitignore' \
+            --exclude='pipelines/' \
+            --exclude='data/FineBadminton-master/' \
+            --exclude='models/*_epoch_*.pth' \
+            --exclude='models/pose_cache_staeformer.pt' \
+            --exclude='core/timesformer.py' \
+            --exclude='core/videomae_pose.py' \
+            --exclude='core/videomae_timesformer.py' \
+            --exclude='core/training_progress.py' \
+            --exclude='core/staeformer.py' \
+            --exclude='core/seed_utils.py' \
+            --exclude='core/split.py' \
             backend/ hf_space/
+
+      - name: Strip per-epoch checkpoints from Space (keep final *.pth only)
+        run: |
+          find hf_space/models -maxdepth 1 -name '*_epoch_*.pth' -print -delete
 
       - name: Verify model files are LFS-tracked (not raw blobs)
         run: |
