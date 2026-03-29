@@ -129,52 +129,53 @@ _COMMENTARY_CACHE_MAX = 128
 _gemini_backoff_until: float = 0.0
 _GEMINI_BACKOFF_SECONDS = 30
 
+# Short tips only: live commentary must pass _live_commentary_acceptable (≤10 words, one sentence).
 _FALLBACK_TIPS: dict[str, list[str]] = {
     "Serve": [
-        "Keep your elbow high and snap your wrist at contact for a tighter serve.",
-        "Aim deep to the back tramline — push them onto the back foot early.",
-        "Vary between short and flick serves to keep your opponent guessing.",
+        "Snap your wrist at contact for a tighter serve.",
+        "Serve deep toward their back tramline.",
+        "Vary short serves with occasional flicks.",
     ],
     "Smash": [
-        "Rotate your torso and transfer weight forward for more power on your smash.",
-        "Aim your smash to the body or sidelines — avoid the centre where they can block easily.",
-        "Get under the shuttle early and contact it at the highest point you can reach.",
+        "Drive through with your hips on smashes.",
+        "Aim smashes at the body or sidelines.",
+        "Meet the shuttle at your highest reach.",
     ],
     "Clear": [
-        "Use a full arm swing and follow through high to get depth on your clears.",
-        "Push clears all the way to the baseline — a short clear is an invitation to attack.",
-        "Recover to centre court quickly after playing your clear.",
+        "Finish high through contact on clears.",
+        "Send clears deep to the baseline.",
+        "Recover quickly to centre after clears.",
     ],
     "Drop": [
-        "Disguise your drop with the same arm motion as a clear to deceive your opponent.",
-        "Aim just over the net with a soft touch — the steeper the angle, the harder the reply.",
-        "Follow your drop to the net to cut off the return early.",
+        "Match drop preparation to your clear.",
+        "Brush the shuttle softly over the tape.",
+        "Follow your drop tight behind the shuttle.",
     ],
     "Net_Shot": [
-        "Keep a relaxed grip and gentle touch — let the shuttle tumble over the net.",
-        "Try to take net shots as early and as high as possible above the tape.",
-        "Stay balanced on the balls of your feet so you can push back quickly.",
+        "Relax your grip above the net tape.",
+        "Take net balls high and as early as possible.",
+        "Stay balanced on the balls of your feet.",
     ],
     "Drive": [
-        "Keep the shuttle flat and fast — use a short punchy swing from the elbow.",
-        "Aim cross-court drives to open up the sideline for your next shot.",
-        "Stay compact with your swing — big backswings lose you time in drive exchanges.",
+        "Punch flat drives compactly from the elbow.",
+        "Open the court with cross-court drives.",
+        "Keep swings short in fast drive exchanges.",
     ],
     "Lob": [
-        "Play high lobs deep to the baseline to buy recovery time.",
-        "Add variety — mix attacking low lobs with high defensive ones.",
-        "Push off from a low lunge to get back to centre after your lob.",
+        "Lob high and deep to buy recovery time.",
+        "Mix high defensive lobs with attacking ones.",
+        "Push out of the lunge back toward centre.",
     ],
     "Defensive_Shot": [
-        "Keep your racket up in front of you and react with short compact swings.",
-        "Aim defensive returns to the net or deep — avoid half-court lifts.",
-        "Stay low and wide to cover more court when defending.",
+        "Keep the racket up with compact swings.",
+        "Avoid lifting defensively into mid-court.",
+        "Stay low and wide when you defend.",
     ],
 }
 _FALLBACK_GENERIC = [
-    "Focus on getting to the shuttle early — preparation is half the battle.",
-    "Keep a balanced ready position between shots to react faster.",
-    "Watch the shuttle onto your racket and move your feet before your arm.",
+    "Reach the shuttle early every rally.",
+    "Balance your ready stance between rallies.",
+    "Move your feet before you swing.",
 ]
 _fallback_counters: dict[str, int] = {}
 
@@ -214,29 +215,46 @@ def _result_signature(result: dict) -> str:
     )
 
 
+_LIVE_COMMENTARY_MAX_WORDS = 10
+
+
+def _live_commentary_acceptable(text: str) -> bool:
+    """At most 10 words; one complete sentence ending in . ! or ?"""
+    t = text.strip()
+    if not t or t[-1] not in ".!?":
+        return False
+    return len(t.split()) <= _LIVE_COMMENTARY_MAX_WORDS
+
+
 async def _generate_commentary(result: dict) -> str:
     """Cached Gemini coaching tip with fallback to canned tips."""
     global _gemini_backoff_until
 
     sig = _result_signature(result)
     if sig in _commentary_cache:
-        return _commentary_cache[sig]
+        cached = _commentary_cache[sig]
+        if _live_commentary_acceptable(cached):
+            return cached
+        del _commentary_cache[sig]
 
     stroke = result.get("label", "Other")
 
     if not state.gemini_enabled or not state.gemini_client:
-        return _get_fallback_tip(stroke)
+        tip = _get_fallback_tip(stroke)
+        return tip if _live_commentary_acceptable(tip) else ""
 
     if time.monotonic() < _gemini_backoff_until:
-        return _get_fallback_tip(stroke)
+        tip = _get_fallback_tip(stroke)
+        return tip if _live_commentary_acceptable(tip) else ""
 
     try:
         m = result.get("metrics", {})
         prompt = (
             "You are a live badminton coach giving real-time courtside feedback. "
-            "Give ONE sentence (15-20 words) — a specific, actionable technical tip only. "
-            "No encouragement, no praise, no filler. Just the correction or suggestion. "
-            "No lists, no markdown.\n\n"
+            f"Reply with exactly ONE complete sentence, at most {_LIVE_COMMENTARY_MAX_WORDS} words total — hard limit. "
+            "It must end with a single period, question mark, or exclamation mark. "
+            "One specific actionable technical tip only: no encouragement, praise, filler, lists, or markdown. "
+            "Vary vocabulary; do not overuse one verb (e.g. 'rotate') unless it is clearly best.\n\n"
             f"Stroke: {stroke}, "
             f"Technique: {m.get('technique', {}).get('label', '?')}, "
             f"Placement: {m.get('placement', {}).get('label', '?')}, "
@@ -261,7 +279,16 @@ async def _generate_commentary(result: dict) -> str:
             if resp.candidates:
                 reason = getattr(resp.candidates[0], "finish_reason", "unknown")
             print(f"[live] gemini: empty response ({reason}) — using fallback")
-            return _get_fallback_tip(stroke)
+            tip = _get_fallback_tip(stroke)
+            return tip if _live_commentary_acceptable(tip) else ""
+
+        if not _live_commentary_acceptable(text):
+            n = len(text.split())
+            print(
+                f"[live] gemini: skipped tip (not ≤{_LIVE_COMMENTARY_MAX_WORDS} words "
+                f"or incomplete sentence; got {n} words)"
+            )
+            return ""
 
         if len(_commentary_cache) >= _COMMENTARY_CACHE_MAX:
             _commentary_cache.pop(next(iter(_commentary_cache)))
@@ -277,7 +304,8 @@ async def _generate_commentary(result: dict) -> str:
             print(f"[live] gemini: 503 unavailable — backing off {_GEMINI_BACKOFF_SECONDS}s")
         else:
             print(f"[live] gemini exception: {e}")
-        return _get_fallback_tip(stroke)
+        tip = _get_fallback_tip(stroke)
+        return tip if _live_commentary_acceptable(tip) else ""
 
 
 @router.websocket("/sessions/{session_id}/ws")
