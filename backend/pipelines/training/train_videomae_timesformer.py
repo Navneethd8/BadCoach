@@ -53,7 +53,7 @@ _imagenet_norm_video = _tf._imagenet_norm_video
 def train_videomae_timesformer(
     data_root,
     list_file,
-    epochs=60,
+    epochs=30,
     batch_size=DEFAULT_TRAIN_BATCH_SIZE,
     lr=1e-4,
     device="cpu",
@@ -445,7 +445,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="VideoMAE + pose + divided ST. Registry: badminton_model_videomae_timesformer.pth"
     )
-    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_TRAIN_BATCH_SIZE)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--pose-cache", type=str, default=None)

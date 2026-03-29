@@ -13,6 +13,7 @@ import importlib
 import threading
 import numpy as np
 import pytest
+import api.clip_analysis as clip_analysis_module
 import api.state as state_module
 import api.server as server_module
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -211,17 +212,34 @@ class TestAnalyzeDurationLimit:
         """
         A video that exceeds MAX_VIDEO_DURATION_SECONDS should return
         a structured response with over_duration_limit=True.
-        This test patches the frame count to simulate a long video.
+        OpenCV capture is mocked so duration = (frame_count / fps) is above the limit.
         """
-        MAX = getattr(server_module, "MAX_VIDEO_DURATION_SECONDS", None)
-        if MAX is None:
-            pytest.skip("MAX_VIDEO_DURATION_SECONDS not implemented yet")
+        max_sec = server_module.MAX_VIDEO_DURATION_SECONDS
+        # Unique seed so we never hit _result_cache from other tests in the session.
+        video = _make_video_bytes(seed=90210)
+        fake_cap = MagicMock()
 
-        video = _make_video_bytes()
-        # Patch total_frames and fps to exceed limit
-        original_get = getattr(server_module, "_get_video_info", None)
-        if original_get is None:
-            pytest.skip("Duration guard not yet implemented")
+        def fake_get(prop):
+            if prop == cv2.CAP_PROP_FPS:
+                return 30.0
+            if prop == cv2.CAP_PROP_FRAME_COUNT:
+                return int((max_sec + 300) * 30)
+            return 0
+
+        fake_cap.get.side_effect = fake_get
+
+        with patch.object(clip_analysis_module.cv2, "VideoCapture", return_value=fake_cap):
+            r = app_client.post(
+                "/analyze",
+                files={"file": ("long.mp4", video, "video/mp4")},
+            )
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body.get("validation_failed") is True
+        assert body.get("over_duration_limit") is True
+        assert "error" in body
+        fake_cap.release.assert_called()
 
 
 # ---------------------------------------------------------------------------

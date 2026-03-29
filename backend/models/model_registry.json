@@ -27,14 +27,14 @@
       "hf_model_id": "MCG-NJU/videomae-base"
     },
     "badminton_model_videomae_timesformer.pth": {
-      "accuracy": 5.26,
-      "val_loss": 9.645,
-      "epoch": 1,
-      "timestamp": "2026-03-27T11:26:01.518653",
+      "accuracy": 47.37,
+      "val_loss": 10.7981,
+      "epoch": 72,
+      "timestamp": "2026-03-29T02:05:42.956379",
       "script": "train_videomae_timesformer.py",
       "hf_model_id": "MCG-NJU/videomae-base",
       "checkpoint_metric": "val_type_acc",
-      "best_val_type_acc": 5.26
+      "best_val_type_acc": 47.37
     }
   },
   "active_model": "badminton_model_videomae_timesformer.pth"
