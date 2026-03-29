@@ -24,7 +24,7 @@ export default function LiveSession() {
     const wsRef = useRef(null)
     const streamRef = useRef(null)
     const intervalRef = useRef(null)
-    const chatEndRef = useRef(null)
+    const chatScrollRef = useRef(null)
 
     const [sessionId, setSessionId] = useState(null)
     const [status, setStatus] = useState('idle')   // idle | connecting | live | paused | error | capacity
@@ -87,7 +87,9 @@ export default function LiveSession() {
     }, [])
 
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        const el = chatScrollRef.current
+        if (!el) return
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }, [chatLog])
 
     const stopCamera = useCallback(() => {
@@ -407,8 +409,9 @@ export default function LiveSession() {
                         </div>
                     </div>
 
-                    <div
-                        className="flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 sm:h-[min(20rem,44vh)] lg:h-auto lg:min-h-0 lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
+                    <aside
+                        className="flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 sm:h-[min(20rem,44vh)] lg:min-h-0 lg:max-h-[min(40rem,calc(100dvh-9rem))] lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
+                        aria-label="AI Coach chat"
                     >
                         <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800 flex-shrink-0">
                             <Icon name="smart_toy" size={16} className="text-emerald-500" />
@@ -423,7 +426,13 @@ export default function LiveSession() {
                                 </button>
                             </div>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 scroll-smooth">
+                        <div
+                            ref={chatScrollRef}
+                            className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 py-3 space-y-3 scroll-smooth"
+                            role="log"
+                            aria-live="polite"
+                            aria-relevant="additions"
+                        >
                             {chatLog.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
                                     <Icon name="sports" size={28} className="text-neutral-800" />
@@ -449,9 +458,8 @@ export default function LiveSession() {
                                     </motion.div>
                                 ))}
                             </AnimatePresence>
-                            <div ref={chatEndRef} />
                         </div>
-                    </div>
+                    </aside>
 
                 </div>
             </div>
