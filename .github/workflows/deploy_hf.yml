@@ -112,9 +112,6 @@ jobs:
             --exclude='data/FineBadminton-master/' \
             --exclude='models/*_epoch_*.pth' \
             --exclude='models/pose_cache_staeformer.pt' \
-            --exclude='core/timesformer.py' \
-            --exclude='core/videomae_pose.py' \
-            --exclude='core/videomae_timesformer.py' \
             --exclude='core/training_progress.py' \
             --exclude='core/staeformer.py' \
             --exclude='core/seed_utils.py' \
@@ -124,6 +121,41 @@ jobs:
       - name: Strip per-epoch checkpoints from Space (keep final *.pth only)
         run: |
           find hf_space/models -maxdepth 1 -name '*_epoch_*.pth' -print -delete
+
+      - name: Prune Space to active_model + slim registry (HF LFS quota)
+        run: |
+          python3 << 'PY'
+          import glob
+          import json
+          import os
+
+          models_dir = os.path.join("hf_space", "models")
+          reg_path = os.path.join(models_dir, "model_registry.json")
+          with open(reg_path, encoding="utf-8") as f:
+              reg = json.load(f)
+          active = reg.get("active_model")
+          if not active:
+              raise SystemExit("model_registry.json must set active_model for Space deploy")
+          active_path = os.path.join(models_dir, active)
+          if not os.path.isfile(active_path):
+              raise SystemExit(f"active_model file missing after sync: {active_path}")
+
+          for p in glob.glob(os.path.join(models_dir, "*.pth")):
+              if os.path.basename(p) != active:
+                  os.remove(p)
+                  print("removed", os.path.basename(p))
+          for p in glob.glob(os.path.join(models_dir, "*.pt")):
+              os.remove(p)
+              print("removed", os.path.basename(p))
+
+          meta = reg.get("models", {}).get(active)
+          if meta is None:
+              raise SystemExit(f"active_model {active!r} has no metadata entry in models")
+          reg["models"] = {active: meta}
+          with open(reg_path, "w", encoding="utf-8") as f:
+              json.dump(reg, f, indent=2)
+          print("Space models:", os.listdir(models_dir))
+          PY
 
       - name: Verify model files are LFS-tracked (not raw blobs)
         run: |

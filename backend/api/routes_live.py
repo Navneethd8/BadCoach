@@ -12,6 +12,7 @@ import torch
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from api import state
+from api.inference import run_stroke_model
 
 router = APIRouter(tags=["live"])
 
@@ -68,7 +69,7 @@ def _run_window_inference(frames_rgb: list[np.ndarray]) -> dict:
     tensor = tensor.permute(0, 3, 1, 2).unsqueeze(0).to(state.device)  # (1, 16, 3, 224, 224)
 
     with torch.no_grad():
-        outputs = state.model(tensor)
+        outputs = run_stroke_model(tensor, frames_rgb)
 
     seg_results: dict = {}
     for task, logits in outputs.items():

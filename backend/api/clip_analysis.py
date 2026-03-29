@@ -12,6 +12,7 @@ import torch
 
 from api import state
 from api.config import MAX_VIDEO_DURATION_SECONDS
+from api.inference import run_stroke_model
 
 
 def run_analysis_sync(temp_file: str) -> dict:
@@ -146,7 +147,7 @@ def run_analysis_sync(temp_file: str) -> dict:
         pose_b64 = base64.b64encode(buffer).decode("utf-8")
 
         with torch.no_grad():
-            outputs = state.model(segment_tensor)
+            outputs = run_stroke_model(segment_tensor, segment_frames)
 
             seg_results = {}
             for task, logits in outputs.items():
@@ -435,7 +436,7 @@ async def run_analyze_stream_async(temp_file: str, video_hash: str):
         pose_b64 = base64.b64encode(buf).decode("utf-8")
 
         with torch.no_grad():
-            outputs = await asyncio.to_thread(state.model, segment_tensor)
+            outputs = await asyncio.to_thread(run_stroke_model, segment_tensor, segment_frames)
             seg_results = {}
             for task, logits in outputs.items():
                 probs = torch.softmax(logits, dim=1)

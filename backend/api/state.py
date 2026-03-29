@@ -6,6 +6,7 @@ from api import config
 
 device = "cpu"
 model = None
+model_architecture = "cnn_lstm"
 pose_estimator = None
 badminton_detector = None
 dataset_metadata = None

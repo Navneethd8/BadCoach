@@ -437,6 +437,11 @@ def train_timesformer(
                     {
                         "model": model.state_dict(),
                         "task_classes": task_classes,
+                        "architecture": "timesformer",
+                        "num_frames": model.num_frames,
+                        "embed_dim": embed_dim,
+                        "depth": depth,
+                        "num_heads": num_heads,
                         "backbone": backbone,
                         "vit_model_name": vit_model_name,
                         "vit_unfreeze_last_n": vit_unfreeze_last_n,
@@ -466,6 +471,11 @@ def train_timesformer(
                     {
                         "model": model.state_dict(),
                         "task_classes": task_classes,
+                        "architecture": "timesformer",
+                        "num_frames": model.num_frames,
+                        "embed_dim": embed_dim,
+                        "depth": depth,
+                        "num_heads": num_heads,
                         "backbone": backbone,
                         "vit_model_name": vit_model_name,
                         "vit_unfreeze_last_n": vit_unfreeze_last_n,

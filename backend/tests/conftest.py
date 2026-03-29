@@ -168,27 +168,27 @@ def app_client(monkeypatch):
     This avoids needing GPU, model weights, or MediaPipe model files.
     """
     with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
-        with patch("api.lifespan.CNN_LSTM_Model") as MockModel, \
+        mock_model_instance = MagicMock()
+
+        def _fake_forward(*args, **kwargs):
+            b = args[0].shape[0] if args else 1
+            return {
+                "stroke_type": torch.zeros(b, 9),
+                "stroke_subtype": torch.zeros(b, 21),
+                "technique": torch.zeros(b, 4),
+                "placement": torch.zeros(b, 7),
+                "position": torch.zeros(b, 10),
+                "intent": torch.zeros(b, 10),
+                "quality": torch.zeros(b, 7),
+                "is_badminton": torch.tensor([[0.2, 0.8]] * b),
+            }
+
+        mock_model_instance.side_effect = _fake_forward
+
+        with patch("api.lifespan.load_stroke_model", return_value=(mock_model_instance, "cnn_lstm")), \
+             patch("api.lifespan.resolve_model_path", return_value="models/badminton_model.pth"), \
              patch("api.lifespan.PoseEstimator") as MockPose, \
-             patch("api.lifespan.BadmintonPoseDetector") as MockDetector, \
-             patch("torch.load", return_value={}):
-
-            mock_model_instance = MagicMock()
-
-            def _fake_forward(tensor):
-                b = tensor.shape[0]
-                return {
-                    "stroke_type": torch.zeros(b, 9),
-                    "stroke_subtype": torch.zeros(b, 21),
-                    "technique": torch.zeros(b, 4),
-                    "placement": torch.zeros(b, 7),
-                    "position": torch.zeros(b, 10),
-                    "intent": torch.zeros(b, 10),
-                    "quality": torch.zeros(b, 7),
-                    "is_badminton": torch.tensor([[0.2, 0.8]] * b),
-                }
-            mock_model_instance.side_effect = _fake_forward
-            MockModel.return_value = mock_model_instance
+             patch("api.lifespan.BadmintonPoseDetector") as MockDetector:
 
             mock_pose = MagicMock()
             mock_pose.process_frame.return_value = MagicMock(pose_landmarks=[])
@@ -207,6 +207,8 @@ def app_client(monkeypatch):
             import api.main as main_module
 
             state_module.model = mock_model_instance
+            state_module.model_architecture = "cnn_lstm"
+            state_module.device = "cpu"
             state_module.pose_estimator = mock_pose
             state_module.badminton_detector = mock_detector
             state_module.gemini_enabled = False

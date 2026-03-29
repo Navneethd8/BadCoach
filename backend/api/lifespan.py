@@ -1,5 +1,4 @@
 """Application startup: load model, pose, detector, Gemini client."""
-import json
 import os
 import sys
 
@@ -13,10 +12,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api import state
 
-from core.model import CNN_LSTM_Model
 from core.dataset import FineBadmintonDataset
 from core.pose_utils import PoseEstimator
 from core.badminton_detector import BadmintonPoseDetector
+from api.model_loader import load_registry, load_stroke_model, resolve_model_path
 
 load_dotenv()
 
@@ -25,45 +24,6 @@ if not os.path.isdir(MODELS_DIR):
     MODELS_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "../../models"))
 
 MODEL_PATH: str = ""
-
-
-def _pick_best_cnn_lstm_model() -> tuple[str, int]:
-    """
-    Read model_registry.json, pick the highest-accuracy checkpoint whose file exists,
-    skipping filenames containing ``staeformer`` (different forward signature).
-    Returns (abs_path, hidden_size).
-    """
-    registry_path = os.path.join(MODELS_DIR, "model_registry.json")
-    fallback = os.path.join(MODELS_DIR, "badminton_model.pth")
-
-    if not os.path.exists(registry_path):
-        return fallback, 128
-
-    try:
-        with open(registry_path) as f:
-            registry = json.load(f)
-    except Exception as e:
-        print(f"Warning: Could not read model registry: {e}")
-        return fallback, 128
-
-    best_name, best_acc, best_hidden = None, -1.0, 128
-    for name, meta in registry.get("models", {}).items():
-        if "staeformer" in name.lower():
-            continue
-        path = os.path.join(MODELS_DIR, name)
-        if not os.path.exists(path):
-            continue
-        acc = meta.get("accuracy", 0.0)
-        if acc > best_acc:
-            best_acc = acc
-            best_name = name
-            best_hidden = meta.get("hidden_size", 128)
-
-    if best_name:
-        print(f"Registry: Selected {best_name} (accuracy={best_acc}%, hidden_size={best_hidden})")
-        return os.path.join(MODELS_DIR, best_name), best_hidden
-
-    return fallback, 128
 
 
 @asynccontextmanager
@@ -105,27 +65,24 @@ async def app_lifespan(app: FastAPI):
     task_classes = {k: len(v) for k, v in state.dataset_metadata.items()}
     task_classes["quality"] = 7
 
-    MODEL_PATH, hidden_size = _pick_best_cnn_lstm_model()
     state.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    state.model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size)
+    registry = load_registry(MODELS_DIR)
+    path = resolve_model_path(MODELS_DIR, registry)
+    if not path:
+        print(f"CRITICAL: No model checkpoint found under {MODELS_DIR}.")
+        sys.exit(1)
 
-    if os.path.exists(MODEL_PATH):
-        abs_path = os.path.abspath(MODEL_PATH)
-        print(f"Loading model from: {abs_path}")
-        try:
-            state_dict = torch.load(MODEL_PATH, map_location=state.device)
-            missing, unexpected = state.model.load_state_dict(state_dict, strict=False)
-            if missing:
-                print(f"WARNING: Missing keys in checkpoint (random init): {missing}")
-            if unexpected:
-                print(f"WARNING: Unexpected keys in checkpoint (ignored): {unexpected}")
-            print(f"SUCCESS: Model loaded from {abs_path}.")
-        except Exception as e:
-            print(f"ERROR: Failed to load state_dict: {e}")
-            sys.exit(1)
-    else:
-        print(f"CRITICAL: Model file NOT found at {os.path.abspath(MODEL_PATH)}.")
+    MODEL_PATH = path
+    abs_path = os.path.abspath(MODEL_PATH)
+    print(f"Loading model from: {abs_path}")
+
+    try:
+        state.model, arch = load_stroke_model(MODEL_PATH, task_classes, registry, state.device)
+        state.model_architecture = arch
+        print(f"Architecture: {arch}")
+    except Exception as e:
+        print(f"ERROR: Failed to build/load model: {e}")
         sys.exit(1)
 
     state.model.to(state.device)
