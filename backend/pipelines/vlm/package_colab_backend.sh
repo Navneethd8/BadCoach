@@ -3,7 +3,7 @@
 #
 # Always includes:
 #   - backend/pipelines/vlm/   (notebook, train/infer, JSONL helpers, pose bridge)
-#   - backend/core/pose_utils.py + __init__.py  (required by vlm_pose)
+#   - backend/core/pose_utils.py, split.py, __init__.py  (pose + vlm_jsonl_video_level_split)
 #
 # Optional (env vars):
 #   INCLUDE_FINEBADMINTON=1       copy labels + generated jsonl (default: 1)
@@ -46,6 +46,7 @@ rsync -a \
   "$BACKEND_ROOT/pipelines/vlm/" "$STAGE/backend/pipelines/vlm/"
 
 cp "$BACKEND_ROOT/core/pose_utils.py" "$STAGE/backend/core/pose_utils.py"
+cp "$BACKEND_ROOT/core/split.py" "$STAGE/backend/core/split.py"
 touch "$STAGE/backend/core/__init__.py"
 
 if [[ "$INCLUDE_FINEBADMINTON" == "1" ]]; then
