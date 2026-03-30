@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+_VLM_DIR = Path(__file__).resolve().parent
+_BACKEND_ROOT = _VLM_DIR.parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 from PIL import Image
 
