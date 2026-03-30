@@ -91,7 +91,7 @@ def _parse_args() -> argparse.Namespace:
         "--num_train_epochs",
         type=float,
         default=25.0,
-        help="Upper bound; use with early stopping to avoid pointless late-epoch overfitting.",
+        help="Number of training epochs.",
     )
     p.add_argument("--logging_steps", type=int, default=1)
     p.add_argument("--seed", type=int, default=42)
@@ -206,18 +206,6 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="If set, also save every N steps (save_strategy=steps) in addition to epoch eval.",
     )
-    p.add_argument(
-        "--early_stopping_patience",
-        type=int,
-        default=5,
-        help="Stop after this many evaluations without improvement (0 = disabled).",
-    )
-    p.add_argument(
-        "--early_stopping_threshold",
-        type=float,
-        default=0.0,
-        help="Minimum change to qualify as improvement (for metric_for_best_model).",
-    )
     return p.parse_args()
 
 
@@ -241,7 +229,6 @@ def main() -> None:
         )
         sys.exit(1)
 
-    from transformers import EarlyStoppingCallback
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastVisionModel
     from unsloth.trainer import UnslothVisionDataCollator
@@ -336,7 +323,6 @@ def main() -> None:
     else:
         train_kwargs["num_train_epochs"] = args.num_train_epochs
 
-    callbacks: list = []
     if eval_dataset is not None:
         if args.eval_stroke_metrics:
             train_kwargs.update(
@@ -360,13 +346,6 @@ def main() -> None:
             train_kwargs["save_steps"] = args.save_steps
         else:
             train_kwargs["save_strategy"] = "epoch"
-        if args.early_stopping_patience > 0:
-            callbacks.append(
-                EarlyStoppingCallback(
-                    early_stopping_patience=args.early_stopping_patience,
-                    early_stopping_threshold=args.early_stopping_threshold,
-                )
-            )
     else:
         train_kwargs["save_strategy"] = (
             "steps" if args.save_steps is not None else "epoch"
@@ -386,7 +365,6 @@ def main() -> None:
             if eval_dataset is not None and args.eval_stroke_metrics
             else None
         ),
-        callbacks=callbacks,
         args=SFTConfig(**train_kwargs),
     )
 
