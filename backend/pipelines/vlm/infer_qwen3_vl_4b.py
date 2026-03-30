@@ -56,6 +56,12 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to pose_landmarker *.task file.",
     )
+    p.add_argument(
+        "--pose_min_short_edge",
+        type=int,
+        default=960,
+        help="Upscale before pose if min(h,w) below this; 0 disables.",
+    )
     return p.parse_args()
 
 
@@ -87,11 +93,13 @@ def main() -> None:
     prompt = args.prompt
     if args.pose_mode != "none":
         pose_estimator = create_pose_estimator(args.pose_model_path)
+        pose_min = None if args.pose_min_short_edge == 0 else args.pose_min_short_edge
         image, prompt = apply_pose_to_pil(
             image,
             pose_estimator,
             mode=args.pose_mode,
             instruction=prompt,
+            min_short_edge_for_pose=pose_min,
         )
     device = _device()
 

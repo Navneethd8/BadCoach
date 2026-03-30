@@ -20,8 +20,14 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from load_dataset_jsonl import load_jsonl_conversations, trainer_vision_kwargs
+from load_dataset_jsonl import (
+    load_jsonl_conversations,
+    load_jsonl_conversations_train_val,
+    trainer_vision_kwargs,
+)
+from core.split import SPLIT_RATIO, SPLIT_SEED
 from qwen3_vl_config import DEFAULT_MAX_SEQ_LENGTH, DEFAULT_MODEL_ID
+from vlm_train_metrics import build_sft_eval_compute_metrics
 
 
 def _parse_args() -> argparse.Namespace:
@@ -59,7 +65,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--learning_rate", type=float, default=2e-4)
     p.add_argument("--warmup_steps", type=int, default=5)
     p.add_argument("--max_steps", type=int, default=None)
-    p.add_argument("--num_train_epochs", type=float, default=1.0)
+    p.add_argument("--num_train_epochs", type=float, default=60.0)
     p.add_argument("--logging_steps", type=int, default=1)
     p.add_argument("--seed", type=int, default=3407)
     p.add_argument(
@@ -91,6 +97,31 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Optional path to pose_landmarker *.task file.",
+    )
+    p.add_argument(
+        "--pose_min_short_edge",
+        type=int,
+        default=960,
+        help="Upscale frame before MediaPipe if min(h,w) is below this (helps wide shots). 0 disables.",
+    )
+    p.add_argument(
+        "--no_val_split",
+        action="store_true",
+        help="Train on full JSONL with no validation (no eval_loss / eval_accuracy).",
+    )
+    p.add_argument("--split_seed", type=int, default=SPLIT_SEED)
+    p.add_argument(
+        "--split_ratio",
+        type=float,
+        default=SPLIT_RATIO,
+        help="Video-level train fraction (same policy as core.split.video_level_split).",
+    )
+    p.add_argument("--per_device_eval_batch_size", type=int, default=2)
+    p.add_argument(
+        "--save_total_limit",
+        type=int,
+        default=3,
+        help="Max checkpoints to keep when using val split (epoch saves).",
     )
     return p.parse_args()
 
@@ -134,17 +165,31 @@ def main() -> None:
     )
 
     print(f"Loading dataset: {args.jsonl}")
-    train_dataset = load_jsonl_conversations(
-        args.jsonl,
-        pose_mode=args.pose_mode,
-        pose_model_path=args.pose_model_path,
-    )
+    pose_min = None if args.pose_min_short_edge == 0 else args.pose_min_short_edge
+    if args.no_val_split:
+        train_dataset = load_jsonl_conversations(
+            args.jsonl,
+            pose_mode=args.pose_mode,
+            pose_model_path=args.pose_model_path,
+            pose_min_short_edge=pose_min,
+        )
+        eval_dataset = None
+    else:
+        train_dataset, eval_dataset = load_jsonl_conversations_train_val(
+            args.jsonl,
+            pose_mode=args.pose_mode,
+            pose_model_path=args.pose_model_path,
+            pose_min_short_edge=pose_min,
+            split_seed=args.split_seed,
+            split_ratio=args.split_ratio,
+        )
 
     FastVisionModel.for_training(model)
 
     tkwargs = trainer_vision_kwargs(max_length=args.max_seq_length)
     train_kwargs: dict = {
         "per_device_train_batch_size": args.per_device_train_batch_size,
+        "per_device_eval_batch_size": args.per_device_eval_batch_size,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "warmup_steps": args.warmup_steps,
         "learning_rate": args.learning_rate,
@@ -162,11 +207,27 @@ def main() -> None:
     else:
         train_kwargs["num_train_epochs"] = args.num_train_epochs
 
+    if eval_dataset is not None:
+        train_kwargs.update(
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            save_total_limit=args.save_total_limit,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+            greater_is_better=False,
+        )
+    else:
+        train_kwargs["save_strategy"] = "epoch"
+
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
         data_collator=UnslothVisionDataCollator(model, tokenizer),
         train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        compute_metrics=(
+            build_sft_eval_compute_metrics(tokenizer) if eval_dataset is not None else None
+        ),
         args=SFTConfig(**train_kwargs),
     )
 

@@ -24,6 +24,10 @@ from core.pose_utils import PoseEstimator  # noqa: E402
 
 PoseMode = Literal["none", "overlay", "text", "both"]
 
+# Upscale before pose when min(h, w) is below this (broadcast frames: players are tiny).
+# 1280×720 → short edge 720 → upscale so short edge reaches this value (then overlay is resized back).
+DEFAULT_POSE_MIN_SHORT_EDGE = 960
+
 # Subset of landmarks for a short text cue (MediaPipe pose, 33 landmarks).
 _LM_IDS = (0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
 _LM_NAMES = (
@@ -53,6 +57,20 @@ def _bgr_to_pil_rgb(bgr: np.ndarray) -> Image.Image:
     return Image.fromarray(rgb)
 
 
+def _bgr_upscale_min_short_edge(bgr: np.ndarray, min_short: int) -> tuple[np.ndarray, tuple[int, int]]:
+    """Return (possibly upscaled BGR, (orig_w, orig_h)) for resizing overlays back."""
+    h, w = bgr.shape[:2]
+    orig_wh = (w, h)
+    short = min(h, w)
+    if short >= min_short:
+        return bgr, orig_wh
+    scale = min_short / float(short)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    up = cv2.resize(bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    return up, orig_wh
+
+
 def format_pose_context_text(detection_result: Any) -> str:
     """Compact pose summary for prepending to the user instruction."""
     if not detection_result.pose_landmarks:
@@ -76,9 +94,13 @@ def apply_pose_to_pil(
     *,
     mode: PoseMode,
     instruction: str,
+    min_short_edge_for_pose: int | None = DEFAULT_POSE_MIN_SHORT_EDGE,
 ) -> tuple[Image.Image, str]:
     """
     Optionally draw skeleton on the image and/or prepend pose text to ``instruction``.
+
+    ``min_short_edge_for_pose``: if set, run MediaPipe on an upscaled copy when the frame
+    is smaller on the short edge (helps wide shots). ``None`` disables upscaling.
 
     Returns:
         (image_for_vlm, instruction_for_vlm)
@@ -87,11 +109,18 @@ def apply_pose_to_pil(
         return pil_rgb, instruction
 
     bgr = _pil_rgb_to_bgr(pil_rgb)
-    detection_result = estimator.process_frame(bgr)
+    if min_short_edge_for_pose is not None and min_short_edge_for_pose > 0:
+        bgr_pose, orig_wh = _bgr_upscale_min_short_edge(bgr, min_short_edge_for_pose)
+    else:
+        bgr_pose, orig_wh = bgr, (bgr.shape[1], bgr.shape[0])
+
+    detection_result = estimator.process_frame(bgr_pose)
 
     out_img = pil_rgb
     if mode in ("overlay", "both"):
-        drawn = estimator.draw_landmarks(bgr, detection_result)
+        drawn = estimator.draw_landmarks(bgr_pose, detection_result)
+        if drawn.shape[1] != orig_wh[0] or drawn.shape[0] != orig_wh[1]:
+            drawn = cv2.resize(drawn, orig_wh, interpolation=cv2.INTER_LINEAR)
         out_img = _bgr_to_pil_rgb(drawn)
 
     out_text = instruction
@@ -103,4 +132,16 @@ def apply_pose_to_pil(
 
 
 def create_pose_estimator(model_path: str | None = None) -> PoseEstimator:
-    return PoseEstimator(model_path=model_path)
+    """
+    Use more lenient thresholds than MediaPipe defaults (0.5): broadcast badminton
+    frames often show small figures, so the lite model frequently misses at 0.5.
+    ``num_poses=2`` helps doubles / two players in frame (we still read the first pose).
+    For harder scenes, try the full ``pose_landmarker.task`` model from Google.
+    """
+    return PoseEstimator(
+        model_path=model_path,
+        num_poses=2,
+        min_pose_detection_confidence=0.25,
+        min_pose_presence_confidence=0.25,
+        min_tracking_confidence=0.25,
+    )

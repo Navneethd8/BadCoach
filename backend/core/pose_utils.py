@@ -6,7 +6,15 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 class PoseEstimator:
-    def __init__(self, model_path=None):
+    def __init__(
+        self,
+        model_path=None,
+        *,
+        num_poses: int = 1,
+        min_pose_detection_confidence: float = 0.5,
+        min_pose_presence_confidence: float = 0.5,
+        min_tracking_confidence: float = 0.5,
+    ):
         if model_path is None:
             # Default to ../models/pose_landmarker_lite.task relative to this file
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,7 +23,12 @@ class PoseEstimator:
         base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.PoseLandmarkerOptions(
             base_options=base_options,
-            output_segmentation_masks=False)
+            output_segmentation_masks=False,
+            num_poses=num_poses,
+            min_pose_detection_confidence=min_pose_detection_confidence,
+            min_pose_presence_confidence=min_pose_presence_confidence,
+            min_tracking_confidence=min_tracking_confidence,
+        )
         self.detector = vision.PoseLandmarker.create_from_options(options)
 
         # Body connections for drawing (simplified standard set)

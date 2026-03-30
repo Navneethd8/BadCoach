@@ -62,3 +62,7 @@ training_output.txt
 backend/models/*_epoch_*.pth
 backend/models/feature_cache_mtl.pt
 backend/models/badminton_model_fast.pth
+
+
+backend.zip
+backend_vlm_colab.zip
