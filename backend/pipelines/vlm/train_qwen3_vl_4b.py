@@ -28,7 +28,12 @@ from load_dataset_jsonl import (
     trainer_vision_kwargs,
 )
 from core.split import SPLIT_RATIO, SPLIT_SEED
-from qwen3_vl_config import DEFAULT_MAX_SEQ_LENGTH, DEFAULT_MODEL_ID
+from qwen3_vl_config import (
+    DEFAULT_MODEL_ID,
+    DEFAULT_TRAIN_MAX_PIXELS,
+    DEFAULT_TRAIN_MAX_SEQ_LENGTH,
+)
+from vlm_processor_utils import apply_vision_processor_limits
 from vlm_train_metrics import build_sft_eval_compute_metrics
 
 
@@ -52,7 +57,12 @@ def _parse_args() -> argparse.Namespace:
         default="outputs/qwen3_vl_4b_lora",
         help="Directory for checkpoints and final adapter.",
     )
-    p.add_argument("--max_seq_length", type=int, default=DEFAULT_MAX_SEQ_LENGTH)
+    p.add_argument(
+        "--max_seq_length",
+        type=int,
+        default=DEFAULT_TRAIN_MAX_SEQ_LENGTH,
+        help="Training max sequence length (default 1536; use 2048 for longer captions).",
+    )
     p.add_argument("--load_in_4bit", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument(
         "--gradient_checkpointing",
@@ -77,7 +87,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--learning_rate", type=float, default=2e-4)
     p.add_argument("--warmup_steps", type=int, default=5)
     p.add_argument("--max_steps", type=int, default=None)
-    p.add_argument("--num_train_epochs", type=float, default=60.0)
+    p.add_argument(
+        "--num_train_epochs",
+        type=float,
+        default=25.0,
+        help="Upper bound; use with early stopping to avoid pointless late-epoch overfitting.",
+    )
     p.add_argument("--logging_steps", type=int, default=1)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
@@ -123,6 +138,18 @@ def _parse_args() -> argparse.Namespace:
         help="If set, resize each frame so max(w,h) is at most this (saves RAM on CPU decode).",
     )
     p.add_argument(
+        "--max_pixels",
+        type=int,
+        default=DEFAULT_TRAIN_MAX_PIXELS,
+        help="Vision preprocessor max_pixels (aligns with PIL resize; 0 = leave processor defaults).",
+    )
+    p.add_argument(
+        "--min_pixels",
+        type=int,
+        default=None,
+        help="Optional vision preprocessor min_pixels (Qwen smart_resize).",
+    )
+    p.add_argument(
         "--no_val_split",
         action="store_true",
         help="Train on full JSONL with no validation (no eval_loss / eval_accuracy).",
@@ -152,8 +179,14 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--bf16",
         action=argparse.BooleanOptionalAction,
+        default=False,
+        help="BF16 mixed precision (Ampere+). Default off; use --fp16 for T4.",
+    )
+    p.add_argument(
+        "--fp16",
+        action=argparse.BooleanOptionalAction,
         default=True,
-        help="Mixed precision on GPU (T4/A100+). Disable with --no-bf16 if unstable.",
+        help="FP16 mixed precision (default on for T4). Disabled if --bf16 is set.",
     )
     p.add_argument(
         "--dataloader_num_workers",
@@ -164,8 +197,26 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--save_total_limit",
         type=int,
-        default=3,
-        help="Max checkpoints to keep when using val split (epoch saves).",
+        default=5,
+        help="Max checkpoints to keep on disk.",
+    )
+    p.add_argument(
+        "--save_steps",
+        type=int,
+        default=None,
+        help="If set, also save every N steps (save_strategy=steps) in addition to epoch eval.",
+    )
+    p.add_argument(
+        "--early_stopping_patience",
+        type=int,
+        default=5,
+        help="Stop after this many evaluations without improvement (0 = disabled).",
+    )
+    p.add_argument(
+        "--early_stopping_threshold",
+        type=float,
+        default=0.0,
+        help="Minimum change to qualify as improvement (for metric_for_best_model).",
     )
     return p.parse_args()
 
@@ -190,6 +241,7 @@ def main() -> None:
         )
         sys.exit(1)
 
+    from transformers import EarlyStoppingCallback
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastVisionModel
     from unsloth.trainer import UnslothVisionDataCollator
@@ -216,6 +268,15 @@ def main() -> None:
         use_rslora=False,
         loftq_config=None,
     )
+
+    max_pixels = None if args.max_pixels == 0 else args.max_pixels
+    apply_vision_processor_limits(
+        tokenizer,
+        max_pixels=max_pixels,
+        min_pixels=args.min_pixels,
+    )
+    if max_pixels is not None:
+        print(f"Vision preprocessor: max_pixels={max_pixels}", file=sys.stderr)
 
     print(f"Loading dataset: {args.jsonl}")
     pose_min = None if args.pose_min_short_edge == 0 else args.pose_min_short_edge
@@ -267,6 +328,7 @@ def main() -> None:
         "output_dir": args.output_dir,
         "report_to": args.report_to,
         "bf16": args.bf16,
+        "fp16": args.fp16 and not args.bf16,
         **tkwargs,
     }
     if args.max_steps is not None:
@@ -274,11 +336,11 @@ def main() -> None:
     else:
         train_kwargs["num_train_epochs"] = args.num_train_epochs
 
+    callbacks: list = []
     if eval_dataset is not None:
         if args.eval_stroke_metrics:
             train_kwargs.update(
                 eval_strategy="epoch",
-                save_strategy="epoch",
                 save_total_limit=args.save_total_limit,
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_stroke_accuracy",
@@ -287,15 +349,31 @@ def main() -> None:
         else:
             train_kwargs.update(
                 eval_strategy="epoch",
-                save_strategy="epoch",
                 save_total_limit=args.save_total_limit,
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_loss",
                 greater_is_better=False,
                 prediction_loss_only=True,
             )
+        if args.save_steps is not None:
+            train_kwargs["save_strategy"] = "steps"
+            train_kwargs["save_steps"] = args.save_steps
+        else:
+            train_kwargs["save_strategy"] = "epoch"
+        if args.early_stopping_patience > 0:
+            callbacks.append(
+                EarlyStoppingCallback(
+                    early_stopping_patience=args.early_stopping_patience,
+                    early_stopping_threshold=args.early_stopping_threshold,
+                )
+            )
     else:
-        train_kwargs["save_strategy"] = "epoch"
+        train_kwargs["save_strategy"] = (
+            "steps" if args.save_steps is not None else "epoch"
+        )
+        if args.save_steps is not None:
+            train_kwargs["save_steps"] = args.save_steps
+        train_kwargs["save_total_limit"] = args.save_total_limit
 
     trainer = SFTTrainer(
         model=model,
@@ -308,6 +386,7 @@ def main() -> None:
             if eval_dataset is not None and args.eval_stroke_metrics
             else None
         ),
+        callbacks=callbacks,
         args=SFTConfig(**train_kwargs),
     )
 
