@@ -20,6 +20,8 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
+from torch.utils.data import Subset
+
 from load_dataset_jsonl import (
     load_jsonl_conversations,
     load_jsonl_conversations_train_val,
@@ -60,14 +62,24 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--r", type=int, default=16, help="LoRA rank.")
     p.add_argument("--lora_alpha", type=int, default=16)
-    p.add_argument("--per_device_train_batch_size", type=int, default=2)
-    p.add_argument("--gradient_accumulation_steps", type=int, default=4)
+    p.add_argument(
+        "--per_device_train_batch_size",
+        type=int,
+        default=1,
+        help="Default 1 for T4/16GB VRAM + vision; increase if you have headroom.",
+    )
+    p.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=8,
+        help="Effective batch ≈ batch_size × this (default 8 matches old 2×4).",
+    )
     p.add_argument("--learning_rate", type=float, default=2e-4)
     p.add_argument("--warmup_steps", type=int, default=5)
     p.add_argument("--max_steps", type=int, default=None)
     p.add_argument("--num_train_epochs", type=float, default=60.0)
     p.add_argument("--logging_steps", type=int, default=1)
-    p.add_argument("--seed", type=int, default=3407)
+    p.add_argument("--seed", type=int, default=42)
     p.add_argument(
         "--report_to",
         type=str,
@@ -105,6 +117,12 @@ def _parse_args() -> argparse.Namespace:
         help="Upscale frame before MediaPipe if min(h,w) is below this (helps wide shots). 0 disables.",
     )
     p.add_argument(
+        "--max_image_long_edge",
+        type=int,
+        default=None,
+        help="If set, resize each frame so max(w,h) is at most this (saves RAM on CPU decode).",
+    )
+    p.add_argument(
         "--no_val_split",
         action="store_true",
         help="Train on full JSONL with no validation (no eval_loss / eval_accuracy).",
@@ -116,7 +134,33 @@ def _parse_args() -> argparse.Namespace:
         default=SPLIT_RATIO,
         help="Video-level train fraction (same policy as core.split.video_level_split).",
     )
-    p.add_argument("--per_device_eval_batch_size", type=int, default=2)
+    p.add_argument("--per_device_eval_batch_size", type=int, default=1)
+    p.add_argument(
+        "--max_eval_samples",
+        type=int,
+        default=None,
+        help="Cap validation size (first N after split). Strongly recommended on low-RAM "
+        "hosts: eval with stroke metrics materializes logits on CPU.",
+    )
+    p.add_argument(
+        "--eval_stroke_metrics",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If disabled, validation only reports eval_loss (no logits on CPU). "
+        "Much lower host RAM at end of each epoch; use --no-eval_stroke_metrics on Colab.",
+    )
+    p.add_argument(
+        "--bf16",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Mixed precision on GPU (T4/A100+). Disable with --no-bf16 if unstable.",
+    )
+    p.add_argument(
+        "--dataloader_num_workers",
+        type=int,
+        default=0,
+        help="Use 0 on Colab to avoid extra RAM from worker processes.",
+    )
     p.add_argument(
         "--save_total_limit",
         type=int,
@@ -128,7 +172,16 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    import random
+
+    import numpy as np
     import torch
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
 
     if not torch.cuda.is_available():
         print(
@@ -172,6 +225,7 @@ def main() -> None:
             pose_mode=args.pose_mode,
             pose_model_path=args.pose_model_path,
             pose_min_short_edge=pose_min,
+            max_image_long_edge=args.max_image_long_edge,
         )
         eval_dataset = None
     else:
@@ -182,7 +236,17 @@ def main() -> None:
             pose_min_short_edge=pose_min,
             split_seed=args.split_seed,
             split_ratio=args.split_ratio,
+            max_image_long_edge=args.max_image_long_edge,
         )
+        if args.max_eval_samples is not None and len(eval_dataset) > args.max_eval_samples:
+            print(
+                f"Capping eval_dataset: {len(eval_dataset)} -> {args.max_eval_samples} "
+                f"(RAM-friendly eval; metrics are on this subset only).",
+                file=sys.stderr,
+            )
+            eval_dataset = Subset(
+                eval_dataset, range(min(args.max_eval_samples, len(eval_dataset)))
+            )
 
     FastVisionModel.for_training(model)
 
@@ -191,6 +255,8 @@ def main() -> None:
         "per_device_train_batch_size": args.per_device_train_batch_size,
         "per_device_eval_batch_size": args.per_device_eval_batch_size,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "dataloader_num_workers": args.dataloader_num_workers,
+        "dataloader_pin_memory": False,
         "warmup_steps": args.warmup_steps,
         "learning_rate": args.learning_rate,
         "logging_steps": args.logging_steps,
@@ -200,6 +266,7 @@ def main() -> None:
         "seed": args.seed,
         "output_dir": args.output_dir,
         "report_to": args.report_to,
+        "bf16": args.bf16,
         **tkwargs,
     }
     if args.max_steps is not None:
@@ -208,14 +275,25 @@ def main() -> None:
         train_kwargs["num_train_epochs"] = args.num_train_epochs
 
     if eval_dataset is not None:
-        train_kwargs.update(
-            eval_strategy="epoch",
-            save_strategy="epoch",
-            save_total_limit=args.save_total_limit,
-            load_best_model_at_end=True,
-            metric_for_best_model="eval_stroke_accuracy",
-            greater_is_better=True,
-        )
+        if args.eval_stroke_metrics:
+            train_kwargs.update(
+                eval_strategy="epoch",
+                save_strategy="epoch",
+                save_total_limit=args.save_total_limit,
+                load_best_model_at_end=True,
+                metric_for_best_model="eval_stroke_accuracy",
+                greater_is_better=True,
+            )
+        else:
+            train_kwargs.update(
+                eval_strategy="epoch",
+                save_strategy="epoch",
+                save_total_limit=args.save_total_limit,
+                load_best_model_at_end=True,
+                metric_for_best_model="eval_loss",
+                greater_is_better=False,
+                prediction_loss_only=True,
+            )
     else:
         train_kwargs["save_strategy"] = "epoch"
 
@@ -226,7 +304,9 @@ def main() -> None:
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         compute_metrics=(
-            build_sft_eval_compute_metrics(tokenizer) if eval_dataset is not None else None
+            build_sft_eval_compute_metrics(tokenizer)
+            if eval_dataset is not None and args.eval_stroke_metrics
+            else None
         ),
         args=SFTConfig(**train_kwargs),
     )
