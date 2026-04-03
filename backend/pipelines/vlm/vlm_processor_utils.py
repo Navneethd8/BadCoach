@@ -32,15 +32,32 @@ def apply_vision_processor_limits(
     min_pixels: int | None = None,
 ) -> None:
     """
-    Set ``max_pixels`` / ``min_pixels`` on Hugging Face image processors attached to the
-    tokenizer so preprocessing matches PIL resize and avoids implicit defaults (e.g. 512).
+    Set vision limits on HF image processors attached to the tokenizer.
 
-    No-op if no processor exposes these attributes.
+    ``Qwen2VLImageProcessor`` (Qwen3-VL) exposes ``max_pixels`` / ``min_pixels`` as
+    read-only properties; the mutable fields are ``size["longest_edge"]`` and
+    ``size["shortest_edge"]``. Other processors may allow direct attribute assignment.
     """
     if max_pixels is None and min_pixels is None:
         return
     for ip in _collect_image_processors(tokenizer):
-        if max_pixels is not None and hasattr(ip, "max_pixels"):
-            ip.max_pixels = max_pixels
-        if min_pixels is not None and hasattr(ip, "min_pixels"):
-            ip.min_pixels = min_pixels
+        applied = False
+        sz = getattr(ip, "size", None)
+        if sz is not None:
+            try:
+                if max_pixels is not None:
+                    sz["longest_edge"] = max_pixels
+                if min_pixels is not None:
+                    sz["shortest_edge"] = min_pixels
+                applied = True
+            except (TypeError, KeyError):
+                applied = False
+        if applied:
+            continue
+        try:
+            if max_pixels is not None and hasattr(ip, "max_pixels"):
+                ip.max_pixels = max_pixels
+            if min_pixels is not None and hasattr(ip, "min_pixels"):
+                ip.min_pixels = min_pixels
+        except AttributeError:
+            pass
