@@ -1,9 +1,11 @@
-import { useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { motion, useReducedMotion, AnimatePresence } from 'framer-motion'
+import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
+import BadmintonNetScene from './BadmintonNetScene'
+import FeaturesPoseRally from './FeaturesPoseRally'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -13,6 +15,45 @@ function Icon({ name, size = 20, className = '' }) {
         >
             {name}
         </span>
+    )
+}
+
+const HERO_MICRO_LINES = [
+    'Sideline or behind the baseline: if we can see the swing, we can read it.',
+    'Ten stroke families, from net brushes to full rear-court power.',
+    'Built between sessions by someone who burns through grips, not slide decks.',
+]
+
+function RotatingMicroLine({ lines }) {
+    const shouldReduceMotion = useReducedMotion()
+    const [i, setI] = useState(0)
+    useEffect(() => {
+        if (shouldReduceMotion) return
+        const id = setInterval(() => setI((n) => (n + 1) % lines.length), 4200)
+        return () => clearInterval(id)
+    }, [shouldReduceMotion, lines.length])
+    if (shouldReduceMotion) {
+        return (
+            <p className="text-sm text-emerald-500/85 text-center max-w-lg mx-auto mt-3 font-medium leading-snug">
+                {lines[0]}
+            </p>
+        )
+    }
+    return (
+        <div className="mt-3 min-h-[2.75rem] max-w-lg mx-auto flex items-center justify-center px-2">
+            <AnimatePresence mode="wait">
+                <motion.p
+                    key={i}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    className="text-sm text-emerald-500/90 text-center font-medium leading-snug"
+                >
+                    {lines[i]}
+                </motion.p>
+            </AnimatePresence>
+        </div>
     )
 }
 
@@ -34,18 +75,21 @@ function FadeUp({ children, delay = 0, className = '' }) {
 const features = [
     {
         icon: 'directions_run',
-        label: 'Pose Tracing',
-        description: 'See exactly how your body moves on every shot. We track your arms, legs, and footwork frame by frame so you can quickly spot and fix breakdowns.',
+        label: 'Pose tracing',
+        description:
+            'Split-step late? Contact behind you? See your body frame by frame so you can fix the same miss twice, not twenty times.',
     },
     {
         icon: 'query_stats',
-        label: 'Stroke Analysis',
-        description: 'Detects the shot you played, where it landed, and how well you executed it across 10 common stroke types.',
+        label: 'Stroke reads',
+        description:
+            'What you hit, roughly where it went, and how clean it looked, across ten real-world strokes, not textbook labels nobody says out loud.',
     },
     {
         icon: 'tips_and_updates',
-        label: 'AI Coaching',
-        description: 'Get clear, practical tips based on what the AI sees, tailored to your level with specific actions to improve your next session.',
+        label: 'Coaching notes',
+        description:
+            'Short, specific cues you can take to the hall: what to try on the next rep, not a wall of generic “keep practising.”',
     },
 ]
 
@@ -53,29 +97,32 @@ const steps = [
     {
         n: '01',
         icon: 'upload',
-        title: 'Upload Your Clip',
-        description: 'Upload a badminton video showing a single stroke or a short rally.',
+        title: 'Toss us a clip',
+        description: 'One hard smash, a messy rally, or a drill. Keep the camera steady and the shuttle in frame.',
     },
     {
         n: '02',
         icon: 'model_training',
-        title: 'AI Analyzes Your Play',
-        description: 'IsoCourt tracks your movement, identifies each stroke, and scores your technique quickly.',
+        title: 'We do the tedious bit',
+        description: 'Poses, strokes, and scores get stitched together while you grab water. No manual tagging.',
     },
     {
         n: '03',
         icon: 'emoji_events',
-        title: 'Get Actionable Feedback',
-        description: 'Receive a performance score, a shot by shot breakdown, and clear coaching tips you can apply in your next session.',
+        title: 'Walk back on court smarter',
+        description: 'A clear read on what broke down, plus a few cues to try before your next session.',
     },
 ]
 
 const stats = [
-    { value: '10', label: 'Stroke types', icon: 'sports' },
-    { value: '4', label: 'Tactical metrics', icon: 'explore' },
-    { value: 'Fast', label: 'Analysis', icon: 'timer' },
-    { value: 'Free', label: 'To try', icon: 'card_giftcard' },
+    { value: '10', label: 'Strokes in the book', icon: 'sports' },
+    { value: '4', label: 'Court reads', icon: 'explore' },
+    { value: '1', label: 'Clip per analysis', icon: 'movie' },
+    { value: 'Free', label: 'No signup to start', icon: 'lock_open' },
 ]
+
+const navCtaClass =
+    'text-sm font-medium px-3.5 sm:px-4 py-2 rounded-lg border border-emerald-600/45 bg-emerald-950/30 text-emerald-100 hover:bg-emerald-950/45 hover:border-emerald-500/65 transition-colors flex items-center justify-center gap-2'
 
 export default function LandingPage() {
     const navigate = useNavigate()
@@ -115,66 +162,86 @@ export default function LandingPage() {
         <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 overflow-x-hidden">
 
             {/* Navbar */}
-            <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/80 backdrop-blur-md">
-                <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-                    <button onClick={() => navigate('/analyze')} className="flex items-center gap-2 focus:outline-none" aria-label="IsoCourt home">
-                        <Logo size={22} className="text-emerald-500" />
-                        <span className="text-base font-semibold tracking-tight">
+            <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/85 backdrop-blur-md">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-14 py-2 flex items-center justify-between gap-3">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/analyze')}
+                        className="flex items-center gap-2 shrink-0 min-w-0 rounded-md"
+                        aria-label="IsoCourt home"
+                    >
+                        <Logo size={22} className="text-emerald-500 shrink-0" />
+                        <span className="text-base font-semibold tracking-tight hidden sm:inline truncate">
                             Iso<span className="text-emerald-500">Court</span>
                         </span>
                     </button>
-                    <div className="flex items-center gap-4 sm:gap-5">
-                        <button
+                    <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0">
+                        <motion.button
+                            type="button"
+                            onClick={() => {
+                                ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_nav' })
+                                navigate('/analyze')
+                            }}
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={navCtaClass}
+                        >
+                            Drop a clip
+                        </motion.button>
+                        <motion.button
                             type="button"
                             onClick={() => {
                                 ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_nav' })
                                 navigate('/live')
                             }}
-                            className="text-sm font-medium text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5"
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={navCtaClass}
                         >
-                            <Icon name="sensors" size={18} className="text-emerald-500/90" />
+                            <Icon name="sensors" size={18} className="text-emerald-400" />
                             <span className="hidden sm:inline">Live coaching</span>
                             <span className="sm:hidden">Live</span>
-                        </button>
-                        <motion.button
-                            onClick={() => navigate('/analyze')}
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.97 }}
-                            className="text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md transition-colors"
-                        >
-                            Try it free
                         </motion.button>
                     </div>
                 </div>
             </nav>
 
-            {/* Hero */}
-            <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 px-6 text-center overflow-hidden">
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <div className="w-[700px] h-[500px] bg-emerald-600/8 rounded-full blur-[120px]" />
+            {/* Hero: net scene */}
+            <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 px-6 text-center overflow-hidden bg-black min-h-[min(88vh,720px)]">
+                <div className="pointer-events-none absolute inset-0 z-0">
+                    <BadmintonNetScene className="w-full h-full object-cover opacity-[0.92]" />
                 </div>
-
-                <div className="relative max-w-3xl mx-auto">
+                <div
+                    className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,rgba(0,0,0,0.72)_0%,transparent_68%)]"
+                    aria-hidden
+                />
+                <div
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-40 z-[2] bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent"
+                    aria-hidden
+                />
+                <div className="relative z-10 max-w-3xl mx-auto">
                     <FadeUp delay={0}>
                         <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
                             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                            AI-powered badminton coaching
+                            Made for people who actually play
                         </div>
                     </FadeUp>
 
                     <FadeUp delay={0.08}>
                         <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
                             Your{' '}
-                            <span className="text-emerald-400">AI Coach.</span>
+                            <span className="text-emerald-400">AI second pair of eyes</span>
                             <br />
-                            Real Badminton.
+                            on court.
                         </h1>
                     </FadeUp>
 
-                    <FadeUp delay={0.16}>
-                        <p className="text-lg text-neutral-400 max-w-xl mx-auto mb-10 leading-relaxed">
-                            Upload a clip and get instant feedback on your strokes, body positioning, and shot selection from an AI that knows badminton.
+                    <FadeUp delay={0.16} className="mb-10">
+                        <p className="text-lg text-neutral-400 max-w-xl mx-auto mb-2 leading-relaxed">
+                            Upload a video clip (rally or single stroke). Our AI reads footwork, contact, and shot type like a club coach who had coffee first: fast,
+                            specific, zero corporate fluff.
                         </p>
+                        <RotatingMicroLine lines={HERO_MICRO_LINES} />
                     </FadeUp>
 
                     <FadeUp delay={0.22}>
@@ -185,7 +252,7 @@ export default function LandingPage() {
                                 whileTap={{ scale: 0.97 }}
                                 className="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
                             >
-                                Start Analyzing for Free
+                                Drop a clip, it’s free
                             </motion.button>
                             <motion.button
                                 type="button"
@@ -198,28 +265,27 @@ export default function LandingPage() {
                                 className="w-full sm:w-auto px-8 py-3 border border-emerald-600/40 hover:border-emerald-500/70 bg-emerald-950/20 text-emerald-100 hover:text-white font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
                             >
                                 <Icon name="sensors" size={18} className="text-emerald-400" />
-                                Live coaching
+                                Live while you play
                             </motion.button>
-                            <a
-                                href="#how-it-works"
-                                className="w-full sm:w-auto px-8 py-3 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white font-medium rounded-lg text-sm transition-colors text-center"
-                            >
-                                See how it works
-                            </a>
                         </div>
                     </FadeUp>
 
                     {/* Mock analysis card */}
                     <FadeUp delay={0.32}>
                         <div className="mt-16 mx-auto max-w-sm bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-left shadow-2xl">
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                                 <span className="text-xs text-neutral-500 font-medium flex items-center gap-1.5">
                                     <Icon name="analytics" size={14} className="text-emerald-500" />
                                     Analysis Results
                                 </span>
-                                <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-                                    Advanced
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] uppercase tracking-wide text-neutral-500 font-semibold border border-neutral-600/70 px-2 py-0.5 rounded">
+                                        Example
+                                    </span>
+                                    <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
+                                        Advanced
+                                    </span>
+                                </div>
                             </div>
                             <div className="flex justify-between items-end mb-2">
                                 <span className="text-2xl font-bold text-emerald-400">Advanced</span>
@@ -276,22 +342,31 @@ export default function LandingPage() {
             </section>
 
             {/* Features */}
-            <section id="features" className="py-16 md:py-28 px-6">
-                <div className="max-w-5xl mx-auto">
+            <section id="features" className="relative py-16 md:py-28 px-6 overflow-visible">
+                <div className="max-w-5xl mx-auto relative z-10">
                     <FadeUp className="text-center mb-16">
                         <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">Features</span>
                         <h2 className="text-3xl md:text-4xl font-bold mt-3 tracking-tight">
-                            Everything a coach sees,<br />in seconds
+                            The stuff coaches nag you about,<br />
+                            without the side-eye
                         </h2>
                         <p className="text-neutral-400 mt-4 max-w-lg mx-auto leading-relaxed">
-                            IsoCourt gives you the kind of detailed feedback that used to require a professional coach, available instantly after every clip.
+                            Pose lines, stroke calls, and plain-language cues. The same details you’d get from a good training block, compressed into the minutes
+                            between rallies.
                         </p>
                     </FadeUp>
 
-                    <div className="grid md:grid-cols-3 gap-5">
+                    <div className="relative mt-10 md:mt-12">
+                        <div
+                            className="pointer-events-none absolute inset-x-0 bottom-full z-10 flex h-[5.5rem] sm:h-24 items-end justify-stretch"
+                            aria-hidden
+                        >
+                            <FeaturesPoseRally className="w-full h-[4.75rem] sm:h-[5.25rem] shrink-0" />
+                        </div>
+                        <div className="relative z-0 grid md:grid-cols-3 gap-5">
                         {features.map(({ icon, label, description }, i) => (
                             <FadeUp key={label} delay={i * 0.1}>
-                                <div className="h-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl p-6 transition-all duration-300">
+                                <div className="h-full bg-neutral-900 border border-neutral-800 hover:border-emerald-500/25 hover:-translate-y-0.5 rounded-xl p-6 transition-all duration-300">
                                     <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-4">
                                         <Icon name={icon} size={22} className="text-emerald-400" />
                                     </div>
@@ -300,6 +375,7 @@ export default function LandingPage() {
                                 </div>
                             </FadeUp>
                         ))}
+                        </div>
                     </div>
                 </div>
             </section>
@@ -310,7 +386,7 @@ export default function LandingPage() {
                     <FadeUp className="text-center mb-8">
                         <p className="text-xs text-neutral-500 uppercase tracking-widest font-semibold flex items-center justify-center gap-2">
                             <Icon name="play_circle" size={14} className="text-emerald-500" />
-                            See it in action
+                            Real footage, real breakdown
                         </p>
                     </FadeUp>
                     <FadeUp delay={0.1}>
@@ -335,7 +411,8 @@ export default function LandingPage() {
                     <FadeUp className="text-center mb-16">
                         <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">How It Works</span>
                         <h2 className="text-3xl md:text-4xl font-bold mt-3 tracking-tight">
-                            From clip to coaching<br />in three steps
+                            Clip in. Notes out.<br />
+                            Three steps.
                         </h2>
                     </FadeUp>
 
@@ -365,22 +442,25 @@ export default function LandingPage() {
                 </div>
                 <FadeUp className="relative max-w-2xl mx-auto text-center">
                     <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 leading-[1.1]">
-                        Ready to level up<br />your game?
+                        Same session tomorrow.
+                        <br />
+                        Fewer blind spots.
                     </h2>
                     <p className="text-neutral-400 mb-10 text-lg">
-                        No account needed. Drop a clip and get instant feedback.
+                        No signup circus. One clip is enough to see how it reads your game.
                     </p>
                     <motion.button
+                        type="button"
                         onClick={() => navigate('/analyze')}
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.97 }}
                         className="inline-flex items-center gap-2 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
                     >
-                        <Icon name="videocam" size={18} />
-                        Analyze My Stroke
+                        <Icon name="upload" size={18} />
+                        Drop a clip
                     </motion.button>
                     <p className="mt-8 text-sm text-neutral-500">
-                        Want tips while you play?{' '}
+                        Prefer feedback between points?{' '}
                         <button
                             type="button"
                             onClick={() => {
@@ -401,10 +481,10 @@ export default function LandingPage() {
                     <FadeUp className="text-center mb-10">
                         <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">Feedback</span>
                         <h2 className="text-3xl md:text-4xl font-bold mt-3 tracking-tight">
-                            Got thoughts?<br />We'd love to hear them.
+                            Court notes welcome
                         </h2>
                         <p className="text-neutral-400 mt-4 max-w-md mx-auto leading-relaxed">
-                            Bug report, feature idea, or just saying hi — drop us a message and we'll get back to you.
+                            Wrong call, wild idea, or “this saved my smash.” We read every message between training blocks.
                         </p>
                     </FadeUp>
 
@@ -437,7 +517,7 @@ export default function LandingPage() {
                                             onChange={(e) => setFbName(e.target.value)}
                                             placeholder="Your name"
                                             required
-                                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 outline-none transition-colors"
+                                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 transition-colors"
                                         />
                                     </div>
                                     <div>
@@ -449,7 +529,7 @@ export default function LandingPage() {
                                             onChange={(e) => setFbEmail(e.target.value)}
                                             placeholder="you@example.com"
                                             required
-                                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 outline-none transition-colors"
+                                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 transition-colors"
                                         />
                                     </div>
                                 </div>
@@ -459,10 +539,10 @@ export default function LandingPage() {
                                         id="fb-message"
                                         value={fbMessage}
                                         onChange={(e) => setFbMessage(e.target.value)}
-                                        placeholder="What's on your mind?"
+                                        placeholder="e.g. love the clears read, wish it saw doubles rotation…"
                                         required
                                         rows={4}
-                                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 outline-none transition-colors resize-none"
+                                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 transition-colors resize-none"
                                     />
                                 </div>
 
@@ -500,16 +580,29 @@ export default function LandingPage() {
 
             {/* Footer */}
             <footer className="border-t border-neutral-800 py-8 px-6">
-                <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                        <Logo size={18} className="text-emerald-500" />
-                        <span className="text-sm font-semibold">
-                            Iso<span className="text-emerald-500">Court</span>
-                        </span>
+                <div className="max-w-5xl mx-auto flex flex-col gap-5">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                            <Logo size={18} className="text-emerald-500" />
+                            <span className="text-sm font-semibold">
+                                Iso<span className="text-emerald-500">Court</span>
+                            </span>
+                        </div>
+                        <p className="text-xs text-neutral-600 text-center sm:text-right max-w-md sm:max-w-none leading-relaxed">
+                            Stroke analysis for people who know what a feather costs · Shipped by someone who still chases shuttles off-court
+                        </p>
                     </div>
-                    <p className="text-xs text-neutral-600">
-                        AI-powered badminton stroke analysis · Built by a badminton player for badminton players
-                    </p>
+                    <nav className="flex flex-wrap items-center justify-center sm:justify-end gap-x-6 gap-y-2 text-xs text-neutral-500" aria-label="Legal">
+                        <Link to="/privacy" className="hover:text-emerald-400 transition-colors">
+                            Privacy
+                        </Link>
+                        <Link to="/terms" className="hover:text-emerald-400 transition-colors">
+                            Terms
+                        </Link>
+                        <a href="#feedback" className="hover:text-emerald-400 transition-colors">
+                            Contact
+                        </a>
+                    </nav>
                 </div>
             </footer>
         </div>

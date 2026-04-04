@@ -21,6 +21,23 @@ body {
   min-height: 100vh;
 }
 
+/* Keyboard focus: visible ring for interactive controls (does not remove mouse click outline where browsers hide it) */
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgb(52, 211, 153);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-offset: 0;
+}
+
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
   vertical-align: middle;
@@ -42,4 +59,29 @@ body {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #525252;
+}
+
+/* Landing “alive” motion (disabled when user prefers reduced motion) */
+@media (prefers-reduced-motion: no-preference) {
+  .badminton-net-mesh {
+    animation: net-mesh-breathe 6s ease-in-out infinite;
+  }
+
+}
+
+@keyframes net-mesh-breathe {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badminton-net-mesh {
+    animation: none !important;
+    opacity: 1;
+  }
 }

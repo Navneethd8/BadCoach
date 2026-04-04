@@ -133,14 +133,14 @@ export default function LiveSession() {
     const pauseSession = useCallback(() => {
         if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
         setStatus('paused')
-        pushChat('system', 'Session paused — take a break.')
+        pushChat('system', 'Session paused. Take a break.')
     }, [pushChat])
 
     const resumeSession = useCallback(() => {
         const v = videoRef.current, c = canvasRef.current, w = wsRef.current
         if (v && c && w) beginFrameLoop(v, c, w)
         setStatus('live')
-        pushChat('system', 'Resumed — back on court!')
+        pushChat('system', 'Resumed. Back on court!')
     }, [pushChat])
 
     useEffect(() => () => stopCamera(), [stopCamera])
@@ -195,7 +195,7 @@ export default function LiveSession() {
 
         ws.onopen = () => {
             setStatus('live')
-            pushChat('system', 'Session started — point your camera at the court.')
+            pushChat('system', 'Session started. Point your camera at the court.')
             ReactGA.event({ category: 'Live', action: 'Session Started' })
             beginFrameLoop(videoRef.current, canvasRef.current, ws)
         }
@@ -212,7 +212,7 @@ export default function LiveSession() {
                     setLastResult(null)
                     pushChat('system', data.message || 'Break detected.')
                 } else if (data.event === 'analysis') {
-                    if (onBreakRef.current) pushChat('system', 'Play resumed — analyzing...')
+                    if (onBreakRef.current) pushChat('system', 'Play resumed. Analyzing…')
                     setOnBreak(null)
                     onBreakRef.current = null
                     setLastResult(data)
@@ -366,8 +366,8 @@ export default function LiveSession() {
                                         className={onBreak === 'no_badminton' ? 'text-amber-500' : 'text-neutral-500'} />
                                     <span className={`text-xs ${onBreak === 'no_badminton' ? 'text-amber-300' : 'text-neutral-400'}`}>
                                         {onBreak === 'no_badminton'
-                                            ? 'No badminton detected — point camera at the court'
-                                            : 'Break in play — waiting for action'}
+                                            ? 'No badminton detected. Point camera at the court'
+                                            : 'Break in play. Waiting for action'}
                                     </span>
                                 </motion.div>
                             )}
@@ -384,23 +384,23 @@ export default function LiveSession() {
                                             </div>
                                             <div>
                                                 <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Technique</p>
-                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.technique?.label || '—'}</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.technique?.label || '-'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Placement</p>
-                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.placement?.label || '—'}</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.placement?.label || '-'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Position</p>
-                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.position?.label || '—'}</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.position?.label || '-'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Intent</p>
-                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.intent?.label || '—'}</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.intent?.label || '-'}</p>
                                             </div>
                                             <div>
                                                 <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Quality</p>
-                                                <p className={`text-[11px] font-semibold truncate ${getQualityColor(lastResult.metrics?.quality)}`}>{lastResult.metrics?.quality || '—'}</p>
+                                                <p className={`text-[11px] font-semibold truncate ${getQualityColor(lastResult.metrics?.quality)}`}>{lastResult.metrics?.quality || '-'}</p>
                                             </div>
                                         </div>
                                     </motion.div>

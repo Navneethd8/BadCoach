@@ -329,7 +329,7 @@ export default function App() {
         } catch (error) {
             console.error("Error uploading file:", error)
 
-            // 503 — server at capacity
+            // 503: server at capacity
             if (error.response?.status === 503) {
                 const retryAfter = error.response?.data?.detail?.retry_after || 30
                 setCapacityError(retryAfter)
@@ -1099,7 +1099,7 @@ export default function App() {
                             {result.cache_hit && (
                                 <div className="flex items-center gap-2 text-[11px] text-emerald-400/70 font-medium px-1">
                                     <Icon name="bolt" size={13} className="text-emerald-500" />
-                                    Instant result — same clip analyzed before
+                                    Instant result: same clip analyzed before
                                 </div>
                             )}
                             <div className="space-y-3">
@@ -1322,7 +1322,7 @@ export default function App() {
                     )}
                 </section>
 
-                {/* Feedback nudge — only after results */}
+                {/* Feedback nudge: only after results */}
                 {result && !result.validation_error && (
                     <div className="mt-4 text-center">
                         <a
