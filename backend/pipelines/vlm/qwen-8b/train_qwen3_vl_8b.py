@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
-Fine-tune Qwen3-VL-4B-Instruct with Unsloth (LoRA + 4-bit base).
+Fine-tune Qwen3-VL-8B-Instruct with Unsloth (LoRA + 4-bit base).
 
-Requires a CUDA GPU and the dependencies in requirements-unsloth-vlm.txt.
+Requires a CUDA GPU and the dependencies in common/requirements-unsloth-vlm.txt.
+
+Mixed precision: on Ampere+ (A100, etc.) bf16 is chosen automatically unless you
+pass --bf16 / --no-bf16 / --fp16 / --no-fp16 explicitly.
 
 Example:
-  cd backend/pipelines/vlm
-  pip install -r requirements-unsloth-vlm.txt
-  python train_qwen3_vl_4b.py --jsonl example_data/sample.jsonl --output_dir ./outputs/qwen3vl4b_lora
+  cd backend/pipelines/vlm/qwen-8b
+  pip install -r ../common/requirements-unsloth-vlm.txt
+  python train_qwen3_vl_8b.py --jsonl ../common/example_data/sample.jsonl --output_dir ./outputs/qwen3_vl_8b_lora
 """
 
 from __future__ import annotations
@@ -17,28 +20,33 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
+_VLM_ROOT = _SCRIPT_DIR.parent
+_COMMON = _VLM_ROOT / "common"
+_BACKEND_ROOT = _VLM_ROOT.parent.parent
+for p in (_BACKEND_ROOT, _COMMON, _SCRIPT_DIR):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
 from torch.utils.data import Subset
 
+from core.split import SPLIT_RATIO, SPLIT_SEED
 from load_dataset_jsonl import (
     load_jsonl_conversations,
     load_jsonl_conversations_train_val,
     trainer_vision_kwargs,
 )
-from core.split import SPLIT_RATIO, SPLIT_SEED
 from qwen3_vl_config import (
     DEFAULT_MODEL_ID,
     DEFAULT_TRAIN_MAX_PIXELS,
     DEFAULT_TRAIN_MAX_SEQ_LENGTH,
 )
+from vlm_gpu_defaults import resolve_train_amp
 from vlm_processor_utils import apply_vision_processor_limits
 from vlm_train_metrics import build_sft_eval_compute_metrics
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Unsloth SFT for Qwen3-VL-4B-Instruct")
+    p = argparse.ArgumentParser(description="Unsloth SFT for Qwen3-VL-8B-Instruct")
     p.add_argument(
         "--jsonl",
         type=str,
@@ -49,12 +57,12 @@ def _parse_args() -> argparse.Namespace:
         "--model_name",
         type=str,
         default=DEFAULT_MODEL_ID,
-        help="Hugging Face model id (default: Unsloth 4-bit Qwen3-VL-4B-Instruct).",
+        help="Hugging Face model id (default: Unsloth 4-bit Qwen3-VL-8B-Instruct).",
     )
     p.add_argument(
         "--output_dir",
         type=str,
-        default="outputs/qwen3_vl_4b_lora",
+        default="outputs/qwen3_vl_8b_lora",
         help="Directory for checkpoints and final adapter.",
     )
     p.add_argument(
@@ -76,7 +84,7 @@ def _parse_args() -> argparse.Namespace:
         "--per_device_train_batch_size",
         type=int,
         default=1,
-        help="Default 1 for T4/16GB VRAM + vision; increase if you have headroom.",
+        help="Default 1 for T4/16GB VRAM + vision; A100 40GB often allows 2+.",
     )
     p.add_argument(
         "--gradient_accumulation_steps",
@@ -179,14 +187,14 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--bf16",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="BF16 mixed precision (Ampere+). Default off; use --fp16 for T4.",
+        default=None,
+        help="BF16 mixed precision. Default: on for CUDA sm>=8 (A100), off for older GPUs.",
     )
     p.add_argument(
         "--fp16",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="FP16 mixed precision (default on for T4). Disabled if --bf16 is set.",
+        default=None,
+        help="FP16 when not using BF16. Default: auto from GPU unless flags are set.",
     )
     p.add_argument(
         "--dataloader_num_workers",
@@ -228,6 +236,13 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+    bf16, fp16 = resolve_train_amp(args.bf16, args.fp16)
+    print(
+        f"Mixed precision: bf16={bf16} fp16={fp16} "
+        f"(GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'n/a'})",
+        file=sys.stderr,
+    )
 
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastVisionModel
@@ -314,8 +329,8 @@ def main() -> None:
         "seed": args.seed,
         "output_dir": args.output_dir,
         "report_to": args.report_to,
-        "bf16": args.bf16,
-        "fp16": args.fp16 and not args.bf16,
+        "bf16": bf16,
+        "fp16": fp16,
         **tkwargs,
     }
     if args.max_steps is not None:

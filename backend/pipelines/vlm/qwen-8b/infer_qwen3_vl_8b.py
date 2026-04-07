@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Run inference with Unsloth Qwen3-VL-4B-Instruct (base or saved LoRA folder).
+Run inference with Unsloth Qwen3-VL-8B-Instruct (base or saved LoRA folder).
 
 Example (base 4-bit model):
-  python infer_qwen3_vl_4b.py --image /path/to/img.jpg --prompt "Describe this image."
+  python infer_qwen3_vl_8b.py --image /path/to/img.jpg --prompt "Describe this image."
 
 Example (after training):
-  python infer_qwen3_vl_4b.py --lora_path outputs/qwen3_vl_4b_lora/lora_adapter --image img.jpg --prompt "..."
+  python infer_qwen3_vl_8b.py --lora_path outputs/qwen3_vl_8b_lora/lora_adapter --image img.jpg --prompt "..."
 """
 
 from __future__ import annotations
@@ -16,15 +16,19 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
+_VLM_ROOT = _SCRIPT_DIR.parent
+_COMMON = _VLM_ROOT / "common"
+_BACKEND_ROOT = _VLM_ROOT.parent.parent
+for p in (_BACKEND_ROOT, _COMMON, _SCRIPT_DIR):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
 from qwen3_vl_config import DEFAULT_MODEL_ID
 from vlm_pose import apply_pose_to_pil, create_pose_estimator
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Inference: Qwen3-VL-4B via Unsloth")
+    p = argparse.ArgumentParser(description="Inference: Qwen3-VL-8B via Unsloth")
     p.add_argument("--image", type=str, required=True, help="Path to an image file.")
     p.add_argument("--prompt", type=str, default="Describe this image in detail.")
     p.add_argument(
@@ -37,7 +41,7 @@ def _parse_args() -> argparse.Namespace:
         "--lora_path",
         type=str,
         default=None,
-        help="Directory with saved LoRA adapter (from train_qwen3_vl_4b.py).",
+        help="Directory with saved LoRA adapter (from train_qwen3_vl_8b.py).",
     )
     p.add_argument("--max_new_tokens", type=int, default=256)
     p.add_argument("--temperature", type=float, default=1.5)
@@ -48,7 +52,7 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         choices=("none", "overlay", "text", "both"),
         default="none",
-        help="MediaPipe pose: overlay / text / both (see train_qwen3_vl_4b.py).",
+        help="MediaPipe pose: overlay / text / both (see train_qwen3_vl_8b.py).",
     )
     p.add_argument(
         "--pose_model_path",

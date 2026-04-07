@@ -2,7 +2,10 @@
 # Build a minimal backend/ tree for Colab Qwen3-VL + MediaPipe training.
 #
 # Always includes:
-#   - backend/pipelines/vlm/   (notebook, train/infer, JSONL helpers, pose bridge)
+#   - backend/pipelines/vlm/common/   (JSONL helpers, pose bridge, shared deps list)
+#   - backend/pipelines/vlm/qwen-4b/  (4B config, train/infer, notebook)
+#   - backend/pipelines/vlm/qwen-8b/  (8B config, train/infer, notebook)
+#   - backend/pipelines/vlm/package_colab_backend.sh
 #   - backend/core/pose_utils.py, split.py, __init__.py  (pose + vlm_jsonl_video_level_split)
 #
 # Optional (env vars):
@@ -31,7 +34,9 @@ STAGE="$(mktemp -d)"
 cleanup() { rm -rf "$STAGE"; }
 trap cleanup EXIT
 
-mkdir -p "$STAGE/backend/pipelines/vlm"
+mkdir -p "$STAGE/backend/pipelines/vlm/common"
+mkdir -p "$STAGE/backend/pipelines/vlm/qwen-4b"
+mkdir -p "$STAGE/backend/pipelines/vlm/qwen-8b"
 mkdir -p "$STAGE/backend/core"
 
 echo "Backend root: $BACKEND_ROOT"
@@ -43,7 +48,25 @@ rsync -a \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
   --exclude '.DS_Store' \
-  "$BACKEND_ROOT/pipelines/vlm/" "$STAGE/backend/pipelines/vlm/"
+  "$BACKEND_ROOT/pipelines/vlm/common/" "$STAGE/backend/pipelines/vlm/common/"
+
+rsync -a \
+  --exclude 'outputs/' \
+  --exclude '.ipynb_checkpoints/' \
+  --exclude '__pycache__/' \
+  --exclude '*.pyc' \
+  --exclude '.DS_Store' \
+  "$BACKEND_ROOT/pipelines/vlm/qwen-4b/" "$STAGE/backend/pipelines/vlm/qwen-4b/"
+
+rsync -a \
+  --exclude 'outputs/' \
+  --exclude '.ipynb_checkpoints/' \
+  --exclude '__pycache__/' \
+  --exclude '*.pyc' \
+  --exclude '.DS_Store' \
+  "$BACKEND_ROOT/pipelines/vlm/qwen-8b/" "$STAGE/backend/pipelines/vlm/qwen-8b/"
+
+cp "$BACKEND_ROOT/pipelines/vlm/package_colab_backend.sh" "$STAGE/backend/pipelines/vlm/"
 
 cp "$BACKEND_ROOT/core/pose_utils.py" "$STAGE/backend/core/pose_utils.py"
 cp "$BACKEND_ROOT/core/split.py" "$STAGE/backend/core/split.py"

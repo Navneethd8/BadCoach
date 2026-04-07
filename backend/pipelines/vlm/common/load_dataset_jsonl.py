@@ -9,14 +9,15 @@ from typing import Any
 
 from torch.utils.data import Dataset
 
-_VLM_DIR = Path(__file__).resolve().parent
-_BACKEND_ROOT = _VLM_DIR.parent.parent
+_COMMON_DIR = Path(__file__).resolve().parent
+_VLM_ROOT = _COMMON_DIR.parent
+_BACKEND_ROOT = _VLM_ROOT.parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from PIL import Image
 
-from qwen3_vl_config import DEFAULT_MAX_SEQ_LENGTH
+from vlm_qwen3_defaults import DEFAULT_MAX_SEQ_LENGTH
 
 from vlm_pose import (
     DEFAULT_POSE_MIN_SHORT_EDGE,
