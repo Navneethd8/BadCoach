@@ -9,7 +9,8 @@
 #   - backend/core/pose_utils.py, split.py, __init__.py  (pose + vlm_jsonl_video_level_split)
 #
 # Optional (env vars):
-#   INCLUDE_FINEBADMINTON=1       copy labels + generated jsonl (default: 1)
+#   INCLUDE_FINEBADMINTON=1       copy labels + jsonl (default: 1); json/jsonl may be
+#                                 filled from FineBadminton-master/dataset when 20K has images only
 #   INCLUDE_FINEBADMINTON_IMAGES=1   copy dataset/image/ — LARGE (~10k files); default: 0
 #   INCLUDE_POSE_TASK=1         copy backend/models/pose_landmarker_lite.task if present
 #
@@ -73,23 +74,48 @@ cp "$BACKEND_ROOT/core/split.py" "$STAGE/backend/core/split.py"
 touch "$STAGE/backend/core/__init__.py"
 
 if [[ "$INCLUDE_FINEBADMINTON" == "1" ]]; then
-  DS="$BACKEND_ROOT/data/FineBadminton-master/dataset"
-  if [[ -d "$DS" ]]; then
-    mkdir -p "$STAGE/backend/data/FineBadminton-master/dataset"
+  DS20="$BACKEND_ROOT/data/FineBadminton-20K/dataset"
+  DS_LEGACY="$BACKEND_ROOT/data/FineBadminton-master/dataset"
+  if [[ -d "$DS20" ]]; then
+    DS="$DS20"
+    DS_STAGE="FineBadminton-20K/dataset"
+    DS_ALT=""
+    [[ -d "$DS_LEGACY" ]] && DS_ALT="$DS_LEGACY"
+  elif [[ -d "$DS_LEGACY" ]]; then
+    DS="$DS_LEGACY"
+    DS_STAGE="FineBadminton-master/dataset"
+    DS_ALT=""
+    [[ -d "$DS20" ]] && DS_ALT="$DS20"
+  else
+    DS=""
+    DS_STAGE=""
+    DS_ALT=""
+  fi
+  TF="$BACKEND_ROOT/data/transformed_combined_rounds_output_en_evals_translated.json"
+  if [[ -f "$TF" ]]; then
+    mkdir -p "$STAGE/backend/data"
+    cp "$TF" "$STAGE/backend/data/"
+    echo "  + data/transformed_combined_rounds_output_en_evals_translated.json"
+  fi
+  if [[ -n "$DS" ]]; then
+    mkdir -p "$STAGE/backend/data/$DS_STAGE"
     for f in \
       transformed_combined_rounds_output_en_evals_translated.json \
       transformed_combined_rounds_zh.json \
       finebadminton_vlm_train.jsonl; do
       if [[ -f "$DS/$f" ]]; then
-        cp "$DS/$f" "$STAGE/backend/data/FineBadminton-master/dataset/"
-        echo "  + data/FineBadminton-master/dataset/$f"
+        cp "$DS/$f" "$STAGE/backend/data/$DS_STAGE/"
+        echo "  + data/$DS_STAGE/$f"
+      elif [[ -n "${DS_ALT:-}" && -f "$DS_ALT/$f" ]]; then
+        cp "$DS_ALT/$f" "$STAGE/backend/data/$DS_STAGE/"
+        echo "  + data/$DS_STAGE/$f (from alternate tree)"
       fi
     done
     if [[ "$INCLUDE_FINEBADMINTON_IMAGES" == "1" ]]; then
       if [[ -d "$DS/image" ]]; then
-        echo "  + data/FineBadminton-master/dataset/image/  (this may take a while)"
-        mkdir -p "$STAGE/backend/data/FineBadminton-master/dataset/image"
-        rsync -a "$DS/image/" "$STAGE/backend/data/FineBadminton-master/dataset/image/"
+        echo "  + data/$DS_STAGE/image/  (this may take a while)"
+        mkdir -p "$STAGE/backend/data/$DS_STAGE/image"
+        rsync -a "$DS/image/" "$STAGE/backend/data/$DS_STAGE/image/"
       else
         echo "  ! FineBadminton image/ not found at $DS/image" >&2
       fi
@@ -97,7 +123,7 @@ if [[ "$INCLUDE_FINEBADMINTON" == "1" ]]; then
       echo "  (skipped dataset/image — set INCLUDE_FINEBADMINTON_IMAGES=1 to include training frames)"
     fi
   else
-    echo "  ! FineBadminton dataset dir missing: $DS" >&2
+    echo "  ! No dataset dir (expected $DS20 or $DS_LEGACY)" >&2
   fi
 fi
 

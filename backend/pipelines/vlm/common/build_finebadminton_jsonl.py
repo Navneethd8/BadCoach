@@ -119,7 +119,7 @@ def main() -> None:
         "--dataset_dir",
         type=Path,
         default=None,
-        help="Folder containing image/ and where output JSONL is written.",
+        help="Folder with image/ and JSONL output (default: FineBadminton-20K/dataset; use FineBadminton-master/dataset for legacy).",
     )
     p.add_argument(
         "--output",
