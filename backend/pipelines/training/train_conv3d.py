@@ -1,19 +1,10 @@
 """
-VideoMAE encoder + pose + **divided space–time** blocks (`DividedSTBlock` from `timesformer.py`).
+R(2+1)D / R3D / MC3 (torchvision) + MediaPipe late fusion — same training contract as ``train_videomae.py``:
 
-Same **training pipeline** as `train_videomae.py` / `train_timesformer.py` (split, cache, losses, registry).
+``video_level_split``, weighted sampler, augmentations, multitask losses, MLflow, registry category
+``conv3d_pose``, checkpoint ``badminton_model_conv3d_pose.pth`` by default.
 
-**vs** `train_videomae.py`: that script **pools** VideoMAE tokens and MLP-fuses pose. **This** script
-reshapes VideoMAE tokens to **(B, T_tube, spatial_patches, D)** (e.g. 8×196 for tubelet 2, 16 frames),
-aligns pose by **averaging** pairs of frames per tube, prepends a pose token per tube, then runs
-the same **spatial then temporal** attention stack as TimeSformer.
-
-Checkpoint: `badminton_model_videomae_timesformer.pth` — registry `script: train_videomae_timesformer.py`.
-
-**Conservative retry (method 3)** — smaller ST + regularization + lower head LR + light VideoMAE unfreeze.
-Main checkpoint still follows **val stroke-type accuracy** (use --checkpoint-metric val_loss to switch).
-
-    python3 train_videomae_timesformer.py --preset conservative
+**Interpretability:** explicit RGB 3D trunk vs skeleton MLP; see ``core/conv3d_pose.Conv3DPoseMultitaskModel.grad_cam_target_module``.
 """
 import os
 import sys
@@ -30,11 +21,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 import mlflow
 
+from core.conv3d_pose import Conv3DPoseMultitaskModel, backbone_parameter_groups
 from core.dataset import FineBadmintonDataset
 from core.seed_utils import set_seed
 from core.split import video_level_split
-from core.videomae_timesformer import VideoMAETimeSformerPoseModel
-from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_pose_cache_build, tqdm_train_batches
+from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
 from core.model_registry import register_training_checkpoint
 
 _tf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_timesformer.py")
@@ -50,10 +41,10 @@ _build_pose_cache = _tf._build_pose_cache
 _imagenet_norm_video = _tf._imagenet_norm_video
 
 
-def train_videomae_timesformer(
+def train_conv3d(
     data_root,
     list_file,
-    epochs=30,
+    epochs=60,
     batch_size=DEFAULT_TRAIN_BATCH_SIZE,
     lr=1e-4,
     device="cpu",
@@ -63,11 +54,13 @@ def train_videomae_timesformer(
     start_epoch=0,
     seed=42,
     max_train_batches=None,
-    hf_model_id="MCG-NJU/videomae-base",
-    freeze_videomae=True,
-    videomae_unfreeze_last_n=0,
+    video_backbone="r2plus1d_18",
+    spatial_size=112,
+    pretrained=True,
+    freeze_3d=True,
+    unfreeze_layer4=True,
     lr_mult=5.0,
-    videomae_lr_mult=0.1,
+    backbone_lr_mult=0.1,
     weight_decay=1e-2,
     label_smoothing=0.1,
     scheduler_t0=10,
@@ -75,10 +68,6 @@ def train_videomae_timesformer(
     accumulation_steps=4,
     stroke_loss_weight=2.0,
     aug_strength="strong",
-    embed_dim=128,
-    depth=4,
-    num_heads=4,
-    checkpoint_metric="val_type_acc",
     registry_experiment=False,
     use_pose=True,
 ):
@@ -87,11 +76,11 @@ def train_videomae_timesformer(
     _dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(backend_root, "models", "badminton_model_videomae_timesformer.pth")
+        save_path = os.path.join(backend_root, "models", "badminton_model_conv3d_pose.pth")
     if pose_cache_path is None:
         pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
 
-    mlflow.set_experiment("IsoCourt_Training_VideoMAE_TimeSformer")
+    mlflow.set_experiment("IsoCourt_Training_Conv3D_Pose")
     with mlflow.start_run():
         mlflow.log_params(
             {
@@ -99,11 +88,13 @@ def train_videomae_timesformer(
                 "batch_size": batch_size,
                 "lr": lr,
                 "seed": seed,
-                "hf_model_id": hf_model_id,
-                "freeze_videomae": freeze_videomae,
-                "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
+                "video_backbone": video_backbone,
+                "spatial_size": spatial_size,
+                "pretrained": pretrained,
+                "freeze_3d": freeze_3d,
+                "unfreeze_layer4": unfreeze_layer4,
                 "lr_mult": lr_mult,
-                "videomae_lr_mult": videomae_lr_mult,
+                "backbone_lr_mult": backbone_lr_mult,
                 "weight_decay": weight_decay,
                 "label_smoothing": label_smoothing,
                 "scheduler_t0": scheduler_t0,
@@ -111,12 +102,8 @@ def train_videomae_timesformer(
                 "accumulation_steps": accumulation_steps,
                 "stroke_loss_weight": stroke_loss_weight,
                 "aug_strength": aug_strength,
-                "embed_dim": embed_dim,
-                "depth": depth,
-                "num_heads": num_heads,
-                "checkpoint_metric": checkpoint_metric,
                 "use_pose": use_pose,
-                "script": "train_videomae_timesformer.py",
+                "script": "train_conv3d.py",
             }
         )
 
@@ -168,15 +155,14 @@ def train_videomae_timesformer(
             pin_memory=(device == "cuda"),
         )
 
-        model = VideoMAETimeSformerPoseModel(
+        model = Conv3DPoseMultitaskModel(
             task_classes=task_classes,
-            hf_model_id=hf_model_id,
             num_frames=dataset.sequence_length,
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            depth=depth,
-            freeze_videomae=freeze_videomae,
-            videomae_unfreeze_last_n=videomae_unfreeze_last_n,
+            video_backbone=video_backbone,
+            spatial_size=spatial_size,
+            pretrained=pretrained,
+            freeze_backbone=freeze_3d,
+            unfreeze_layer4=unfreeze_layer4,
             use_pose=use_pose,
         ).to(device)
 
@@ -184,34 +170,25 @@ def train_videomae_timesformer(
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
             if "model" in ckpt:
                 model.load_state_dict(ckpt["model"], strict=False)
-                print("Loaded VideoMAE+TimeSformer from checkpoint")
+                print("Loaded Conv3D+pose from checkpoint")
 
         trainable = [p for p in model.parameters() if p.requires_grad]
         print(
-            f"VideoMAE+ST | {hf_model_id} | trainable params: {sum(p.numel() for p in trainable):,} "
-            f"(unfreeze_last_n={videomae_unfreeze_last_n}) | embed_dim={embed_dim} depth={depth}"
+            f"Conv3D {video_backbone} | T={dataset.sequence_length} | spatial_in->{spatial_size} | "
+            f"trainable params: {sum(p.numel() for p in trainable):,}"
         )
 
-        backbone_params = []
-        other_params = []
-        for name, p in model.named_parameters():
-            if not p.requires_grad:
-                continue
-            if name.startswith("backbone."):
-                backbone_params.append(p)
-            else:
-                other_params.append(p)
-
-        if backbone_params:
+        bb_params, other_params = backbone_parameter_groups(model)
+        if bb_params:
             optimizer = optim.AdamW(
                 [
-                    {"params": backbone_params, "lr": lr * videomae_lr_mult, "weight_decay": weight_decay},
+                    {"params": bb_params, "lr": lr * backbone_lr_mult, "weight_decay": weight_decay},
                     {"params": other_params, "lr": lr * lr_mult, "weight_decay": weight_decay},
                 ]
             )
             print(
-                f"Optimizer: VideoMAE lr={lr * videomae_lr_mult:.6f} | "
-                f"ST/heads lr={lr * lr_mult:.6f}"
+                f"Optimizer: 3D backbone lr={lr * backbone_lr_mult:.6f} | "
+                f"fusion/heads lr={lr * lr_mult:.6f}"
             )
         else:
             optimizer = optim.AdamW(trainable, lr=lr * lr_mult, weight_decay=weight_decay)
@@ -235,14 +212,10 @@ def train_videomae_timesformer(
             "quality": 0.5,
         }
         best_acc = 0.0
-        best_val_loss = float("inf")
-        peak_val_acc = 0.0
-        min_val_loss_seen = float("inf")
 
-        print(f"\nStarting VideoMAE + divided ST stack (use_pose={use_pose})...")
+        print(f"\nStarting Conv3D + pose training (use_pose={use_pose})...")
         print(
-            f"checkpoint_metric={checkpoint_metric} | "
-            f"lr_mult={lr_mult} | videomae_lr_mult={videomae_lr_mult} | aug={aug_strength} | "
+            f"lr_mult={lr_mult} | backbone_lr_mult={backbone_lr_mult} | aug={aug_strength} | "
             f"stroke_loss_weight={stroke_loss_weight} | "
             f"cosine T_0={scheduler_t0} T_mult={scheduler_t_mult} | "
             f"accumulation_steps={accumulation_steps}"
@@ -329,12 +302,9 @@ def train_videomae_timesformer(
                 "learning_rate": lrs[0],
             }
             if len(lrs) > 1:
-                metrics["lr_videomae"] = lrs[0]
+                metrics["lr_3d"] = lrs[0]
                 metrics["lr_other"] = lrs[1]
             mlflow.log_metrics(metrics, step=epoch)
-
-            peak_val_acc = max(peak_val_acc, val_acc)
-            min_val_loss_seen = min(min_val_loss_seen, val_loss_epoch)
 
             lr_str = ", ".join(f"{x:.6f}" for x in lrs)
             print(
@@ -344,73 +314,46 @@ def train_videomae_timesformer(
                 f"LR: [{lr_str}]"
             )
 
-            should_save = False
-            if checkpoint_metric == "val_type_acc":
-                if val_acc > best_acc:
-                    best_acc = val_acc
-                    should_save = True
-            elif checkpoint_metric == "val_loss":
-                if val_loss_epoch < best_val_loss:
-                    best_val_loss = val_loss_epoch
-                    should_save = True
-            else:
-                raise ValueError(f"Unknown checkpoint_metric: {checkpoint_metric}")
-
-            if should_save:
+            if val_acc > best_acc:
+                best_acc = val_acc
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 torch.save(
                     {
                         "model": model.state_dict(),
                         "task_classes": task_classes,
-                        "architecture": "videomae_timesformer",
+                        "architecture": "conv3d_pose",
                         "num_frames": model.num_frames,
-                        "hf_model_id": hf_model_id,
-                        "freeze_videomae": freeze_videomae,
-                        "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
-                        "embed_dim": embed_dim,
-                        "depth": depth,
-                        "num_heads": num_heads,
-                        "checkpoint_metric": checkpoint_metric,
+                        "video_backbone": video_backbone,
+                        "spatial_size": spatial_size,
+                        "pretrained": pretrained,
+                        "freeze_3d": freeze_3d,
+                        "unfreeze_layer4": unfreeze_layer4,
                         "use_pose": use_pose,
                     },
                     save_path,
                 )
-                if checkpoint_metric == "val_type_acc":
-                    print(f"  -> Saved best val_type_acc ({best_acc:.1f}%)")
-                else:
-                    print(
-                        f"  -> Saved best val_loss ({best_val_loss:.4f}) "
-                        f"(val_type_acc this epoch: {val_acc:.1f}%)"
-                    )
+                print(f"  -> Saved best ({best_acc:.1f}%)")
                 name = os.path.basename(save_path)
-                reg_entry = {
-                    "accuracy": round(val_acc, 2),
-                    "val_loss": round(val_loss_epoch, 4),
-                    "epoch": epoch + 1,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "script": "train_videomae_timesformer.py",
-                    "hf_model_id": hf_model_id,
-                    "checkpoint_metric": checkpoint_metric,
-                    "architecture": "videomae_timesformer",
-                    "inference": {
-                        "embed_dim": embed_dim,
-                        "depth": depth,
-                        "num_heads": num_heads,
-                        "num_frames": model.num_frames,
-                        "freeze_videomae": freeze_videomae,
-                        "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
-                        "use_pose": use_pose,
-                    },
-                }
-                if checkpoint_metric == "val_loss":
-                    reg_entry["best_val_loss"] = round(best_val_loss, 4)
-                else:
-                    reg_entry["best_val_type_acc"] = round(best_acc, 2)
                 register_training_checkpoint(
                     os.path.dirname(save_path),
-                    category="videomae_timesformer",
+                    category="conv3d_pose",
                     file_basename=name,
-                    meta=reg_entry,
+                    meta={
+                        "accuracy": round(best_acc, 2),
+                        "epoch": epoch + 1,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_conv3d.py",
+                        "architecture": "conv3d_pose",
+                        "inference": {
+                            "num_frames": model.num_frames,
+                            "video_backbone": video_backbone,
+                            "spatial_size": spatial_size,
+                            "pretrained": pretrained,
+                            "freeze_3d": freeze_3d,
+                            "unfreeze_layer4": unfreeze_layer4,
+                            "use_pose": use_pose,
+                        },
+                    },
                     experiment=registry_experiment,
                 )
 
@@ -419,59 +362,57 @@ def train_videomae_timesformer(
                     {
                         "model": model.state_dict(),
                         "task_classes": task_classes,
-                        "architecture": "videomae_timesformer",
+                        "architecture": "conv3d_pose",
                         "num_frames": model.num_frames,
-                        "hf_model_id": hf_model_id,
-                        "freeze_videomae": freeze_videomae,
-                        "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
-                        "embed_dim": embed_dim,
-                        "depth": depth,
-                        "num_heads": num_heads,
-                        "checkpoint_metric": checkpoint_metric,
+                        "video_backbone": video_backbone,
+                        "spatial_size": spatial_size,
+                        "pretrained": pretrained,
+                        "freeze_3d": freeze_3d,
+                        "unfreeze_layer4": unfreeze_layer4,
                         "use_pose": use_pose,
                     },
                     f"{save_path}_epoch_{epoch+1}.pth",
                 )
 
-        print(
-            f"\nTraining finished! checkpoint_metric={checkpoint_metric} | "
-            f"peak val_type_acc: {peak_val_acc:.1f}% | min val_loss: {min_val_loss_seen:.4f}"
-        )
-        if checkpoint_metric == "val_type_acc":
-            print(f"  (saved checkpoint: best val_type_acc {best_acc:.1f}%)")
-        else:
-            print(
-                f"  (saved checkpoint: best val_loss {best_val_loss:.4f} — "
-                f"compare peak acc {peak_val_acc:.1f}% on a fixed val if needed)"
-            )
+        print(f"\nTraining finished! Best stroke_type accuracy: {best_acc:.1f}%")
 
 
 if __name__ == "__main__":
     import argparse
-    import sys
-
-    def _argv_has_flag(argv: list[str], flag: str) -> bool:
-        """True if the user passed ``flag`` or ``flag=value`` (not argparse defaults)."""
-        for a in argv:
-            if a == flag or a.startswith(flag + "="):
-                return True
-        return False
-
-    _argv = sys.argv[1:]
 
     parser = argparse.ArgumentParser(
-        description="VideoMAE + pose + divided ST. Registry: badminton_model_videomae_timesformer.pth"
+        description="R(2+1)D/R3D/MC3 + MediaPipe (registry: conv3d_pose, badminton_model_conv3d_pose.pth)"
     )
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_TRAIN_BATCH_SIZE)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--pose-cache", type=str, default=None)
     parser.add_argument("--max-train-batches", type=int, default=None)
-    parser.add_argument("--hf-model-id", type=str, default="MCG-NJU/videomae-base")
-    parser.add_argument("--no-freeze-videomae", action="store_true")
-    parser.add_argument("--videomae-unfreeze-last-n", type=int, default=0)
+    parser.add_argument(
+        "--video-backbone",
+        type=str,
+        default="r2plus1d_18",
+        choices=("r2plus1d_18", "r3d_18", "mc3_18"),
+        help="torchvision.models.video Kinetics400-pretrained trunk (default: R(2+1)D-18).",
+    )
+    parser.add_argument("--spatial-size", type=int, default=112, help="Square spatial size fed to 3D CNN")
+    parser.add_argument(
+        "--no-pretrained",
+        action="store_true",
+        help="Random-init 3D trunk (no Kinetics download; for smoke tests / small data).",
+    )
+    parser.add_argument(
+        "--no-freeze-3d",
+        action="store_true",
+        help="Train the full 3D backbone (heavy; lower backbone_lr_mult recommended).",
+    )
+    parser.add_argument(
+        "--no-unfreeze-layer4",
+        action="store_true",
+        help="When 3D is frozen: do not train layer4 (only fusion+heads).",
+    )
     parser.add_argument("--lr-mult", type=float, default=5.0)
-    parser.add_argument("--videomae-lr-mult", type=float, default=0.1)
+    parser.add_argument("--backbone-lr-mult", type=float, default=0.1)
     parser.add_argument("--weight-decay", type=float, default=1e-2)
     parser.add_argument("--label-smoothing", type=float, default=0.1)
     parser.add_argument("--scheduler-t0", type=int, default=10)
@@ -479,51 +420,20 @@ if __name__ == "__main__":
     parser.add_argument("--accum-steps", type=int, default=4)
     parser.add_argument("--stroke-loss-weight", type=float, default=2.0)
     parser.add_argument("--aug", type=str, choices=("strong", "medium", "mild"), default="strong")
-    parser.add_argument("--embed-dim", type=int, default=128)
-    parser.add_argument("--depth", type=int, default=4)
-    parser.add_argument("--num-heads", type=int, default=4)
-    parser.add_argument(
-        "--checkpoint-metric",
-        choices=("val_type_acc", "val_loss"),
-        default="val_type_acc",
-        help="Which metric drives the main checkpoint (default: val_type_acc).",
-    )
-    parser.add_argument(
-        "--preset",
-        choices=("none", "conservative"),
-        default="none",
-        help="conservative: embed 128/4/4, WD 0.02, lr_mult 4, unfreeze last 2 VideoMAE blocks at "
-        "0.05× backbone LR, label_smoothing 0.05 (checkpoint metric unchanged; default val_type_acc).",
-    )
     parser.add_argument(
         "--registry-experiment",
         action="store_true",
-        help="Append best checkpoint to registry experiments instead of overwriting videomae_timesformer primary.",
+        help="Append best checkpoint to registry experiments instead of overwriting conv3d_pose primary.",
     )
     parser.add_argument(
         "--no-pose",
         action="store_true",
-        help="VideoMAE tokens + ST only (no pose token); skips MediaPipe cache build.",
+        help="RGB 3D trunk only; skips MediaPipe cache build.",
     )
+    parser.add_argument("--resume-checkpoint", type=str, default=None)
+    parser.add_argument("--start-epoch", type=int, default=0)
 
     args = parser.parse_args()
-    if args.preset == "conservative":
-        if not _argv_has_flag(_argv, "--embed-dim"):
-            args.embed_dim = 128
-        if not _argv_has_flag(_argv, "--depth"):
-            args.depth = 4
-        if not _argv_has_flag(_argv, "--num-heads"):
-            args.num_heads = 4
-        if not _argv_has_flag(_argv, "--weight-decay"):
-            args.weight_decay = 0.02
-        if not _argv_has_flag(_argv, "--lr-mult"):
-            args.lr_mult = 4.0
-        if not _argv_has_flag(_argv, "--videomae-unfreeze-last-n"):
-            args.videomae_unfreeze_last_n = 2
-        if not _argv_has_flag(_argv, "--videomae-lr-mult"):
-            args.videomae_lr_mult = 0.05
-        if not _argv_has_flag(_argv, "--label-smoothing"):
-            args.label_smoothing = 0.05
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
     data_root = os.path.join(backend_root, "data")
@@ -532,7 +442,7 @@ if __name__ == "__main__":
     )
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
-    train_videomae_timesformer(
+    train_conv3d(
         data_root=data_root,
         list_file=list_file,
         epochs=args.epochs,
@@ -541,11 +451,15 @@ if __name__ == "__main__":
         device=device,
         pose_cache_path=args.pose_cache,
         max_train_batches=args.max_train_batches,
-        hf_model_id=args.hf_model_id,
-        freeze_videomae=not args.no_freeze_videomae,
-        videomae_unfreeze_last_n=args.videomae_unfreeze_last_n,
+        resume_checkpoint=args.resume_checkpoint,
+        start_epoch=args.start_epoch,
+        video_backbone=args.video_backbone,
+        spatial_size=args.spatial_size,
+        pretrained=not args.no_pretrained,
+        freeze_3d=not args.no_freeze_3d,
+        unfreeze_layer4=not args.no_unfreeze_layer4,
         lr_mult=args.lr_mult,
-        videomae_lr_mult=args.videomae_lr_mult,
+        backbone_lr_mult=args.backbone_lr_mult,
         weight_decay=args.weight_decay,
         label_smoothing=args.label_smoothing,
         scheduler_t0=args.scheduler_t0,
@@ -553,10 +467,6 @@ if __name__ == "__main__":
         accumulation_steps=args.accum_steps,
         stroke_loss_weight=args.stroke_loss_weight,
         aug_strength=args.aug,
-        embed_dim=args.embed_dim,
-        depth=args.depth,
-        num_heads=args.num_heads,
-        checkpoint_metric=args.checkpoint_metric,
         registry_experiment=args.registry_experiment,
         use_pose=not args.no_pose,
     )

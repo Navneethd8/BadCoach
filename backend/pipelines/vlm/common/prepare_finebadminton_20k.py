@@ -2,7 +2,9 @@
 """
 Download Moujuruo/Finebadminton-20K from Hugging Face Hub, flatten annotations to the
 same JSON shape as transformed_combined_rounds_output_en_evals_translated.json, and
-optionally extract contact-frame JPEGs for VLM / IsoCourt training.
+optionally extract JPEGs for VLM / IsoCourt training:
+  ``--extract-frames`` = one JPEG per stroke at ``hit_frame``;
+  ``--extract-all-frames`` = every decoded frame for each video (very large).
 
 Dataset: https://huggingface.co/datasets/Moujuruo/Finebadminton-20K
 
@@ -10,6 +12,7 @@ Typical usage (from repo):
 
   pip install huggingface_hub opencv-python-headless
   python backend/pipelines/vlm/common/prepare_finebadminton_20k.py
+  python backend/pipelines/vlm/common/prepare_finebadminton_20k.py --extract-frames
   python backend/pipelines/vlm/common/build_finebadminton_jsonl.py
 
 If the download dies with OSError errno 6 (Device not configured) on an external
@@ -156,6 +159,97 @@ def merge_annotations(snapshot_dir: Path) -> list[dict]:
     return merged
 
 
+def extract_training_frames(
+    merged: list[dict],
+    snapshot_dir: Path,
+    image_dir: Path,
+    *,
+    sequence_length: int = 16,
+    jpeg_quality: int = 92,
+) -> tuple[int, int]:
+    """Extract exactly the frames that FineBadmintonDataset samples during training.
+
+    For each hit, np.linspace(start_frame, end_frame-1, sequence_length) gives
+    the frame indices. Only these are decoded and written as JPEGs, keeping disk
+    usage manageable (~326 K frames for 20K hits with T=16).
+    """
+    try:
+        import cv2  # type: ignore
+    except ImportError as e:
+        raise SystemExit(
+            "Frame extraction requires opencv-python or opencv-python-headless."
+        ) from e
+    import numpy as np
+
+    video_dir = snapshot_dir / "videos"
+    if not video_dir.is_dir():
+        raise FileNotFoundError(f"Missing videos folder: {video_dir}")
+    image_dir.mkdir(parents=True, exist_ok=True)
+
+    needed: dict[str, set[int]] = {}
+    for clip in merged:
+        video_name = clip.get("video") or ""
+        if not video_name:
+            continue
+        stem = Path(video_name).stem
+        for hit in clip.get("hitting") or []:
+            sf = hit.get("start_frame")
+            ef = hit.get("end_frame")
+            if sf is None or ef is None:
+                continue
+            sf, ef = int(sf), int(ef)
+            if ef - sf <= 0:
+                continue
+            indices = np.linspace(sf, ef - 1, sequence_length).astype(int)
+            entry = needed.setdefault(video_name, set())
+            for idx in indices:
+                entry.add(int(idx))
+
+    total_needed = sum(len(v) for v in needed.values())
+    print(
+        f"Need {total_needed:,} unique frame-JPEGs across {len(needed)} videos -> {image_dir}",
+        flush=True,
+    )
+
+    written = 0
+    skipped = 0
+    new_files = 0
+
+    for video_name, frame_set in sorted(needed.items()):
+        stem = Path(video_name).stem
+        cap = cv2.VideoCapture(str(video_dir / video_name))
+        if not cap.isOpened():
+            skipped += len(frame_set)
+            continue
+        for idx in sorted(frame_set):
+            out_path = image_dir / f"{stem}_{idx}.jpg"
+            if out_path.is_file():
+                written += 1
+                continue
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                skipped += 1
+                continue
+            if not cv2.imwrite(
+                str(out_path), frame,
+                [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality],
+            ):
+                skipped += 1
+                continue
+            written += 1
+            new_files += 1
+            if new_files % 1000 == 0:
+                print(
+                    f"  … {written:,} on disk ({new_files:,} new), {skipped} skips",
+                    flush=True,
+                )
+        cap.release()
+
+    print(f"Training frames: {written:,} written, {skipped} skipped.", flush=True)
+    return written, skipped
+
+
 def extract_contact_frames(
     merged: list[dict],
     snapshot_dir: Path,
@@ -245,6 +339,71 @@ def extract_contact_frames(
     return written, skipped
 
 
+def extract_all_video_frames(
+    merged: list[dict],
+    snapshot_dir: Path,
+    image_dir: Path,
+    *,
+    jpeg_quality: int = 92,
+) -> tuple[int, int]:
+    """
+    Decode every frame of each unique video referenced in ``merged`` and write
+    ``{video_stem}_{frame_index}.jpg`` under ``image_dir`` (same naming as training).
+
+    Heavy: full 20K can be millions of files. Prefer SSD and ``--max-workers`` tuning
+    at the Hub download step; extraction is sequential per video.
+    """
+    try:
+        import cv2  # type: ignore
+    except ImportError as e:
+        raise SystemExit(
+            "Frame extraction requires opencv-python or opencv-python-headless."
+        ) from e
+
+    video_dir = snapshot_dir / "videos"
+    if not video_dir.is_dir():
+        raise FileNotFoundError(f"Missing videos folder: {video_dir}")
+
+    image_dir.mkdir(parents=True, exist_ok=True)
+    unique_videos = sorted({(c.get("video") or "") for c in merged if c.get("video")})
+    print(
+        f"Extracting ALL frames for {len(unique_videos)} videos -> {image_dir} …",
+        flush=True,
+    )
+    written = 0
+    skipped = 0
+    for video_name in unique_videos:
+        stem = Path(video_name).stem
+        cap_path = video_dir / video_name
+        cap = cv2.VideoCapture(str(cap_path))
+        if not cap.isOpened():
+            skipped += 1
+            continue
+        n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        for idx in range(max(n, 0)):
+            out_path = image_dir / f"{stem}_{idx}.jpg"
+            if out_path.is_file():
+                written += 1
+                continue
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                skipped += 1
+                continue
+            if not cv2.imwrite(
+                str(out_path),
+                frame,
+                [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality],
+            ):
+                skipped += 1
+                continue
+            written += 1
+            if written % 2000 == 0:
+                print(f"  … {written} JPEGs written, {skipped} skips", flush=True)
+        cap.release()
+    return written, skipped
+
+
 def main() -> None:
     backend = _backend_root()
     default_root = backend / "data" / "FineBadminton-20K"
@@ -283,7 +442,18 @@ def main() -> None:
     ap.add_argument(
         "--extract-frames",
         action="store_true",
-        help=f"Write contact frames to --image-dir (default {default_image_dir}).",
+        help=f"Write contact (hit_frame) JPEGs to --image-dir (default {default_image_dir}).",
+    )
+    ap.add_argument(
+        "--extract-training-frames",
+        action="store_true",
+        help="Extract only the frames that FineBadmintonDataset samples during training "
+             "(np.linspace across each clip, ~326K for T=16). Best balance of coverage and size.",
+    )
+    ap.add_argument(
+        "--extract-all-frames",
+        action="store_true",
+        help="Write every decoded frame for each video in merged JSON (large output).",
     )
     ap.add_argument(
         "--image-dir",
@@ -343,15 +513,33 @@ def main() -> None:
             json.dump(merged, f, ensure_ascii=False)
         print(f"Wrote {len(merged)} clips -> {args.output_json}", flush=True)
 
+    extract_flags = sum([args.extract_frames, args.extract_training_frames, args.extract_all_frames])
+    if extract_flags > 1:
+        raise SystemExit("Use only one of --extract-frames / --extract-training-frames / --extract-all-frames.")
+
     if args.extract_frames:
-        print("Starting frame extraction (this is separate from the JSON step; can take a long time) …", flush=True)
+        print("Starting contact-frame extraction …", flush=True)
         w, s = extract_contact_frames(
-            merged,
-            local_dir,
-            args.image_dir.resolve(),
+            merged, local_dir, args.image_dir.resolve(),
             jpeg_quality=args.jpeg_quality,
         )
-        print(f"Extracted frames: {w} written, {s} skipped (missing video or read failure).")
+        print(f"Extracted contact frames: {w} written, {s} skipped.")
+
+    if args.extract_training_frames:
+        print("Starting training-frame extraction (T=16 linspace per hit) …", flush=True)
+        w, s = extract_training_frames(
+            merged, local_dir, args.image_dir.resolve(),
+            sequence_length=16, jpeg_quality=args.jpeg_quality,
+        )
+        print(f"Extracted training frames: {w} written, {s} skipped.")
+
+    if args.extract_all_frames:
+        print("Starting full-video frame extraction (very large) …", flush=True)
+        w, s = extract_all_video_frames(
+            merged, local_dir, args.image_dir.resolve(),
+            jpeg_quality=args.jpeg_quality,
+        )
+        print(f"Extracted all frames: {w} JPEGs on disk, {s} skips.")
 
 
 if __name__ == "__main__":

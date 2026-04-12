@@ -41,6 +41,7 @@ class VideoMAEPoseModel(nn.Module):
         dropout: float = 0.1,
         freeze_backbone: bool = True,
         unfreeze_last_n: int = 0,
+        use_pose: bool = True,
     ):
         super().__init__()
         try:
@@ -71,17 +72,23 @@ class VideoMAEPoseModel(nn.Module):
                 for p in layer.parameters():
                     p.requires_grad = True
 
-        pose_in = num_frames * 33 * 3
-        self.pose_proj = nn.Sequential(
-            nn.Linear(pose_in, self.hidden_size),
-            nn.GELU(),
-            nn.Dropout(dropout),
-        )
+        self.use_pose = use_pose
+        if use_pose:
+            pose_in = num_frames * 33 * 3
+            self.pose_proj = nn.Sequential(
+                nn.Linear(pose_in, self.hidden_size),
+                nn.GELU(),
+                nn.Dropout(dropout),
+            )
+            head_in = self.hidden_size * 2
+        else:
+            self.pose_proj = None
+            head_in = self.hidden_size
 
         self.heads = nn.ModuleDict(
             {
                 task: nn.Sequential(
-                    nn.Linear(self.hidden_size * 2, self.hidden_size),
+                    nn.Linear(head_in, self.hidden_size),
                     nn.GELU(),
                     nn.Dropout(dropout),
                     nn.Linear(self.hidden_size, num_c),
@@ -93,7 +100,7 @@ class VideoMAEPoseModel(nn.Module):
     def trainable_parameter_count(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def forward(self, frames: torch.Tensor, joint_seq: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, frames: torch.Tensor, joint_seq: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         """
         frames: (B, T, 3, H, W) ImageNet-normalized (mean/std), not raw [0,1].
         """
@@ -105,8 +112,14 @@ class VideoMAEPoseModel(nn.Module):
         h = out.last_hidden_state
         video_feat = h.mean(dim=1)
 
-        pose_flat = joint_seq.reshape(B, -1)
-        pose_feat = self.pose_proj(pose_flat)
-        feat = torch.cat([video_feat, pose_feat], dim=-1)
+        if self.use_pose:
+            if joint_seq is None:
+                raise ValueError("VideoMAEPoseModel(use_pose=True) requires joint_seq")
+            assert self.pose_proj is not None
+            pose_flat = joint_seq.reshape(B, -1)
+            pose_feat = self.pose_proj(pose_flat)
+            feat = torch.cat([video_feat, pose_feat], dim=-1)
+        else:
+            feat = video_feat
 
         return {task: head(feat) for task, head in self.heads.items()}

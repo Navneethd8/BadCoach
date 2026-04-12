@@ -37,6 +37,11 @@ COPY . .
 # Expose the API port
 EXPOSE 7860
 
+# Inference category: prefer models/inference_selection.json (copied with COPY . .).
+# For local Docker parity with ``docker compose``, use deploy/docker-inference.env
+# (auto-updated by: python -m api.inference_model_cli set <category>).
+# Optional runtime override: ISOCOURT_INFERENCE_CATEGORY
+
 # Run the FastAPI application using uvicorn
 # Hugging Face Spaces expects the app to run on port 7860
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]

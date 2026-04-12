@@ -16,23 +16,42 @@ class STAE_Embedding(nn.Module):
         return x + self.spatial_emb + self.temporal_emb
 
 class STAEformerModel(nn.Module):
-    def __init__(self, task_classes, num_joints=33, num_steps=16, embed_dim=128, num_heads=4, num_layers=2, dropout=0.1, use_cnn=True):
+    def __init__(
+        self,
+        task_classes,
+        num_joints=33,
+        num_steps=16,
+        embed_dim=128,
+        num_heads=4,
+        num_layers=2,
+        dropout=0.1,
+        use_cnn=True,
+        use_pose=True,
+    ):
         """
         STAEformer for Badminton Stroke Recognition.
 
-        When use_cnn=True  -> 33 pose joints + 1 CNN node = 34 spatial nodes.
-        When use_cnn=False -> 33 pose joints only (pose-only ablation).
+        When use_pose=True, use_cnn=True  -> 33 pose joints + 1 CNN node = 34 spatial nodes.
+        When use_pose=True, use_cnn=False -> 33 pose joints only (pose-only ablation).
+        When use_pose=False -> CNN-only: one spatial node per timestep (requires use_cnn=True).
         """
         super(STAEformerModel, self).__init__()
+        if not use_pose and not use_cnn:
+            raise ValueError("STAEformerModel: use_pose=False requires use_cnn=True (CNN-only graph).")
         self.use_cnn = use_cnn
+        self.use_pose = use_pose
         self.num_joints = num_joints
-        self.num_nodes = num_joints + 1 if use_cnn else num_joints
+        if not use_pose:
+            self.num_nodes = 1
+        elif use_cnn:
+            self.num_nodes = num_joints + 1
+        else:
+            self.num_nodes = num_joints
         self.num_steps = num_steps
         self.embed_dim = embed_dim
 
-        self.joint_proj = nn.Linear(3, embed_dim)
-        if use_cnn:
-            self.cnn_proj = nn.Linear(2048, embed_dim)
+        self.joint_proj = nn.Linear(3, embed_dim) if use_pose else None
+        self.cnn_proj = nn.Linear(2048, embed_dim) if use_cnn else None
 
         self.stae_emb = STAE_Embedding(self.num_nodes, num_steps, embed_dim)
 
@@ -69,22 +88,29 @@ class STAEformerModel(nn.Module):
             for task, num_c in task_classes.items()
         })
 
-    def forward(self, joint_seq, cnn_seq=None):
+    def forward(self, joint_seq=None, cnn_seq=None):
         """
         Args:
-            joint_seq: (B, T, 33, 3)
-            cnn_seq:   (B, T, 2048) — required when use_cnn=True, ignored otherwise.
+            joint_seq: (B, T, 33, 3) — required when use_pose=True.
+            cnn_seq:   (B, T, 2048) — required when use_cnn=True.
         """
-        B, T = joint_seq.shape[:2]
-
-        e_joints = self.joint_proj(joint_seq)  # (B, T, 33, D)
-
-        if self.use_cnn:
-            assert cnn_seq is not None, "cnn_seq required when use_cnn=True"
-            e_cnn = self.cnn_proj(cnn_seq).unsqueeze(2)  # (B, T, 1, D)
-            x = torch.cat([e_joints, e_cnn], dim=2)      # (B, T, 34, D)
+        if self.use_pose:
+            assert joint_seq is not None, "joint_seq required when use_pose=True"
+            assert self.joint_proj is not None
+            B, T = joint_seq.shape[:2]
+            e_joints = self.joint_proj(joint_seq)  # (B, T, 33, D)
+            if self.use_cnn:
+                assert cnn_seq is not None, "cnn_seq required when use_cnn=True"
+                assert self.cnn_proj is not None
+                e_cnn = self.cnn_proj(cnn_seq).unsqueeze(2)  # (B, T, 1, D)
+                x = torch.cat([e_joints, e_cnn], dim=2)  # (B, T, 34, D)
+            else:
+                x = e_joints
         else:
-            x = e_joints                                  # (B, T, 33, D)
+            assert cnn_seq is not None, "cnn_seq required when use_pose=False"
+            assert self.cnn_proj is not None
+            B, T = cnn_seq.shape[:2]
+            x = self.cnn_proj(cnn_seq).unsqueeze(2)  # (B, T, 1, D)
 
         # 2. Add STAE
         x = self.stae_emb(x)
@@ -127,5 +153,11 @@ if __name__ == "__main__":
     print("--- use_cnn=False (33 joints, pose-only) ---")
     model_pose = STAEformerModel(task_classes, use_cnn=False)
     out = model_pose(dummy_joints)
+    for k, v in out.items():
+        print(f"  {k}: {v.shape}")
+
+    print("--- use_pose=False, use_cnn=True (CNN token only) ---")
+    model_cnn = STAEformerModel(task_classes, use_cnn=True, use_pose=False)
+    out = model_cnn(cnn_seq=dummy_cnn)
     for k, v in out.items():
         print(f"  {k}: {v.shape}")

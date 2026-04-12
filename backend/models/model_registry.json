@@ -1,67 +1,156 @@
 {
+  "schema_version": 2,
   "models": {
-    "badminton_model.pth": {
-      "accuracy": 45.26,
-      "epoch": 60,
-      "hidden_size": 128,
-      "timestamp": "2026-03-19T16:07:31.858741",
-      "script": "train_full.py",
-      "architecture": "cnn_lstm"
-    },
-    "badminton_model_staeformer.pth": {
-      "accuracy": 48.42,
-      "epoch": 58,
-      "timestamp": "2026-03-19T20:20:32.746799",
-      "script": "train_staeformer.py"
-    },
-    "badminton_model_timesformer.pth": {
-      "accuracy": 46.32,
-      "epoch": 56,
-      "timestamp": "2026-03-26T03:47:46.944521",
-      "script": "train_timesformer.py",
-      "architecture": "timesformer",
-      "inference": {
-        "embed_dim": 128,
-        "depth": 4,
-        "num_heads": 4,
-        "num_frames": 16,
-        "backbone": "vit",
-        "vit_model_name": "vit_small_patch16_224",
-        "vit_unfreeze_last_n": 0
-      }
-    },
-    "badminton_model_videomae.pth": {
-      "accuracy": 16.84,
-      "epoch": 42,
-      "timestamp": "2026-03-26T15:37:13.007645",
-      "script": "train_videomae.py",
-      "hf_model_id": "MCG-NJU/videomae-base",
-      "architecture": "videomae_pose",
-      "inference": {
-        "num_frames": 16,
-        "freeze_videomae": true,
-        "videomae_unfreeze_last_n": 0
-      }
-    },
-    "badminton_model_videomae_timesformer.pth": {
-      "accuracy": 47.37,
-      "val_loss": 10.7981,
-      "epoch": 72,
-      "timestamp": "2026-03-29T02:05:42.956379",
-      "script": "train_videomae_timesformer.py",
-      "hf_model_id": "MCG-NJU/videomae-base",
-      "checkpoint_metric": "val_type_acc",
-      "best_val_type_acc": 47.37,
-      "architecture": "videomae_timesformer",
-      "inference": {
-        "embed_dim": 128,
-        "depth": 4,
-        "num_heads": 4,
-        "num_frames": 16,
-        "freeze_videomae": true,
-        "videomae_unfreeze_last_n": 0
+    "architectures": {
+      "cnn_lstm": {
+        "primary": {
+          "accuracy": 11.88,
+          "epoch": 1,
+          "hidden_size": 128,
+          "timestamp": "2026-04-12T04:41:26.916239",
+          "script": "train_full.py",
+          "architecture": "cnn_lstm",
+          "inference": {
+            "use_pose": true,
+            "hidden_size": 128
+          },
+          "file": "badminton_model.pth",
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          },
+          "experiment": false
+        },
+        "registrations": []
+      },
+      "conv3d_pose": {
+        "primary": null,
+        "registrations": []
+      },
+      "staeformer": {
+        "primary": {
+          "accuracy": 48.42,
+          "epoch": 58,
+          "timestamp": "2026-03-19T20:20:32.746799",
+          "script": "train_staeformer.py",
+          "file": "badminton_model_staeformer.pth",
+          "experiment": false,
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          }
+        },
+        "registrations": []
+      },
+      "timesformer": {
+        "primary": {
+          "accuracy": 46.32,
+          "epoch": 56,
+          "timestamp": "2026-03-26T03:47:46.944521",
+          "script": "train_timesformer.py",
+          "architecture": "timesformer",
+          "inference": {
+            "embed_dim": 128,
+            "depth": 4,
+            "num_heads": 4,
+            "num_frames": 16,
+            "backbone": "vit",
+            "vit_model_name": "vit_small_patch16_224",
+            "vit_unfreeze_last_n": 0
+          },
+          "file": "badminton_model_timesformer.pth",
+          "experiment": false,
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          }
+        },
+        "registrations": []
+      },
+      "videomae_pose": {
+        "primary": {
+          "accuracy": 16.84,
+          "epoch": 42,
+          "timestamp": "2026-03-26T15:37:13.007645",
+          "script": "train_videomae.py",
+          "hf_model_id": "MCG-NJU/videomae-base",
+          "architecture": "videomae_pose",
+          "inference": {
+            "num_frames": 16,
+            "freeze_videomae": true,
+            "videomae_unfreeze_last_n": 0
+          },
+          "file": "badminton_model_videomae.pth",
+          "experiment": false,
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          }
+        },
+        "registrations": []
+      },
+      "videomae_timesformer": {
+        "primary": {
+          "accuracy": 47.37,
+          "val_loss": 10.7981,
+          "epoch": 72,
+          "timestamp": "2026-03-29T02:05:42.956379",
+          "script": "train_videomae_timesformer.py",
+          "hf_model_id": "MCG-NJU/videomae-base",
+          "checkpoint_metric": "val_type_acc",
+          "best_val_type_acc": 47.37,
+          "architecture": "videomae_timesformer",
+          "inference": {
+            "embed_dim": 128,
+            "depth": 4,
+            "num_heads": 4,
+            "num_frames": 16,
+            "freeze_videomae": true,
+            "videomae_unfreeze_last_n": 0
+          },
+          "file": "badminton_model_videomae_timesformer.pth",
+          "experiment": false,
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          }
+        },
+        "registrations": []
+      },
+      "vit_gcn": {
+        "primary": {
+          "accuracy": 15.07,
+          "epoch": 1,
+          "timestamp": "2026-04-09T05:07:14.187973",
+          "script": "train_vit_gcn.py",
+          "architecture": "vit_gcn",
+          "file": "badminton_model_vit_gcn.pth",
+          "experiment": false,
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          }
+        },
+        "registrations": []
       }
     }
-  },
-  "active_model": "badminton_model_videomae_timesformer.pth"
+  }
 }

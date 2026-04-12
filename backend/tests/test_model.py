@@ -10,8 +10,8 @@ from core.model import CNN_LSTM_Model
 TASK_CLASSES_FULL = {
     "stroke_type": 9,
     "stroke_subtype": 21,
-    "technique": 4,
-    "placement": 7,
+    "technique": 3,
+    "placement": 10,
     "position": 10,
     "intent": 10,
     "quality": 7,

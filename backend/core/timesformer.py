@@ -4,7 +4,7 @@ pose token (MediaPipe 33x3 projected to embed_dim) per frame — same fusion ide
 STAEformer (RGB structure + pose), but spatial reasoning is on patch tokens.
 
 Backbone options:
-  - scratch: Conv2d patch embedding (random init).
+  - scratch (default): Conv2d patch embedding (random init) — no timm ViT.
   - vit: timm ViT patch stem + blocks, pretrained on ImageNet (per-frame tokens).
     We drop the CLS token, prepend a pose token, then run the same divided ST stack.
 """
@@ -32,7 +32,7 @@ class PatchEmbed(nn.Module):
 
 
 class DividedSTBlock(nn.Module):
-    """One divided space-time block: spatial MHSA over patches (+ pose), then temporal MHSA."""
+    """One divided space-time block: spatial MHSA over tokens, then temporal MHSA."""
 
     def __init__(self, embed_dim, num_heads, mlp_ratio=4.0, dropout=0.1):
         super().__init__()
@@ -56,7 +56,7 @@ class DividedSTBlock(nn.Module):
         )
 
     def forward(self, x):
-        # x: (B, T, S, D)  S = 1 pose token + num_patches
+        # x: (B, T, S, D) — S is patch count, or patches + 1 pose token
         B, T, S, D = x.shape
         xs = x.reshape(B * T, S, D)
         xs = self.spatial(xs)
@@ -94,6 +94,7 @@ class TimeSformerPoseModel(nn.Module):
         backbone: str = "scratch",
         vit_model_name: str = "vit_small_patch16_224",
         vit_unfreeze_last_n: int = 0,
+        use_pose: bool = True,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -101,6 +102,7 @@ class TimeSformerPoseModel(nn.Module):
         self.backbone = backbone
         self.vit_model_name = vit_model_name
         self.vit_unfreeze_last_n = vit_unfreeze_last_n
+        self.use_pose = use_pose
 
         if backbone == "scratch":
             self.patch_embed = PatchEmbed(img_size, patch_size, 3, embed_dim)
@@ -133,18 +135,20 @@ class TimeSformerPoseModel(nn.Module):
         else:
             raise ValueError(f"Unknown backbone: {backbone}")
 
-        self.num_spatial_tokens = 1 + num_patches  # pose + patches
-
-        self.pose_proj = nn.Linear(33 * 3, embed_dim)
-
         # (1, P, D) so (B*T, P, D) + spatial_pos does not broadcast to (1, B*T, P, D)
         self.spatial_pos = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
         self.temporal_pos = nn.Parameter(torch.zeros(1, num_frames, 1, embed_dim))
-        self.pose_spatial_bias = nn.Parameter(torch.zeros(1, 1, 1, embed_dim))
+
+        if use_pose:
+            self.pose_proj = nn.Linear(33 * 3, embed_dim)
+            self.pose_spatial_bias = nn.Parameter(torch.zeros(1, 1, 1, embed_dim))
+            nn.init.trunc_normal_(self.pose_spatial_bias, std=0.02)
+        else:
+            self.pose_proj = None
+            self.pose_spatial_bias = None
 
         nn.init.trunc_normal_(self.spatial_pos, std=0.02)
         nn.init.trunc_normal_(self.temporal_pos, std=0.02)
-        nn.init.trunc_normal_(self.pose_spatial_bias, std=0.02)
 
         assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads"
         self.blocks = nn.ModuleList(
@@ -181,7 +185,7 @@ class TimeSformerPoseModel(nn.Module):
     def trainable_parameter_count(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def forward(self, frames, joint_seq):
+    def forward(self, frames, joint_seq: Optional[torch.Tensor] = None):
         B, T, C, H, W = frames.shape
         assert T == self.num_frames, f"Expected T={self.num_frames}, got {T}"
 
@@ -201,12 +205,18 @@ class TimeSformerPoseModel(nn.Module):
             patches = self.feat_proj(patches)
             patches = patches + self.spatial_pos
 
-        pose_flat = joint_seq.reshape(B, T, -1)
-        pose_tok = self.pose_proj(pose_flat).unsqueeze(2)
-        pose_tok = pose_tok + self.pose_spatial_bias
-
         num_p = patches.shape[1]
-        x = torch.cat([pose_tok, patches.view(B, T, num_p, self.embed_dim)], dim=2)
+        patch_tokens = patches.view(B, T, num_p, self.embed_dim)
+        if self.use_pose:
+            if joint_seq is None:
+                raise ValueError("TimeSformerPoseModel(use_pose=True) requires joint_seq")
+            assert self.pose_proj is not None and self.pose_spatial_bias is not None
+            pose_flat = joint_seq.reshape(B, T, -1)
+            pose_tok = self.pose_proj(pose_flat).unsqueeze(2)
+            pose_tok = pose_tok + self.pose_spatial_bias
+            x = torch.cat([pose_tok, patch_tokens], dim=2)
+        else:
+            x = patch_tokens
         x = x + self.temporal_pos
 
         for blk in self.blocks:
@@ -230,3 +240,7 @@ if __name__ == "__main__":
         out = m(f, j)
         for k, v in out.items():
             print(bb, k, v.shape)
+    mnp = TimeSformerPoseModel(tc, depth=2, backbone="scratch", use_pose=False)
+    out_np = mnp(f, None)
+    for k, v in out_np.items():
+        print("no_pose", k, v.shape)

@@ -24,8 +24,8 @@ class CNN_LSTM_Model(nn.Module):
         if task_classes is None:
             # Default fallback matching the current dataset definition
             task_classes = {
-                "stroke_type": 9, "stroke_subtype": 21, "technique": 4, 
-                "placement": 7, "position": 10, "intent": 10, "quality": 7
+                "stroke_type": 9, "stroke_subtype": 21, "technique": 3,
+                "placement": 10, "position": 10, "intent": 10, "quality": 7
             }
         
         # 1. CNN Backbone (ResNet50)
@@ -107,8 +107,8 @@ class CNN_LSTM_Model(nn.Module):
 
 if __name__ == "__main__":
     task_classes = {
-        "stroke_type": 9, "stroke_subtype": 21, "technique": 4,
-        "placement": 7, "position": 10, "intent": 10, "quality": 7
+        "stroke_type": 9, "stroke_subtype": 21, "technique": 3,
+        "placement": 10, "position": 10, "intent": 10, "quality": 7
     }
     model = CNN_LSTM_Model(task_classes=task_classes, use_pose=True)
     dummy_input = torch.randn(2, 16, 3, 224, 224)

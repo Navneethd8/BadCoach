@@ -11,6 +11,13 @@ pose_estimator = None
 badminton_detector = None
 dataset_metadata = None
 
+# FineBadminton-20K (or registry override) — set at startup from model_registry + checkpoint
+inference_dataset_id = ""
+inference_dataset_source = ""
+inference_frames_policy = ""
+inference_data_root = ""
+inference_list_file = ""
+
 gemini_enabled = False
 gemini_client = None
 gemini_model_name = "gemini-3.1-flash-lite-preview"

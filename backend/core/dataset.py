@@ -92,11 +92,12 @@ class FineBadmintonDataset(Dataset):
                 "None", "Short_Serve", "Flick_Serve", "High_Serve",
                 "Common_Smash", "Jump_Smash", "Full_Smash", "Stick_Smash", "Slice_Smash",
                 "Slice_Drop", "Stop_Drop", "Reverse_Slice_Drop", "Blocked_Drop",
-                "Flat_Lift", "High_Lift", "Net_Lift",
-                "Attacking_Clear", "Spinning_Net", "Flat_Drive", "High_Drive", "Other"
+                "Flat_Lift", "High_Lift",
+                "Attacking_Clear", "Spinning_Net", "Flat_Drive", "High_Drive",
+                "High_Block", "Continuous_Net_Kills",
             ],
-            "technique": ["Forehand", "Backhand", "Turnaround", "Unknown"],
-            "placement": ["Straight", "Cross-court", "Body_Hit", "Over_Head", "Passing_Shot", "Wide", "Unknown"],
+            "technique": ["Forehand", "Backhand", "Unknown"],
+            "placement": ["Straight", "Cross-court", "Body_Hit", "Over_Head", "Passing_Shot", "Wide", "Net_Fault", "Out", "Repeat", "Unknown"],
             "position": [
                 "Mid_Front", "Mid_Court", "Mid_Back", 
                 "Left_Front", "Left_Mid", "Left_Back",
@@ -118,6 +119,18 @@ class FineBadmintonDataset(Dataset):
             print(f"Warning: Annotation file {list_file} not found.")
             self.samples = []
 
+    def _resolve_video_path(self, video_filename: str) -> str:
+        """Find the .mp4 on disk; search common locations."""
+        candidates = [
+            os.path.join(self.data_root, video_filename),
+            os.path.join(self.data_root, "FineBadminton-20K", "videos", video_filename),
+            os.path.join(self.data_root, "videos", video_filename),
+        ]
+        for p in candidates:
+            if os.path.isfile(p):
+                return p
+        return candidates[0]
+
     def _load_annotations(self, list_file: str) -> List[Dict[str, Any]]:
         import json
         with open(list_file, 'r') as f:
@@ -127,12 +140,13 @@ class FineBadmintonDataset(Dataset):
         for video_item in data:
             video_filename = video_item['video']
             if 'hitting' not in video_item: continue
+            video_path = self._resolve_video_path(video_filename)
                 
             for hit in video_item['hitting']:
                 if 'start_frame' not in hit or 'end_frame' not in hit: continue
                     
                 samples.append({
-                    'video_path': os.path.join(self.data_root, video_filename),
+                    'video_path': video_path,
                     'start_frame': hit['start_frame'],
                     'end_frame': hit['end_frame'],
                     'hit_type': hit.get('hit_type', 'Other'),
@@ -162,21 +176,27 @@ class FineBadmintonDataset(Dataset):
             "common smash": "Common_Smash", "jump smash": "Jump_Smash", "full smash": "Full_Smash",
             "stick smash": "Stick_Smash", "slice smash": "Slice_Smash", "slice drop shot": "Slice_Drop",
             "stop drop shot": "Stop_Drop", "reverse slice drop shot": "Reverse_Slice_Drop", "blocked drop shot": "Blocked_Drop",
-            "flat lift": "Flat_Lift", "high lift": "High_Lift", "net lift": "Net_Lift",
-            "attacking clear": "Attacking_Clear", "spinning net": "Spinning_Net", "flat drive": "Flat_Drive", "high drive": "High_Drive"
+            "flat lift": "Flat_Lift", "high lift": "High_Lift",
+            "attacking clear": "Attacking_Clear", "spinning net": "Spinning_Net", "flat drive": "Flat_Drive", "high drive": "High_Drive",
+            "high block": "High_Block", "continuous net kills": "Continuous_Net_Kills",
         }
         subtypes = [s.lower() for s in sample['subtype']]
         st_mapped = st_map.get(subtypes[0], "None") if subtypes else "None"
 
-        # 3. Map Technique (Player Action)
-        pa_map = {"forehand": "Forehand", "backhand": "Backhand", "turnaround": "Turnaround"}
+        # 3. Map Technique (Player Action — scan all positions, not just first)
+        pa_map = {"forehand": "Forehand", "backhand": "Backhand"}
         actions = [a.lower() for a in sample['player_actions']]
-        pa_mapped = pa_map.get(actions[0], "Unknown") if actions else "Unknown"
+        pa_mapped = "Unknown"
+        for a in actions:
+            if a in pa_map:
+                pa_mapped = pa_map[a]
+                break
 
         # 4. Map Placement (Shot Characteristic)
         char_map = {
             "straight": "Straight", "cross-court": "Cross-court", "body hit": "Body_Hit",
-            "over head": "Over_Head", "passing shot": "Passing_Shot", "wide placement": "Wide"
+            "over head": "Over_Head", "passing shot": "Passing_Shot", "wide placement": "Wide",
+            "net fault": "Net_Fault", "out": "Out", "repeat shot": "Repeat",
         }
         chars = [c.lower() for c in sample['shot_characteristics']]
         ch_mapped = char_map.get(chars[0], "Unknown") if chars else "Unknown"
@@ -189,15 +209,18 @@ class FineBadmintonDataset(Dataset):
         }
         pos_mapped = pos_map.get(sample['ball_area'].lower(), "Unknown")
 
-        # 6. Map Intent (Strategy)
-        strat_map = {
+        # 6. Map Intent (from player_actions — strategies is always empty in 20K)
+        intent_map = {
             "intercept": "Intercept", "passive": "Passive", "defensive": "Defensive",
             "to create depth": "To_Create_Depth", "move to the net": "Move_To_Net",
             "a high net early shot": "Early_Net_Shot", "deception": "Deception",
             "hesitation": "Hesitation", "seamlessly": "Seamlessly"
         }
-        strats = [s.lower() for s in sample['strategies']]
-        strat_mapped = strat_map.get(strats[0], "None") if strats else "None"
+        strat_mapped = "None"
+        for a in actions:
+            if a in intent_map:
+                strat_mapped = intent_map[a]
+                break
 
         # Convert back to indices
         return {
@@ -215,100 +238,67 @@ class FineBadmintonDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.samples[idx]
-        video_base = os.path.splitext(os.path.basename(sample['video_path']))[0]
-        
+
         labels_dict = self._map_labels(sample)
-        
-        # Load as list of PIL images or Tensors for consistent sequence transformation
-        frames = self._load_image_frames_as_list(video_base, sample['start_frame'], sample['end_frame'])
-        
+
+        frames = self._load_frames(
+            sample['video_path'], sample['start_frame'], sample['end_frame'],
+        )
+
         if self.transform:
-            # Apply transform to each frame. 
-            # Note: For ColorJitter, we should ideally use the same parameters for the whole sequence.
-            # Some transforms in torchvision.transforms.v2 support this, but for simplicity:
             frames = self.transform(frames)
 
-        # Convert list of tensors to (T, C, H, W)
         if isinstance(frames, list):
             frames = torch.stack(frames)
-        
-        # Convert labels to tensors
+
         tensor_labels = {k: torch.tensor(v, dtype=torch.long) for k, v in labels_dict.items()}
-        
+
         return frames, tensor_labels
 
-    def _load_image_frames_as_list(self, video_base: str, start_frame: int, end_frame: int) -> List[torch.Tensor]:
-        # Implementation of frame loading as a list of Tensors
-        # Images are flat files: {video_base}_{frame_idx}.jpg
-        frames = []
+    # ------------------------------------------------------------------
+    # Frame loading: decode directly from source .mp4 via cv2
+    # ------------------------------------------------------------------
+
+    _open_caps: Dict[str, Any] = {}
+
+    def _get_cap(self, video_path: str):
+        """Return an open cv2.VideoCapture, reusing across calls for the same file."""
+        if video_path not in FineBadmintonDataset._open_caps:
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                return None
+            FineBadmintonDataset._open_caps[video_path] = cap
+        return FineBadmintonDataset._open_caps[video_path]
+
+    def _load_frames(
+        self, video_path: str, start_frame: int, end_frame: int,
+    ) -> List[torch.Tensor]:
+        """Sample sequence_length evenly-spaced frames from the video clip."""
+        blank = [torch.zeros((3, 224, 224)) for _ in range(self.sequence_length)]
         duration = end_frame - start_frame
         if duration <= 0:
-            return [torch.zeros((3, 224, 224)) for _ in range(self.sequence_length)]
-            
-        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
-        
-        abs_data_root = os.path.abspath(self.data_root)
-        image_dir = os.path.join(abs_data_root, "image")
-        
-        # Search for image dir if not found in root
-        if not os.path.exists(image_dir):
-            potential_dirs = [
-                os.path.join(abs_data_root, "FineBadminton-master", "dataset", "image"),
-                os.path.join(abs_data_root, "dataset", "image")
-            ]
-            for p in potential_dirs:
-                if os.path.exists(p):
-                    image_dir = p
-                    break
+            return blank
 
+        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
+
+        cap = self._get_cap(video_path)
+        if cap is None:
+            return blank
+
+        frames: List[torch.Tensor] = []
         for idx in indices:
-            img_path = os.path.join(image_dir, f"{video_base}_{idx}.jpg")
-            if os.path.exists(img_path):
-                img = cv2.imread(img_path)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img = cv2.resize(img, (224, 224))
-                img_tensor = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
-                frames.append(img_tensor)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+            ok, bgr = cap.read()
+            if ok and bgr is not None:
+                rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                rgb = cv2.resize(rgb, (224, 224))
+                frames.append(
+                    torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0
+                )
             else:
                 frames.append(torch.zeros((3, 224, 224)))
-                
-        return frames
 
-    def _load_image_frames(self, video_base: str, start_frame: int, end_frame: int) -> torch.Tensor:
-        abs_data_root = os.path.abspath(self.data_root)
-        image_dir = os.path.join(abs_data_root, "image")
-        
-        if not os.path.exists(image_dir):
-             potential_paths = [
-                 os.path.join(abs_data_root, "FineBadminton-master", "dataset", "image"),
-                 os.path.join(abs_data_root, "dataset", "image"),
-                 os.path.join(abs_data_root, "../data/FineBadminton-master/dataset/image")
-             ]
-             for path in potential_paths:
-                 if os.path.exists(path):
-                     image_dir = path
-                     break
-        
-        duration = end_frame - start_frame
-        if duration <= 0:
-             return torch.zeros((self.sequence_length, 3, 224, 224), dtype=torch.float32)
-             
-        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
-        
-        frames = []
-        for idx in indices:
-            img_path = os.path.join(image_dir, f"{video_base}_{idx}.jpg")
-            frame = cv2.imread(img_path)
-            if frame is not None:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame = cv2.resize(frame, (224, 224))
-                frames.append(frame)
-            else:
-                frames.append(np.zeros((224, 224, 3), dtype=np.uint8))
-        
-        frames_np = np.array(frames)
-        frames_tensor = torch.from_numpy(frames_np).float() / 255.0
-        return frames_tensor.permute(0, 3, 1, 2)
+        return frames
 
 if __name__ == "__main__":
     print("Dataset class refined with Multi-Task support.")

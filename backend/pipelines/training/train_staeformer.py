@@ -10,7 +10,6 @@ Pose is cached once (from unaugmented frames).
 """
 import os
 import sys
-import json
 import datetime
 
 _backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -29,6 +28,7 @@ from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.staeformer import STAEformerModel
+from core.model_registry import register_training_checkpoint
 from core.training_progress import tqdm_pose_cache_build, tqdm_train_batches
 
 
@@ -66,12 +66,23 @@ class FramePoseDataset(Dataset):
         return frames, pose, labels
 
 
-def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
+def _build_pose_cache(dataset, list_file, device, cache_path, seed=42, use_pose=True):
     """Extract pose for every sample; save to cache. Uses dataset with transform=None."""
+    n_expected = len(dataset)
+    T = dataset.sequence_length
+    if not use_pose:
+        print("use_pose=False: skipping MediaPipe; using zero pose tensors for the dataloader.")
+        return torch.zeros(n_expected, T, 33, 3), None
     if os.path.exists(cache_path):
         print(f"Loading pose cache from {cache_path}...")
         out = torch.load(cache_path, map_location="cpu", weights_only=False)
-        return out["pose_cache"], out.get("task_classes")
+        pose_cache = out["pose_cache"]
+        if pose_cache.shape[0] == n_expected:
+            return pose_cache, out.get("task_classes")
+        print(
+            f"Pose cache length ({pose_cache.shape[0]}) does not match dataset ({n_expected}); "
+            "rebuilding."
+        )
 
     set_seed(seed)
     pose_estimator = PoseEstimator()
@@ -118,18 +129,32 @@ def train_staeformer(
     start_epoch=0,
     seed=42,
     use_cnn=True,
+    registry_experiment=False,
+    use_pose=True,
 ):
     set_seed(seed)
+    if not use_pose:
+        use_cnn = True
 
     _dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(_dir))
-    suffix = "staeformer" if use_cnn else "staeformer_pose_only"
+    if not use_pose:
+        suffix = "staeformer_cnn_only"
+    elif use_cnn:
+        suffix = "staeformer"
+    else:
+        suffix = "staeformer_pose_only"
     if save_path is None:
         save_path = os.path.join(backend_root, "models", f"badminton_model_{suffix}.pth")
     if pose_cache_path is None:
         pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
 
-    experiment_name = "IsoCourt_Training_STAEformer" if use_cnn else "IsoCourt_Training_STAEformer_PoseOnly"
+    if not use_pose:
+        experiment_name = "IsoCourt_Training_STAEformer_CNNOnly"
+    elif use_cnn:
+        experiment_name = "IsoCourt_Training_STAEformer"
+    else:
+        experiment_name = "IsoCourt_Training_STAEformer_PoseOnly"
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run():
         mlflow.log_params({
@@ -138,6 +163,7 @@ def train_staeformer(
             "lr": lr,
             "seed": seed,
             "use_cnn": use_cnn,
+            "use_pose": use_pose,
             "script": "train_staeformer.py",
         })
 
@@ -153,7 +179,9 @@ def train_staeformer(
         dataset = FineBadmintonDataset(data_root, list_file, transform=train_transform)
 
         # Build or load pose cache (aligned to dataset indices)
-        pose_cache, task_classes = _build_pose_cache(dataset, list_file, device, pose_cache_path, seed=seed)
+        pose_cache, task_classes = _build_pose_cache(
+            dataset, list_file, device, pose_cache_path, seed=seed, use_pose=use_pose
+        )
         if task_classes is None:
             task_classes = {k: len(v) for k, v in dataset.classes.items()}
             task_classes["quality"] = 7
@@ -211,7 +239,9 @@ def train_staeformer(
                     cnn.load_state_dict(ckpt["cnn"], strict=True)
                     print("Loaded CNN from checkpoint")
 
-        staeformer = STAEformerModel(task_classes=task_classes, embed_dim=128, use_cnn=use_cnn).to(device)
+        staeformer = STAEformerModel(
+            task_classes=task_classes, embed_dim=128, use_cnn=use_cnn, use_pose=use_pose
+        ).to(device)
         if resume_checkpoint and os.path.exists(resume_checkpoint):
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
             if "staeformer" in ckpt:
@@ -235,7 +265,12 @@ def train_staeformer(
         accumulation_steps = 4
         best_acc = 0.0
 
-        mode_label = "CNN + STAEformer" if use_cnn else "Pose-Only STAEformer"
+        if not use_pose:
+            mode_label = "CNN-only STAEformer (no MediaPipe graph)"
+        elif use_cnn:
+            mode_label = "CNN + STAEformer"
+        else:
+            mode_label = "Pose-Only STAEformer"
         print(f"\nStarting {mode_label} training...")
         if use_cnn:
             print(f"Layer4 LR: {lr*0.5:.6f} | STAEformer LR: {lr*5:.6f}")
@@ -256,7 +291,11 @@ def train_staeformer(
                 poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}
 
-                if use_cnn:
+                if use_cnn and not use_pose:
+                    frames = frames.to(device)
+                    cnn_seq = _cnn_sequence(cnn, frames, device)
+                    logits_dict = staeformer(cnn_seq=cnn_seq)
+                elif use_cnn:
                     frames = frames.to(device)
                     cnn_seq = _cnn_sequence(cnn, frames, device)
                     logits_dict = staeformer(poses, cnn_seq)
@@ -300,7 +339,11 @@ def train_staeformer(
                 for frames, poses, labels in val_loader:
                     poses = poses.to(device)
                     labels = {k: v.to(device) for k, v in labels.items()}
-                    if use_cnn:
+                    if use_cnn and not use_pose:
+                        frames = frames.to(device)
+                        cnn_seq = _cnn_sequence(cnn, frames, device)
+                        logits_dict = staeformer(cnn_seq=cnn_seq)
+                    elif use_cnn:
                         frames = frames.to(device)
                         cnn_seq = _cnn_sequence(cnn, frames, device)
                         logits_dict = staeformer(poses, cnn_seq)
@@ -329,32 +372,34 @@ def train_staeformer(
                     "staeformer": staeformer.state_dict(),
                     "task_classes": task_classes,
                     "use_cnn": use_cnn,
+                    "use_pose": use_pose,
                 }
                 if cnn is not None:
                     ckpt_data["cnn"] = cnn.state_dict()
                 torch.save(ckpt_data, save_path)
                 print(f"  -> Saved best ({best_acc:.1f}%)")
-                registry_path = os.path.join(os.path.dirname(save_path), "model_registry.json")
-                try:
-                    with open(registry_path, "r") as f:
-                        registry = json.load(f)
-                except (FileNotFoundError, json.JSONDecodeError):
-                    registry = {"models": {}, "active_model": None}
                 name = os.path.basename(save_path)
-                registry["models"][name] = {
-                    "accuracy": round(best_acc, 2),
-                    "epoch": epoch + 1,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "script": "train_staeformer.py",
-                }
-                registry["active_model"] = name
-                with open(registry_path, "w") as f:
-                    json.dump(registry, f, indent=2)
+                register_training_checkpoint(
+                    os.path.dirname(save_path),
+                    category="staeformer",
+                    file_basename=name,
+                    meta={
+                        "accuracy": round(best_acc, 2),
+                        "epoch": epoch + 1,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_staeformer.py",
+                        "architecture": "staeformer",
+                        "use_cnn": use_cnn,
+                        "use_pose": use_pose,
+                    },
+                    experiment=registry_experiment,
+                )
             if (epoch + 1) % 10 == 0:
                 periodic_ckpt = {
                     "staeformer": staeformer.state_dict(),
                     "task_classes": task_classes,
                     "use_cnn": use_cnn,
+                    "use_pose": use_pose,
                 }
                 if cnn is not None:
                     periodic_ckpt["cnn"] = cnn.state_dict()
@@ -367,10 +412,22 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--pose-only", action="store_true", help="Train on pose only (no CNN backbone)")
+    parser.add_argument(
+        "--no-pose",
+        action="store_true",
+        help="CNN-only STAEformer (no MediaPipe joints in the graph); implies CNN path.",
+    )
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument(
+        "--registry-experiment",
+        action="store_true",
+        help="Append best checkpoint to registry experiments instead of overwriting staeformer primary.",
+    )
     args = parser.parse_args()
+    if args.pose_only and args.no_pose:
+        parser.error("Cannot combine --pose-only with --no-pose")
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
@@ -386,4 +443,6 @@ if __name__ == "__main__":
         lr=args.lr,
         device=device,
         use_cnn=not args.pose_only,
+        registry_experiment=args.registry_experiment,
+        use_pose=not args.no_pose,
     )

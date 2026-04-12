@@ -64,8 +64,17 @@ def run_stroke_model(
     pe = state.pose_estimator
 
     if arch == ARCH_CNN_LSTM:
-        return model(segment_tensor_01.to(dev))
+        x0 = segment_tensor_01.to(dev)
+        if getattr(model, "use_pose", False):
+            joint = joint_seq_btj3_from_rgb_frames(
+                segment_frames_rgb, pe, dev, dtype=segment_tensor_01.dtype
+            )
+            poses = joint.reshape(joint.shape[0], joint.shape[1], -1)
+            return model(x0, poses=poses)
+        return model(x0, poses=None)
 
     joint = joint_seq_btj3_from_rgb_frames(segment_frames_rgb, pe, dev, dtype=segment_tensor_01.dtype)
     x = imagenet_normalize_btc_hw(segment_tensor_01.to(dev))
+    if not getattr(model, "use_pose", True):
+        return model(x, None)
     return model(x, joint)

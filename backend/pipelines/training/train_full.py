@@ -19,6 +19,7 @@ from core.model import CNN_LSTM_Model
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
+from core.model_registry import register_training_checkpoint
 
 
 class FramePoseDataset(Dataset):
@@ -39,12 +40,23 @@ class FramePoseDataset(Dataset):
         return frames, pose_flat, labels
 
 
-def _build_pose_cache(dataset, list_file, cache_path, seed=42):
+def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
     """Build or load cached pose tensors aligned to dataset indices."""
+    n_expected = len(dataset)
+    T = dataset.sequence_length
+    if not use_pose:
+        print("use_pose=False: skipping MediaPipe; using zero pose tensors for the dataloader.")
+        return torch.zeros(n_expected, T, 33, 3)
     if os.path.exists(cache_path):
         print(f"Loading pose cache from {cache_path}...")
         out = torch.load(cache_path, map_location="cpu", weights_only=False)
-        return out["pose_cache"]
+        pose_cache = out["pose_cache"]
+        if pose_cache.shape[0] == n_expected:
+            return pose_cache
+        print(
+            f"Pose cache length ({pose_cache.shape[0]}) does not match dataset ({n_expected}); "
+            "rebuilding."
+        )
 
     set_seed(seed)
     pose_estimator = PoseEstimator()
@@ -84,6 +96,8 @@ def train_full(
     resume_checkpoint=None,
     start_epoch=0,
     seed=42,
+    registry_experiment=False,
+    use_pose=True,
 ):
     set_seed(seed)
 
@@ -104,6 +118,7 @@ def train_full(
             "hidden_size": hidden_size,
             "device": device,
             "seed": seed,
+            "use_pose": use_pose,
         })
 
         train_transform = v2.Compose([
@@ -118,7 +133,7 @@ def train_full(
         dataset = FineBadmintonDataset(data_root, list_file, transform=train_transform)
 
         # Build or load pose cache (aligned to dataset indices)
-        pose_cache = _build_pose_cache(dataset, list_file, pose_cache_path, seed=seed)
+        pose_cache = _build_pose_cache(dataset, list_file, pose_cache_path, seed=seed, use_pose=use_pose)
         wrapper = FramePoseDataset(dataset, pose_cache)
 
         # --- WeightedRandomSampler for Class Balance ---
@@ -163,7 +178,9 @@ def train_full(
         task_classes = {k: len(v) for k, v in dataset.classes.items()}
         task_classes["quality"] = 7
         del task_classes["stroke_subtype"]
-        model = CNN_LSTM_Model(task_classes=task_classes, hidden_size=hidden_size, pretrained=True, use_pose=True).to(device)
+        model = CNN_LSTM_Model(
+            task_classes=task_classes, hidden_size=hidden_size, pretrained=True, use_pose=use_pose
+        ).to(device)
         
         # Partial freeze: only layer4 is trainable for domain adaptation
         print("Freezing CNN backbone (layer4 unfrozen for domain adaptation)...")
@@ -208,7 +225,7 @@ def train_full(
                 poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}
                 
-                outputs = model(frames, poses=poses)
+                outputs = model(frames, poses=poses if use_pose else None)
                 
                 batch_loss = torch.tensor(0.0, device=device)
                 loss_weights = {
@@ -257,7 +274,7 @@ def train_full(
                     frames = frames.to(device)
                     poses = poses.to(device)
                     labels = {k: v.to(device) for k, v in labels.items()}
-                    outputs = model(frames, poses=poses)
+                    outputs = model(frames, poses=poses if use_pose else None)
                     
                     val_total += frames.size(0)
                     for task, logits in outputs.items():
@@ -285,44 +302,60 @@ def train_full(
                 torch.save(model.state_dict(), save_path)
                 print(f"  -> Saved best model (Type Acc: {best_acc:.1f}%)")
                 
-                import json, datetime
-                registry_path = os.path.join(os.path.dirname(save_path), "model_registry.json")
-                try:
-                    with open(registry_path, "r") as f:
-                        registry = json.load(f)
-                except (FileNotFoundError, json.JSONDecodeError):
-                    registry = {"models": {}, "active_model": None}
-                
+                import datetime
+
                 model_name = os.path.basename(save_path)
-                registry["models"][model_name] = {
-                    "accuracy": round(best_acc, 2),
-                    "epoch": epoch + 1,
-                    "hidden_size": hidden_size,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "script": "train_full.py"
-                }
-                registry["active_model"] = model_name
-                with open(registry_path, "w") as f:
-                    json.dump(registry, f, indent=2)
+                register_training_checkpoint(
+                    os.path.dirname(save_path),
+                    category="cnn_lstm",
+                    file_basename=model_name,
+                    meta={
+                        "accuracy": round(best_acc, 2),
+                        "epoch": epoch + 1,
+                        "hidden_size": hidden_size,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_full.py",
+                        "architecture": "cnn_lstm",
+                        "inference": {"use_pose": use_pose, "hidden_size": hidden_size},
+                    },
+                    experiment=registry_experiment,
+                )
             if (epoch + 1) % 10 == 0:
                 torch.save(model.state_dict(), f"{save_path}_epoch_{epoch+1}.pth")
 
         print(f"\nTraining finished! Best stroke_type accuracy: {best_acc:.1f}%")
 
 if __name__ == "__main__":
+    import argparse
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
     data_root = os.path.join(backend_root, "data")
     list_file = os.path.join(backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json")
-    
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--registry-experiment",
+        action="store_true",
+        help="Append best checkpoint to registry experiments instead of overwriting cnn_lstm primary.",
+    )
+    parser.add_argument(
+        "--no-pose",
+        action="store_true",
+        help="ResNet+LSTM on RGB only (no MediaPipe stream); skips pose cache build.",
+    )
+    args = parser.parse_args()
+
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
 
     train_full(
-        data_root=data_root, 
-        list_file=list_file, 
+        data_root=data_root,
+        list_file=list_file,
         epochs=60,
         device=device,
+        registry_experiment=args.registry_experiment,
+        use_pose=not args.no_pose,
         # resume_checkpoint=os.path.join(backend_root, "models", "badminton_model.pth_epoch_60.pth"),
         # start_epoch=60
     )

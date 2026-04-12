@@ -13,7 +13,7 @@ This is **not** the ViT path in `timesformer.py`; it **reuses** `DividedSTBlock`
 """
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -51,6 +51,7 @@ class VideoMAETimeSformerPoseModel(nn.Module):
         mlp_ratio: float = 4.0,
         freeze_videomae: bool = True,
         videomae_unfreeze_last_n: int = 0,
+        use_pose: bool = True,
     ):
         super().__init__()
         try:
@@ -69,6 +70,7 @@ class VideoMAETimeSformerPoseModel(nn.Module):
         if num_frames % self.tubelet_size != 0:
             raise ValueError(f"num_frames={num_frames} not divisible by tubelet_size={self.tubelet_size}")
 
+        self.use_pose = use_pose
         self.T_tube = num_frames // self.tubelet_size
         image_size = cfg.image_size
         if isinstance(image_size, (tuple, list)):
@@ -97,13 +99,17 @@ class VideoMAETimeSformerPoseModel(nn.Module):
 
         self.feat_proj = nn.Linear(self.hidden_size, embed_dim)
 
-        self.pose_proj = nn.Linear(33 * 3, embed_dim)
         self.spatial_pos = nn.Parameter(torch.zeros(1, self.num_patches_spatial, embed_dim))
         self.temporal_pos = nn.Parameter(torch.zeros(1, self.T_tube, 1, embed_dim))
-        self.pose_spatial_bias = nn.Parameter(torch.zeros(1, 1, 1, embed_dim))
+        if use_pose:
+            self.pose_proj = nn.Linear(33 * 3, embed_dim)
+            self.pose_spatial_bias = nn.Parameter(torch.zeros(1, 1, 1, embed_dim))
+            nn.init.trunc_normal_(self.pose_spatial_bias, std=0.02)
+        else:
+            self.pose_proj = None
+            self.pose_spatial_bias = None
         nn.init.trunc_normal_(self.spatial_pos, std=0.02)
         nn.init.trunc_normal_(self.temporal_pos, std=0.02)
-        nn.init.trunc_normal_(self.pose_spatial_bias, std=0.02)
 
         assert embed_dim % num_heads == 0
         self.blocks = nn.ModuleList(
@@ -129,7 +135,7 @@ class VideoMAETimeSformerPoseModel(nn.Module):
     def trainable_parameter_count(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def forward(self, frames: torch.Tensor, joint_seq: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, frames: torch.Tensor, joint_seq: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         B, T, C, H, W = frames.shape
         if T != self.num_frames:
             raise ValueError(f"Expected T={self.num_frames}, got {T}")
@@ -146,12 +152,17 @@ class VideoMAETimeSformerPoseModel(nn.Module):
         patches = self.feat_proj(h)
         patches = patches + self.spatial_pos
 
-        pose_tube = joint_seq.view(B, self.T_tube, self.tubelet_size, 33, 3).mean(dim=2)
-        pose_flat = pose_tube.reshape(B, self.T_tube, -1)
-        pose_tok = self.pose_proj(pose_flat).unsqueeze(2)
-        pose_tok = pose_tok + self.pose_spatial_bias
-
-        x = torch.cat([pose_tok, patches], dim=2)
+        if self.use_pose:
+            if joint_seq is None:
+                raise ValueError("VideoMAETimeSformerPoseModel(use_pose=True) requires joint_seq")
+            assert self.pose_proj is not None and self.pose_spatial_bias is not None
+            pose_tube = joint_seq.view(B, self.T_tube, self.tubelet_size, 33, 3).mean(dim=2)
+            pose_flat = pose_tube.reshape(B, self.T_tube, -1)
+            pose_tok = self.pose_proj(pose_flat).unsqueeze(2)
+            pose_tok = pose_tok + self.pose_spatial_bias
+            x = torch.cat([pose_tok, patches], dim=2)
+        else:
+            x = patches
         x = x + self.temporal_pos
 
         for blk in self.blocks:

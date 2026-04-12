@@ -4,15 +4,14 @@ TimeSformer (divided space-time) + MediaPipe pose token training.
 Same dataset, video_level_split, augmentations, losses, and sampler as train_staeformer.py.
 Default pose cache path matches STAEformer so MediaPipe runs once if you already cached.
 
-Train/val indices come only from video_level_split (no random clip leakage). Pretrained ViT
-weights are ImageNet — they do not encode your labels. Watch val_loss vs train_loss to spot
-overfitting; val_type_acc is used for checkpointing.
+Train/val indices come only from video_level_split (no random clip leakage). Default visual
+stem is **Conv patch embed** (no ImageNet ViT). Optional ``--backbone vit`` uses timm for
+ablations. Watch val_loss vs train_loss to spot overfitting; val_type_acc is used for checkpointing.
 
 Hyperparameter sweep ranges: see TIMESFORMER_HYPERPARAMS.md next to this script.
 """
 import os
 import sys
-import json
 import datetime
 
 _backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -31,6 +30,7 @@ from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.timesformer import TimeSformerPoseModel
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_pose_cache_build, tqdm_train_batches
+from core.model_registry import register_training_checkpoint
 
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
@@ -105,11 +105,22 @@ class FramePoseDataset(Dataset):
         return frames, pose, labels
 
 
-def _build_pose_cache(dataset, list_file, cache_path, seed=42):
+def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
+    n_expected = len(dataset)
+    T = dataset.sequence_length
+    if not use_pose:
+        print("use_pose=False: skipping MediaPipe; using zero pose tensors for the dataloader.")
+        return torch.zeros(n_expected, T, 33, 3), None
     if os.path.exists(cache_path):
         print(f"Loading pose cache from {cache_path}...")
         out = torch.load(cache_path, map_location="cpu", weights_only=False)
-        return out["pose_cache"], out.get("task_classes")
+        pose_cache = out["pose_cache"]
+        if pose_cache.shape[0] == n_expected:
+            return pose_cache, out.get("task_classes")
+        print(
+            f"Pose cache length ({pose_cache.shape[0]}) does not match dataset ({n_expected}); "
+            "rebuilding."
+        )
 
     set_seed(seed)
     pose_estimator = PoseEstimator()
@@ -170,6 +181,8 @@ def train_timesformer(
     accumulation_steps=4,
     stroke_loss_weight=2.0,
     aug_strength="strong",
+    registry_experiment=False,
+    use_pose=True,
 ):
     set_seed(seed)
 
@@ -205,6 +218,7 @@ def train_timesformer(
                 "accumulation_steps": accumulation_steps,
                 "stroke_loss_weight": stroke_loss_weight,
                 "aug_strength": aug_strength,
+                "use_pose": use_pose,
                 "script": "train_timesformer.py",
             }
         )
@@ -214,7 +228,9 @@ def train_timesformer(
         print("Loading dataset...")
         dataset = FineBadmintonDataset(data_root, list_file, transform=train_transform)
 
-        pose_cache, task_classes = _build_pose_cache(dataset, list_file, pose_cache_path, seed=seed)
+        pose_cache, task_classes = _build_pose_cache(
+            dataset, list_file, pose_cache_path, seed=seed, use_pose=use_pose
+        )
         if task_classes is None:
             task_classes = {k: len(v) for k, v in dataset.classes.items()}
             task_classes["quality"] = 7
@@ -266,6 +282,7 @@ def train_timesformer(
             backbone=backbone,
             vit_model_name=vit_model_name,
             vit_unfreeze_last_n=vit_unfreeze_last_n,
+            use_pose=use_pose,
         ).to(device)
 
         if resume_checkpoint and os.path.exists(resume_checkpoint):
@@ -324,7 +341,7 @@ def train_timesformer(
         }
         best_acc = 0.0
 
-        print("\nStarting TimeSformer + pose training...")
+        print(f"\nStarting TimeSformer training (use_pose={use_pose})...")
         print(
             f"lr_mult={lr_mult} | vit_lr_mult={vit_lr_mult} | aug={aug_strength} | "
             f"stroke_loss_weight={stroke_loss_weight} | "
@@ -350,7 +367,7 @@ def train_timesformer(
                 poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}
 
-                logits_dict = model(frames, poses)
+                logits_dict = model(frames, poses if use_pose else None)
                 batch_loss = _multitask_loss(
                     logits_dict, labels, device, criterion_st, criterion_default, loss_weights
                 )
@@ -392,7 +409,7 @@ def train_timesformer(
                     frames = _imagenet_norm_video(frames.to(device), device)
                     poses = poses.to(device)
                     labels = {k: v.to(device) for k, v in labels.items()}
-                    logits_dict = model(frames, poses)
+                    logits_dict = model(frames, poses if use_pose else None)
                     vloss = _multitask_loss(
                         logits_dict, labels, device, criterion_st, criterion_default, loss_weights
                     )
@@ -445,26 +462,35 @@ def train_timesformer(
                         "backbone": backbone,
                         "vit_model_name": vit_model_name,
                         "vit_unfreeze_last_n": vit_unfreeze_last_n,
+                        "use_pose": use_pose,
                     },
                     save_path,
                 )
                 print(f"  -> Saved best ({best_acc:.1f}%)")
-                registry_path = os.path.join(os.path.dirname(save_path), "model_registry.json")
-                try:
-                    with open(registry_path, "r") as f:
-                        registry = json.load(f)
-                except (FileNotFoundError, json.JSONDecodeError):
-                    registry = {"models": {}, "active_model": None}
                 name = os.path.basename(save_path)
-                registry["models"][name] = {
-                    "accuracy": round(best_acc, 2),
-                    "epoch": epoch + 1,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "script": "train_timesformer.py",
-                }
-                registry["active_model"] = name
-                with open(registry_path, "w") as f:
-                    json.dump(registry, f, indent=2)
+                register_training_checkpoint(
+                    os.path.dirname(save_path),
+                    category="timesformer",
+                    file_basename=name,
+                    meta={
+                        "accuracy": round(best_acc, 2),
+                        "epoch": epoch + 1,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_timesformer.py",
+                        "architecture": "timesformer",
+                        "inference": {
+                            "embed_dim": embed_dim,
+                            "depth": depth,
+                            "num_heads": num_heads,
+                            "num_frames": model.num_frames,
+                            "backbone": backbone,
+                            "vit_model_name": vit_model_name,
+                            "vit_unfreeze_last_n": vit_unfreeze_last_n,
+                            "use_pose": use_pose,
+                        },
+                    },
+                    experiment=registry_experiment,
+                )
 
             if (epoch + 1) % 10 == 0:
                 torch.save(
@@ -479,6 +505,7 @@ def train_timesformer(
                         "backbone": backbone,
                         "vit_model_name": vit_model_name,
                         "vit_unfreeze_last_n": vit_unfreeze_last_n,
+                        "use_pose": use_pose,
                     },
                     f"{save_path}_epoch_{epoch+1}.pth",
                 )
@@ -520,8 +547,8 @@ if __name__ == "__main__":
         "--backbone",
         type=str,
         choices=("scratch", "vit"),
-        default="vit",
-        help="scratch=Conv patch embed; vit=timm ViT (ImageNet) per-frame tokens + projection",
+        default="scratch",
+        help="scratch=Conv patch embed (default); vit=timm ViT (ImageNet) per-frame tokens + projection",
     )
     parser.add_argument(
         "--vit-model",
@@ -599,6 +626,16 @@ if __name__ == "__main__":
         help="0-based epoch index to begin the training loop (e.g. 36 after completing 36 epochs "
         "to run epochs 37..--epochs). Optimizer/scheduler state is not restored.",
     )
+    parser.add_argument(
+        "--registry-experiment",
+        action="store_true",
+        help="Append best checkpoint to registry experiments instead of overwriting timesformer primary.",
+    )
+    parser.add_argument(
+        "--no-pose",
+        action="store_true",
+        help="Train/eval without MediaPipe pose (skip pose cache build; patch tokens only).",
+    )
     args = parser.parse_args()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -643,4 +680,6 @@ if __name__ == "__main__":
         accumulation_steps=args.accum_steps,
         stroke_loss_weight=args.stroke_loss_weight,
         aug_strength=args.aug,
+        registry_experiment=args.registry_experiment,
+        use_pose=not args.no_pose,
     )

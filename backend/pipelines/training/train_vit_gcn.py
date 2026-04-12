@@ -1,24 +1,16 @@
 """
-VideoMAE encoder + pose + **divided space–time** blocks (`DividedSTBlock` from `timesformer.py`).
+timm ViT (per-frame CLS) + fixed skeleton GCN on cached MediaPipe joints.
 
-Same **training pipeline** as `train_videomae.py` / `train_timesformer.py` (split, cache, losses, registry).
+Matches train_timesformer.py: same dataset, video_level_split, augmentations, multitask
+losses (stroke_type weighted), sampler, and val stroke_type accuracy for checkpointing.
+Reuses the default pose cache path so MediaPipe runs once if you already trained STAEformer/TimeSformer.
 
-**vs** `train_videomae.py`: that script **pools** VideoMAE tokens and MLP-fuses pose. **This** script
-reshapes VideoMAE tokens to **(B, T_tube, spatial_patches, D)** (e.g. 8×196 for tubelet 2, 16 frames),
-aligns pose by **averaging** pairs of frames per tube, prepends a pose token per tube, then runs
-the same **spatial then temporal** attention stack as TimeSformer.
-
-Checkpoint: `badminton_model_videomae_timesformer.pth` — registry `script: train_videomae_timesformer.py`.
-
-**Conservative retry (method 3)** — smaller ST + regularization + lower head LR + light VideoMAE unfreeze.
-Main checkpoint still follows **val stroke-type accuracy** (use --checkpoint-metric val_loss to switch).
-
-    python3 train_videomae_timesformer.py --preset conservative
+Default ViT is ``vit_tiny_patch16_224`` (faster per epoch than ``vit_small_patch16_224``). Pass
+``--vit-model vit_small_patch16_224`` to align with TimeSformer’s default backbone.
 """
 import os
 import sys
 import datetime
-import importlib.util
 
 _backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _backend_root not in sys.path:
@@ -27,33 +19,140 @@ if _backend_root not in sys.path:
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
+from torchvision.transforms import v2
 import mlflow
-
 from core.dataset import FineBadmintonDataset
+from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
-from core.videomae_timesformer import VideoMAETimeSformerPoseModel
+from core.vit_gcn import ViTGCNMultitaskModel
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_pose_cache_build, tqdm_train_batches
 from core.model_registry import register_training_checkpoint
 
-_tf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_timesformer.py")
-_spec = importlib.util.spec_from_file_location("train_timesformer", _tf_path)
-_tf = importlib.util.module_from_spec(_spec)
-assert _spec.loader is not None
-_spec.loader.exec_module(_tf)
-
-_multitask_loss = _tf._multitask_loss
-_build_train_transform = _tf._build_train_transform
-FramePoseDataset = _tf.FramePoseDataset
-_build_pose_cache = _tf._build_pose_cache
-_imagenet_norm_video = _tf._imagenet_norm_video
+MEAN = [0.485, 0.456, 0.406]
+STD = [0.229, 0.224, 0.225]
 
 
-def train_videomae_timesformer(
+def _multitask_loss(logits_dict, labels, device, criterion_st, criterion_default, loss_weights):
+    total = torch.tensor(0.0, device=device)
+    for task, logits in logits_dict.items():
+        crit = criterion_st if task == "stroke_type" else criterion_default
+        total = total + loss_weights.get(task, 1.0) * crit(logits, labels[task])
+    return total
+
+
+def _build_train_transform(aug_strength: str):
+    if aug_strength == "strong":
+        return v2.Compose(
+            [
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.9, 1.1)),
+                v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+                v2.RandomGrayscale(p=0.1),
+                v2.RandomErasing(p=0.25, scale=(0.02, 0.15)),
+            ]
+        )
+    if aug_strength == "medium":
+        return v2.Compose(
+            [
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.RandomAffine(degrees=8, translate=(0.04, 0.04), scale=(0.92, 1.08)),
+                v2.ColorJitter(brightness=0.25, contrast=0.25, saturation=0.25, hue=0.06),
+                v2.RandomGrayscale(p=0.06),
+                v2.RandomErasing(p=0.15, scale=(0.02, 0.1)),
+            ]
+        )
+    if aug_strength == "mild":
+        return v2.Compose(
+            [
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.RandomAffine(degrees=5, translate=(0.03, 0.03), scale=(0.95, 1.05)),
+                v2.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.04),
+                v2.RandomGrayscale(p=0.03),
+                v2.RandomErasing(p=0.08, scale=(0.02, 0.08)),
+            ]
+        )
+    raise ValueError(f"aug_strength must be strong|medium|mild, got {aug_strength!r}")
+
+
+def _imagenet_norm_video(frames, device):
+    B, T, C, H, W = frames.shape
+    x = frames.view(B * T, C, H, W)
+    mean = torch.tensor(MEAN, device=device).view(1, 3, 1, 1)
+    std = torch.tensor(STD, device=device).view(1, 3, 1, 1)
+    x = (x - mean) / std
+    return x.view(B, T, C, H, W)
+
+
+class FramePoseDataset(Dataset):
+    def __init__(self, frame_dataset, pose_cache):
+        self.frame_dataset = frame_dataset
+        self.pose_cache = pose_cache
+
+    def __len__(self):
+        return len(self.frame_dataset)
+
+    def __getitem__(self, idx):
+        frames, labels = self.frame_dataset[idx]
+        pose = self.pose_cache[idx]
+        if isinstance(pose, torch.Tensor):
+            pose = pose.clone()
+        return frames, pose, labels
+
+
+def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
+    n_expected = len(dataset)
+    T = dataset.sequence_length
+    if not use_pose:
+        print("use_pose=False: skipping MediaPipe; using zero pose tensors for the dataloader.")
+        return torch.zeros(n_expected, T, 33, 3), None
+    if os.path.exists(cache_path):
+        print(f"Loading pose cache from {cache_path}...")
+        out = torch.load(cache_path, map_location="cpu", weights_only=False)
+        pose_cache = out["pose_cache"]
+        if pose_cache.shape[0] == n_expected:
+            return pose_cache, out.get("task_classes")
+        print(
+            f"Pose cache length ({pose_cache.shape[0]}) does not match dataset ({n_expected}); "
+            "rebuilding."
+        )
+
+    set_seed(seed)
+    pose_estimator = PoseEstimator()
+    dataset_raw = FineBadmintonDataset(
+        dataset.data_root,
+        list_file,
+        transform=None,
+        sequence_length=dataset.sequence_length,
+        frame_interval=dataset.frame_interval,
+    )
+
+    pose_list = []
+    for i in tqdm_pose_cache_build(len(dataset_raw)):
+        frames, _ = dataset_raw[i]
+        with torch.no_grad():
+            p = pose_estimator.extract_tensor_poses(frames)
+        if p.dim() == 2:
+            p = p.view(-1, 33, 3)
+        pose_list.append(p.cpu())
+    pose_cache = torch.stack(pose_list)
+
+    task_classes = {k: len(v) for k, v in dataset.classes.items()}
+    task_classes["quality"] = 7
+    if "stroke_subtype" in task_classes:
+        del task_classes["stroke_subtype"]
+
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    torch.save({"pose_cache": pose_cache, "task_classes": task_classes}, cache_path)
+    print(f"Saved pose cache to {cache_path}")
+    return pose_cache, task_classes
+
+
+def train_vit_gcn(
     data_root,
     list_file,
-    epochs=30,
+    epochs=60,
     batch_size=DEFAULT_TRAIN_BATCH_SIZE,
     lr=1e-4,
     device="cpu",
@@ -62,23 +161,20 @@ def train_videomae_timesformer(
     resume_checkpoint=None,
     start_epoch=0,
     seed=42,
+    embed_dim=128,
+    gcn_layers=2,
     max_train_batches=None,
-    hf_model_id="MCG-NJU/videomae-base",
-    freeze_videomae=True,
-    videomae_unfreeze_last_n=0,
-    lr_mult=5.0,
-    videomae_lr_mult=0.1,
+    vit_model_name="vit_tiny_patch16_224",
+    vit_unfreeze_last_n=0,
     weight_decay=1e-2,
     label_smoothing=0.1,
+    lr_mult=5.0,
+    vit_lr_mult=0.25,
     scheduler_t0=10,
     scheduler_t_mult=2,
     accumulation_steps=4,
     stroke_loss_weight=2.0,
     aug_strength="strong",
-    embed_dim=128,
-    depth=4,
-    num_heads=4,
-    checkpoint_metric="val_type_acc",
     registry_experiment=False,
     use_pose=True,
 ):
@@ -87,11 +183,11 @@ def train_videomae_timesformer(
     _dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(backend_root, "models", "badminton_model_videomae_timesformer.pth")
+        save_path = os.path.join(backend_root, "models", "badminton_model_vit_gcn.pth")
     if pose_cache_path is None:
         pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
 
-    mlflow.set_experiment("IsoCourt_Training_VideoMAE_TimeSformer")
+    mlflow.set_experiment("IsoCourt_Training_ViT_GCN")
     with mlflow.start_run():
         mlflow.log_params(
             {
@@ -99,28 +195,27 @@ def train_videomae_timesformer(
                 "batch_size": batch_size,
                 "lr": lr,
                 "seed": seed,
-                "hf_model_id": hf_model_id,
-                "freeze_videomae": freeze_videomae,
-                "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
-                "lr_mult": lr_mult,
-                "videomae_lr_mult": videomae_lr_mult,
+                "embed_dim": embed_dim,
+                "gcn_layers": gcn_layers,
+                "max_train_batches": max_train_batches,
+                "vit_model_name": vit_model_name,
+                "vit_unfreeze_last_n": vit_unfreeze_last_n,
                 "weight_decay": weight_decay,
                 "label_smoothing": label_smoothing,
+                "lr_mult": lr_mult,
+                "vit_lr_mult": vit_lr_mult,
                 "scheduler_t0": scheduler_t0,
                 "scheduler_t_mult": scheduler_t_mult,
                 "accumulation_steps": accumulation_steps,
                 "stroke_loss_weight": stroke_loss_weight,
                 "aug_strength": aug_strength,
-                "embed_dim": embed_dim,
-                "depth": depth,
-                "num_heads": num_heads,
-                "checkpoint_metric": checkpoint_metric,
                 "use_pose": use_pose,
-                "script": "train_videomae_timesformer.py",
+                "script": "train_vit_gcn.py",
             }
         )
 
         train_transform = _build_train_transform(aug_strength)
+
         print("Loading dataset...")
         dataset = FineBadmintonDataset(data_root, list_file, transform=train_transform)
 
@@ -134,6 +229,7 @@ def train_videomae_timesformer(
                 del task_classes["stroke_subtype"]
 
         wrapper = FramePoseDataset(dataset, pose_cache)
+
         st_labels = []
         for sample in dataset.samples:
             labels = dataset._map_labels(sample)
@@ -168,15 +264,13 @@ def train_videomae_timesformer(
             pin_memory=(device == "cuda"),
         )
 
-        model = VideoMAETimeSformerPoseModel(
+        model = ViTGCNMultitaskModel(
             task_classes=task_classes,
-            hf_model_id=hf_model_id,
             num_frames=dataset.sequence_length,
             embed_dim=embed_dim,
-            num_heads=num_heads,
-            depth=depth,
-            freeze_videomae=freeze_videomae,
-            videomae_unfreeze_last_n=videomae_unfreeze_last_n,
+            gcn_layers=gcn_layers,
+            vit_model_name=vit_model_name,
+            vit_unfreeze_last_n=vit_unfreeze_last_n,
             use_pose=use_pose,
         ).to(device)
 
@@ -184,34 +278,33 @@ def train_videomae_timesformer(
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
             if "model" in ckpt:
                 model.load_state_dict(ckpt["model"], strict=False)
-                print("Loaded VideoMAE+TimeSformer from checkpoint")
+                print("Loaded ViT+GCN from checkpoint")
 
         trainable = [p for p in model.parameters() if p.requires_grad]
         print(
-            f"VideoMAE+ST | {hf_model_id} | trainable params: {sum(p.numel() for p in trainable):,} "
-            f"(unfreeze_last_n={videomae_unfreeze_last_n}) | embed_dim={embed_dim} depth={depth}"
+            f"ViT+GCN | trainable params: {sum(p.numel() for p in trainable):,} "
+            f"(vit_unfreeze_last_n={vit_unfreeze_last_n}, gcn_layers={gcn_layers})"
         )
 
-        backbone_params = []
+        vit_params = []
         other_params = []
         for name, p in model.named_parameters():
             if not p.requires_grad:
                 continue
-            if name.startswith("backbone."):
-                backbone_params.append(p)
+            if name.startswith("vit."):
+                vit_params.append(p)
             else:
                 other_params.append(p)
-
-        if backbone_params:
+        if vit_params:
             optimizer = optim.AdamW(
                 [
-                    {"params": backbone_params, "lr": lr * videomae_lr_mult, "weight_decay": weight_decay},
+                    {"params": vit_params, "lr": lr * vit_lr_mult, "weight_decay": weight_decay},
                     {"params": other_params, "lr": lr * lr_mult, "weight_decay": weight_decay},
                 ]
             )
             print(
-                f"Optimizer: VideoMAE lr={lr * videomae_lr_mult:.6f} | "
-                f"ST/heads lr={lr * lr_mult:.6f}"
+                f"Optimizer: ViT params lr={lr * vit_lr_mult:.6f} | "
+                f"other params lr={lr * lr_mult:.6f}"
             )
         else:
             optimizer = optim.AdamW(trainable, lr=lr * lr_mult, weight_decay=weight_decay)
@@ -235,18 +328,19 @@ def train_videomae_timesformer(
             "quality": 0.5,
         }
         best_acc = 0.0
-        best_val_loss = float("inf")
-        peak_val_acc = 0.0
-        min_val_loss_seen = float("inf")
 
-        print(f"\nStarting VideoMAE + divided ST stack (use_pose={use_pose})...")
+        print(f"\nStarting ViT + {'GCN + ' if use_pose else ''}multitask training (use_pose={use_pose})...")
         print(
-            f"checkpoint_metric={checkpoint_metric} | "
-            f"lr_mult={lr_mult} | videomae_lr_mult={videomae_lr_mult} | aug={aug_strength} | "
+            f"lr_mult={lr_mult} | vit_lr_mult={vit_lr_mult} | aug={aug_strength} | "
             f"stroke_loss_weight={stroke_loss_weight} | "
             f"cosine T_0={scheduler_t0} T_mult={scheduler_t_mult} | "
             f"accumulation_steps={accumulation_steps}"
         )
+        if max_train_batches is not None:
+            print(
+                f"NOTE: max_train_batches={max_train_batches} (partial train epochs; "
+                "val still uses full val set)"
+            )
 
         for epoch in range(start_epoch, epochs):
             model.train()
@@ -259,6 +353,8 @@ def train_videomae_timesformer(
             for batch_idx, (frames, poses, labels) in enumerate(pbar):
                 frames = _imagenet_norm_video(frames.to(device), device)
                 poses = poses.to(device)
+                if poses.dim() == 3:
+                    poses = poses.view(poses.size(0), frames.size(1), 33, 3)
                 labels = {k: v.to(device) for k, v in labels.items()}
 
                 logits_dict = model(frames, poses if use_pose else None)
@@ -302,6 +398,8 @@ def train_videomae_timesformer(
                 for frames, poses, labels in val_loader:
                     frames = _imagenet_norm_video(frames.to(device), device)
                     poses = poses.to(device)
+                    if poses.dim() == 3:
+                        poses = poses.view(poses.size(0), frames.size(1), 33, 3)
                     labels = {k: v.to(device) for k, v in labels.items()}
                     logits_dict = model(frames, poses if use_pose else None)
                     vloss = _multitask_loss(
@@ -329,12 +427,9 @@ def train_videomae_timesformer(
                 "learning_rate": lrs[0],
             }
             if len(lrs) > 1:
-                metrics["lr_videomae"] = lrs[0]
+                metrics["lr_vit"] = lrs[0]
                 metrics["lr_other"] = lrs[1]
             mlflow.log_metrics(metrics, step=epoch)
-
-            peak_val_acc = max(peak_val_acc, val_acc)
-            min_val_loss_seen = min(min_val_loss_seen, val_loss_epoch)
 
             lr_str = ", ".join(f"{x:.6f}" for x in lrs)
             print(
@@ -344,73 +439,44 @@ def train_videomae_timesformer(
                 f"LR: [{lr_str}]"
             )
 
-            should_save = False
-            if checkpoint_metric == "val_type_acc":
-                if val_acc > best_acc:
-                    best_acc = val_acc
-                    should_save = True
-            elif checkpoint_metric == "val_loss":
-                if val_loss_epoch < best_val_loss:
-                    best_val_loss = val_loss_epoch
-                    should_save = True
-            else:
-                raise ValueError(f"Unknown checkpoint_metric: {checkpoint_metric}")
-
-            if should_save:
+            if val_acc > best_acc:
+                best_acc = val_acc
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 torch.save(
                     {
                         "model": model.state_dict(),
                         "task_classes": task_classes,
-                        "architecture": "videomae_timesformer",
+                        "architecture": "vit_gcn",
                         "num_frames": model.num_frames,
-                        "hf_model_id": hf_model_id,
-                        "freeze_videomae": freeze_videomae,
-                        "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
                         "embed_dim": embed_dim,
-                        "depth": depth,
-                        "num_heads": num_heads,
-                        "checkpoint_metric": checkpoint_metric,
+                        "gcn_layers": gcn_layers,
+                        "vit_model_name": vit_model_name,
+                        "vit_unfreeze_last_n": vit_unfreeze_last_n,
                         "use_pose": use_pose,
                     },
                     save_path,
                 )
-                if checkpoint_metric == "val_type_acc":
-                    print(f"  -> Saved best val_type_acc ({best_acc:.1f}%)")
-                else:
-                    print(
-                        f"  -> Saved best val_loss ({best_val_loss:.4f}) "
-                        f"(val_type_acc this epoch: {val_acc:.1f}%)"
-                    )
+                print(f"  -> Saved best ({best_acc:.1f}%)")
                 name = os.path.basename(save_path)
-                reg_entry = {
-                    "accuracy": round(val_acc, 2),
-                    "val_loss": round(val_loss_epoch, 4),
-                    "epoch": epoch + 1,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "script": "train_videomae_timesformer.py",
-                    "hf_model_id": hf_model_id,
-                    "checkpoint_metric": checkpoint_metric,
-                    "architecture": "videomae_timesformer",
-                    "inference": {
-                        "embed_dim": embed_dim,
-                        "depth": depth,
-                        "num_heads": num_heads,
-                        "num_frames": model.num_frames,
-                        "freeze_videomae": freeze_videomae,
-                        "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
-                        "use_pose": use_pose,
-                    },
-                }
-                if checkpoint_metric == "val_loss":
-                    reg_entry["best_val_loss"] = round(best_val_loss, 4)
-                else:
-                    reg_entry["best_val_type_acc"] = round(best_acc, 2)
                 register_training_checkpoint(
                     os.path.dirname(save_path),
-                    category="videomae_timesformer",
+                    category="vit_gcn",
                     file_basename=name,
-                    meta=reg_entry,
+                    meta={
+                        "accuracy": round(best_acc, 2),
+                        "epoch": epoch + 1,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_vit_gcn.py",
+                        "architecture": "vit_gcn",
+                        "inference": {
+                            "num_frames": model.num_frames,
+                            "embed_dim": embed_dim,
+                            "gcn_layers": gcn_layers,
+                            "vit_model_name": vit_model_name,
+                            "vit_unfreeze_last_n": vit_unfreeze_last_n,
+                            "use_pose": use_pose,
+                        },
+                    },
                     experiment=registry_experiment,
                 )
 
@@ -419,111 +485,97 @@ def train_videomae_timesformer(
                     {
                         "model": model.state_dict(),
                         "task_classes": task_classes,
-                        "architecture": "videomae_timesformer",
+                        "architecture": "vit_gcn",
                         "num_frames": model.num_frames,
-                        "hf_model_id": hf_model_id,
-                        "freeze_videomae": freeze_videomae,
-                        "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
                         "embed_dim": embed_dim,
-                        "depth": depth,
-                        "num_heads": num_heads,
-                        "checkpoint_metric": checkpoint_metric,
+                        "gcn_layers": gcn_layers,
+                        "vit_model_name": vit_model_name,
+                        "vit_unfreeze_last_n": vit_unfreeze_last_n,
                         "use_pose": use_pose,
                     },
                     f"{save_path}_epoch_{epoch+1}.pth",
                 )
 
-        print(
-            f"\nTraining finished! checkpoint_metric={checkpoint_metric} | "
-            f"peak val_type_acc: {peak_val_acc:.1f}% | min val_loss: {min_val_loss_seen:.4f}"
-        )
-        if checkpoint_metric == "val_type_acc":
-            print(f"  (saved checkpoint: best val_type_acc {best_acc:.1f}%)")
-        else:
-            print(
-                f"  (saved checkpoint: best val_loss {best_val_loss:.4f} — "
-                f"compare peak acc {peak_val_acc:.1f}% on a fixed val if needed)"
-            )
+        print(f"\nTraining finished! Best stroke_type accuracy: {best_acc:.1f}%")
 
 
 if __name__ == "__main__":
     import argparse
-    import sys
-
-    def _argv_has_flag(argv: list[str], flag: str) -> bool:
-        """True if the user passed ``flag`` or ``flag=value`` (not argparse defaults)."""
-        for a in argv:
-            if a == flag or a.startswith(flag + "="):
-                return True
-        return False
-
-    _argv = sys.argv[1:]
 
     parser = argparse.ArgumentParser(
-        description="VideoMAE + pose + divided ST. Registry: badminton_model_videomae_timesformer.pth"
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Same data and metrics as train_timesformer.py; compares ViT+GCN fusion.",
     )
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=DEFAULT_TRAIN_BATCH_SIZE)
+    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_TRAIN_BATCH_SIZE,
+        help=f"Train/val minibatch size (default {DEFAULT_TRAIN_BATCH_SIZE})",
+    )
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--pose-cache", type=str, default=None)
-    parser.add_argument("--max-train-batches", type=int, default=None)
-    parser.add_argument("--hf-model-id", type=str, default="MCG-NJU/videomae-base")
-    parser.add_argument("--no-freeze-videomae", action="store_true")
-    parser.add_argument("--videomae-unfreeze-last-n", type=int, default=0)
-    parser.add_argument("--lr-mult", type=float, default=5.0)
-    parser.add_argument("--videomae-lr-mult", type=float, default=0.1)
+    parser.add_argument("--embed-dim", type=int, default=128)
+    parser.add_argument(
+        "--gcn-layers",
+        type=int,
+        default=2,
+        help="Number of fixed-graph GCN layers (each: A @ X @ W)",
+    )
+    parser.add_argument(
+        "--pose-cache",
+        type=str,
+        default=None,
+        help="Path to pose .pt cache (default: models/pose_cache_staeformer.pt)",
+    )
+    parser.add_argument(
+        "--max-train-batches",
+        type=int,
+        default=None,
+        help="Stop each train epoch after this many batches (smoke / faster runs; val unchanged)",
+    )
+    parser.add_argument(
+        "--vit-model",
+        type=str,
+        default="vit_tiny_patch16_224",
+        help=(
+            "timm ViT backbone. Default vit_tiny_patch16_224 is faster for long epochs; "
+            "use vit_small_patch16_224 to match TimeSformer’s default ViT."
+        ),
+    )
+    parser.add_argument(
+        "--vit-unfreeze-last-n",
+        type=int,
+        default=0,
+        help="Unfreeze last N ViT transformer blocks (0=frozen ViT)",
+    )
     parser.add_argument("--weight-decay", type=float, default=1e-2)
     parser.add_argument("--label-smoothing", type=float, default=0.1)
+    parser.add_argument("--lr-mult", type=float, default=5.0)
+    parser.add_argument("--vit-lr-mult", type=float, default=0.25)
     parser.add_argument("--scheduler-t0", type=int, default=10)
     parser.add_argument("--scheduler-t-mult", type=int, default=2)
     parser.add_argument("--accum-steps", type=int, default=4)
     parser.add_argument("--stroke-loss-weight", type=float, default=2.0)
-    parser.add_argument("--aug", type=str, choices=("strong", "medium", "mild"), default="strong")
-    parser.add_argument("--embed-dim", type=int, default=128)
-    parser.add_argument("--depth", type=int, default=4)
-    parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument(
-        "--checkpoint-metric",
-        choices=("val_type_acc", "val_loss"),
-        default="val_type_acc",
-        help="Which metric drives the main checkpoint (default: val_type_acc).",
+        "--aug",
+        type=str,
+        choices=("strong", "medium", "mild"),
+        default="strong",
     )
-    parser.add_argument(
-        "--preset",
-        choices=("none", "conservative"),
-        default="none",
-        help="conservative: embed 128/4/4, WD 0.02, lr_mult 4, unfreeze last 2 VideoMAE blocks at "
-        "0.05× backbone LR, label_smoothing 0.05 (checkpoint metric unchanged; default val_type_acc).",
-    )
+    parser.add_argument("--resume-checkpoint", type=str, default=None)
+    parser.add_argument("--start-epoch", type=int, default=0)
     parser.add_argument(
         "--registry-experiment",
         action="store_true",
-        help="Append best checkpoint to registry experiments instead of overwriting videomae_timesformer primary.",
+        help="Append best checkpoint to registry experiments instead of overwriting vit_gcn primary.",
     )
     parser.add_argument(
         "--no-pose",
         action="store_true",
-        help="VideoMAE tokens + ST only (no pose token); skips MediaPipe cache build.",
+        help="ViT-only (no skeleton GCN); skips MediaPipe cache build.",
     )
-
     args = parser.parse_args()
-    if args.preset == "conservative":
-        if not _argv_has_flag(_argv, "--embed-dim"):
-            args.embed_dim = 128
-        if not _argv_has_flag(_argv, "--depth"):
-            args.depth = 4
-        if not _argv_has_flag(_argv, "--num-heads"):
-            args.num_heads = 4
-        if not _argv_has_flag(_argv, "--weight-decay"):
-            args.weight_decay = 0.02
-        if not _argv_has_flag(_argv, "--lr-mult"):
-            args.lr_mult = 4.0
-        if not _argv_has_flag(_argv, "--videomae-unfreeze-last-n"):
-            args.videomae_unfreeze_last_n = 2
-        if not _argv_has_flag(_argv, "--videomae-lr-mult"):
-            args.videomae_lr_mult = 0.05
-        if not _argv_has_flag(_argv, "--label-smoothing"):
-            args.label_smoothing = 0.05
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
     data_root = os.path.join(backend_root, "data")
@@ -532,31 +584,38 @@ if __name__ == "__main__":
     )
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
-    train_videomae_timesformer(
+    resume = args.resume_checkpoint
+    if resume is None and args.start_epoch > 0:
+        resume = os.path.join(backend_root, "models", "badminton_model_vit_gcn.pth")
+        print(f"--start-epoch {args.start_epoch} without --resume-checkpoint: defaulting to {resume}")
+    if args.start_epoch > 0:
+        if not resume or not os.path.isfile(resume):
+            print(f"ERROR: need an existing checkpoint when --start-epoch > 0; missing: {resume!r}")
+            sys.exit(1)
+    train_vit_gcn(
         data_root=data_root,
         list_file=list_file,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
         device=device,
+        resume_checkpoint=resume,
+        start_epoch=args.start_epoch,
         pose_cache_path=args.pose_cache,
+        embed_dim=args.embed_dim,
+        gcn_layers=args.gcn_layers,
         max_train_batches=args.max_train_batches,
-        hf_model_id=args.hf_model_id,
-        freeze_videomae=not args.no_freeze_videomae,
-        videomae_unfreeze_last_n=args.videomae_unfreeze_last_n,
-        lr_mult=args.lr_mult,
-        videomae_lr_mult=args.videomae_lr_mult,
+        vit_model_name=args.vit_model,
+        vit_unfreeze_last_n=args.vit_unfreeze_last_n,
         weight_decay=args.weight_decay,
         label_smoothing=args.label_smoothing,
+        lr_mult=args.lr_mult,
+        vit_lr_mult=args.vit_lr_mult,
         scheduler_t0=args.scheduler_t0,
         scheduler_t_mult=args.scheduler_t_mult,
         accumulation_steps=args.accum_steps,
         stroke_loss_weight=args.stroke_loss_weight,
         aug_strength=args.aug,
-        embed_dim=args.embed_dim,
-        depth=args.depth,
-        num_heads=args.num_heads,
-        checkpoint_metric=args.checkpoint_metric,
         registry_experiment=args.registry_experiment,
         use_pose=not args.no_pose,
     )

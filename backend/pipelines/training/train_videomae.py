@@ -10,7 +10,6 @@ VideoMAE (HF) + pose fusion — same training pipeline as train_timesformer.py /
 """
 import os
 import sys
-import json
 import datetime
 import importlib.util
 
@@ -29,6 +28,7 @@ from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.videomae_pose import VideoMAEPoseModel
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_pose_cache_build, tqdm_train_batches
+from core.model_registry import register_training_checkpoint
 
 # Reuse dataset/aug/loss helpers from TimeSformer trainer (same pipeline contract)
 _tf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_timesformer.py")
@@ -69,6 +69,8 @@ def train_videomae(
     accumulation_steps=4,
     stroke_loss_weight=2.0,
     aug_strength="strong",
+    registry_experiment=False,
+    use_pose=True,
 ):
     set_seed(seed)
 
@@ -99,6 +101,7 @@ def train_videomae(
                 "accumulation_steps": accumulation_steps,
                 "stroke_loss_weight": stroke_loss_weight,
                 "aug_strength": aug_strength,
+                "use_pose": use_pose,
                 "script": "train_videomae.py",
             }
         )
@@ -107,7 +110,9 @@ def train_videomae(
         print("Loading dataset...")
         dataset = FineBadmintonDataset(data_root, list_file, transform=train_transform)
 
-        pose_cache, task_classes = _build_pose_cache(dataset, list_file, pose_cache_path, seed=seed)
+        pose_cache, task_classes = _build_pose_cache(
+            dataset, list_file, pose_cache_path, seed=seed, use_pose=use_pose
+        )
         if task_classes is None:
             task_classes = {k: len(v) for k, v in dataset.classes.items()}
             task_classes["quality"] = 7
@@ -155,6 +160,7 @@ def train_videomae(
             num_frames=dataset.sequence_length,
             freeze_backbone=freeze_videomae,
             unfreeze_last_n=videomae_unfreeze_last_n,
+            use_pose=use_pose,
         ).to(device)
 
         if resume_checkpoint and os.path.exists(resume_checkpoint):
@@ -213,7 +219,7 @@ def train_videomae(
         }
         best_acc = 0.0
 
-        print("\nStarting VideoMAE + pose training...")
+        print(f"\nStarting VideoMAE training (use_pose={use_pose})...")
         print(
             f"lr_mult={lr_mult} | videomae_lr_mult={videomae_lr_mult} | aug={aug_strength} | "
             f"stroke_loss_weight={stroke_loss_weight} | "
@@ -234,7 +240,7 @@ def train_videomae(
                 poses = poses.to(device)
                 labels = {k: v.to(device) for k, v in labels.items()}
 
-                logits_dict = model(frames, poses)
+                logits_dict = model(frames, poses if use_pose else None)
                 batch_loss = _multitask_loss(
                     logits_dict, labels, device, criterion_st, criterion_default, loss_weights
                 )
@@ -276,7 +282,7 @@ def train_videomae(
                     frames = _imagenet_norm_video(frames.to(device), device)
                     poses = poses.to(device)
                     labels = {k: v.to(device) for k, v in labels.items()}
-                    logits_dict = model(frames, poses)
+                    logits_dict = model(frames, poses if use_pose else None)
                     vloss = _multitask_loss(
                         logits_dict, labels, device, criterion_st, criterion_default, loss_weights
                     )
@@ -326,27 +332,32 @@ def train_videomae(
                         "hf_model_id": hf_model_id,
                         "freeze_videomae": freeze_videomae,
                         "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
+                        "use_pose": use_pose,
                     },
                     save_path,
                 )
                 print(f"  -> Saved best ({best_acc:.1f}%)")
-                registry_path = os.path.join(os.path.dirname(save_path), "model_registry.json")
-                try:
-                    with open(registry_path, "r") as f:
-                        registry = json.load(f)
-                except (FileNotFoundError, json.JSONDecodeError):
-                    registry = {"models": {}, "active_model": None}
                 name = os.path.basename(save_path)
-                registry["models"][name] = {
-                    "accuracy": round(best_acc, 2),
-                    "epoch": epoch + 1,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "script": "train_videomae.py",
-                    "hf_model_id": hf_model_id,
-                }
-                registry["active_model"] = name
-                with open(registry_path, "w") as f:
-                    json.dump(registry, f, indent=2)
+                register_training_checkpoint(
+                    os.path.dirname(save_path),
+                    category="videomae_pose",
+                    file_basename=name,
+                    meta={
+                        "accuracy": round(best_acc, 2),
+                        "epoch": epoch + 1,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_videomae.py",
+                        "hf_model_id": hf_model_id,
+                        "architecture": "videomae_pose",
+                        "inference": {
+                            "num_frames": model.num_frames,
+                            "freeze_videomae": freeze_videomae,
+                            "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
+                            "use_pose": use_pose,
+                        },
+                    },
+                    experiment=registry_experiment,
+                )
 
             if (epoch + 1) % 10 == 0:
                 torch.save(
@@ -358,6 +369,7 @@ def train_videomae(
                         "hf_model_id": hf_model_id,
                         "freeze_videomae": freeze_videomae,
                         "videomae_unfreeze_last_n": videomae_unfreeze_last_n,
+                        "use_pose": use_pose,
                     },
                     f"{save_path}_epoch_{epoch+1}.pth",
                 )
@@ -397,6 +409,16 @@ if __name__ == "__main__":
     parser.add_argument("--accum-steps", type=int, default=4)
     parser.add_argument("--stroke-loss-weight", type=float, default=2.0)
     parser.add_argument("--aug", type=str, choices=("strong", "medium", "mild"), default="strong")
+    parser.add_argument(
+        "--registry-experiment",
+        action="store_true",
+        help="Append best checkpoint to registry experiments instead of overwriting videomae_pose primary.",
+    )
+    parser.add_argument(
+        "--no-pose",
+        action="store_true",
+        help="VideoMAE only (no MediaPipe fusion); skips pose cache build.",
+    )
 
     args = parser.parse_args()
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -428,4 +450,6 @@ if __name__ == "__main__":
         accumulation_steps=args.accum_steps,
         stroke_loss_weight=args.stroke_loss_weight,
         aug_strength=args.aug,
+        registry_experiment=args.registry_experiment,
+        use_pose=not args.no_pose,
     )
