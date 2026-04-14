@@ -132,6 +132,7 @@ jobs:
             --exclude='*.egg-info/' \
             --exclude='*.ipynb' \
             --exclude='models/*.pth' \
+            --exclude='models/pose_cache_mediapipe.pt' \
             --exclude='models/pose_cache_staeformer.pt' \
             --exclude='core/training_progress.py' \
             --exclude='core/staeformer.py' \

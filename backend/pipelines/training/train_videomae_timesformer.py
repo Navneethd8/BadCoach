@@ -31,10 +31,11 @@ from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 import mlflow
 
 from core.dataset import FineBadmintonDataset
+from core.pose_cache_build import default_pose_cache_path
 from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.videomae_timesformer import VideoMAETimeSformerPoseModel
-from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_pose_cache_build, tqdm_train_batches
+from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
 from core.model_registry import register_training_checkpoint
 
 _tf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_timesformer.py")
@@ -89,7 +90,7 @@ def train_videomae_timesformer(
     if save_path is None:
         save_path = os.path.join(backend_root, "models", "badminton_model_videomae_timesformer.pth")
     if pose_cache_path is None:
-        pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
+        pose_cache_path = default_pose_cache_path(backend_root)
 
     mlflow.set_experiment("IsoCourt_Training_VideoMAE_TimeSformer")
     with mlflow.start_run():

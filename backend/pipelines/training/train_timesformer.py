@@ -2,7 +2,7 @@
 TimeSformer (divided space-time) + MediaPipe pose token training.
 
 Same dataset, video_level_split, augmentations, losses, and sampler as train_staeformer.py.
-Default pose cache path matches STAEformer so MediaPipe runs once if you already cached.
+Default pose cache path is ``models/pose_cache_mediapipe.pt`` (shared across trainers; legacy ``pose_cache_staeformer.pt`` is still read if present).
 
 Train/val indices come only from video_level_split (no random clip leakage). Default visual
 stem is **Conv patch embed** (no ImageNet ViT). Optional ``--backbone vit`` uses timm for
@@ -25,11 +25,16 @@ from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 import mlflow
 from core.dataset import FineBadmintonDataset
+from core.pose_cache_build import (
+    default_pose_cache_path,
+    load_pose_cache_bundle,
+    media_pipe_fill_pose_cache,
+)
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.timesformer import TimeSformerPoseModel
-from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_pose_cache_build, tqdm_train_batches
+from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
 from core.model_registry import register_training_checkpoint
 
 MEAN = [0.485, 0.456, 0.406]
@@ -111,9 +116,8 @@ def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
     if not use_pose:
         print("use_pose=False: skipping MediaPipe; using zero pose tensors for the dataloader.")
         return torch.zeros(n_expected, T, 33, 3), None
-    if os.path.exists(cache_path):
-        print(f"Loading pose cache from {cache_path}...")
-        out = torch.load(cache_path, map_location="cpu", weights_only=False)
+    out = load_pose_cache_bundle(cache_path)
+    if out is not None:
         pose_cache = out["pose_cache"]
         if pose_cache.shape[0] == n_expected:
             return pose_cache, out.get("task_classes")
@@ -132,15 +136,7 @@ def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
         frame_interval=dataset.frame_interval,
     )
 
-    pose_list = []
-    for i in tqdm_pose_cache_build(len(dataset_raw)):
-        frames, _ = dataset_raw[i]
-        with torch.no_grad():
-            p = pose_estimator.extract_tensor_poses(frames)
-        if p.dim() == 2:
-            p = p.view(-1, 33, 3)
-        pose_list.append(p.cpu())
-    pose_cache = torch.stack(pose_list)
+    pose_cache = media_pipe_fill_pose_cache(dataset_raw, pose_estimator)
 
     task_classes = {k: len(v) for k, v in dataset.classes.items()}
     task_classes["quality"] = 7
@@ -192,7 +188,7 @@ def train_timesformer(
         save_path = os.path.join(backend_root, "models", "badminton_model_timesformer.pth")
     if pose_cache_path is None:
         # Share cache with STAEformer training when present
-        pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
+        pose_cache_path = default_pose_cache_path(backend_root)
 
     mlflow.set_experiment("IsoCourt_Training_TimeSformer")
     with mlflow.start_run():
@@ -535,7 +531,7 @@ if __name__ == "__main__":
         "--pose-cache",
         type=str,
         default=None,
-        help="Path to pose .pt cache (default: models/pose_cache_staeformer.pt)",
+        help="Path to pose .pt cache (default: models/pose_cache_mediapipe.pt)",
     )
     parser.add_argument(
         "--max-train-batches",

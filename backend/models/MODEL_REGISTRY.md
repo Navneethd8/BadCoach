@@ -113,7 +113,7 @@ Legacy **v1** flat `models: { "file.pth": { ... } }` plus `active_model` is stil
 
 ## Copy-paste: train every stroke model
 
-Run these from the **repository root** (the folder that contains `backend/`). Each script resolves `backend/data/transformed_combined_rounds_output_en_evals_translated.json` and `backend/data/` on its own. **JPEG contact frames** should already exist under `backend/data/FineBadminton-20K/dataset/image/` (see *FineBadminton-20K layout* above); most trainers also build or reuse `backend/models/pose_cache_staeformer.pt` unless you pass `--no-pose`.
+Run these from the **repository root** (the folder that contains `backend/`). Each script resolves `backend/data/transformed_combined_rounds_output_en_evals_translated.json` and `backend/data/` on its own. **JPEG contact frames** should already exist under `backend/data/FineBadminton-20K/dataset/image/` (see *FineBadminton-20K layout* above); most trainers also build or reuse `backend/models/pose_cache_mediapipe.pt` unless you pass `--no-pose` (legacy `pose_cache_staeformer.pt` in the same folder is still loaded if the new file is absent).
 
 Device is picked automatically (`cuda` → `mps` → `cpu`).
 
@@ -187,7 +187,7 @@ python3 -m api.inference_model_cli promote vit_gcn 0
 
 ## Related assets
 
-- `**pose_cache_staeformer.pt`**: Shared MediaPipe-derived pose tensor cache for many trainers (name is historical).
+- `**pose_cache_mediapipe.pt`**: Shared MediaPipe-derived pose tensor `(N, T, 33, 3)` for trainers that fuse pose. **`pose_cache_staeformer.pt`** in the same directory is a supported legacy filename (auto-loaded when the default is missing).
 - `**pose_landmarker_lite.task`**: MediaPipe task file used by `PoseEstimator`.
 
 VLMs (Qwen, JSONL, etc.) live under `backend/pipelines/vlm/` and are **not** entries in this stroke registry.

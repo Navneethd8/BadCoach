@@ -23,6 +23,7 @@ import mlflow
 
 from core.conv3d_pose import Conv3DPoseMultitaskModel, backbone_parameter_groups
 from core.dataset import FineBadmintonDataset
+from core.pose_cache_build import default_pose_cache_path
 from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
@@ -78,7 +79,7 @@ def train_conv3d(
     if save_path is None:
         save_path = os.path.join(backend_root, "models", "badminton_model_conv3d_pose.pth")
     if pose_cache_path is None:
-        pose_cache_path = os.path.join(backend_root, "models", "pose_cache_staeformer.pt")
+        pose_cache_path = default_pose_cache_path(backend_root)
 
     mlflow.set_experiment("IsoCourt_Training_Conv3D_Pose")
     with mlflow.start_run():

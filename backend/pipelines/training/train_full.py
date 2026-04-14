@@ -14,7 +14,12 @@ from torchvision.transforms import v2
 import mlflow
 import mlflow.pytorch
 from core.dataset import FineBadmintonDataset
-from core.training_progress import tqdm_pose_cache_build, tqdm_train_batches
+from core.pose_cache_build import (
+    default_pose_cache_path,
+    load_pose_cache_bundle,
+    media_pipe_fill_pose_cache,
+)
+from core.training_progress import tqdm_train_batches
 from core.model import CNN_LSTM_Model
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
@@ -47,9 +52,8 @@ def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
     if not use_pose:
         print("use_pose=False: skipping MediaPipe; using zero pose tensors for the dataloader.")
         return torch.zeros(n_expected, T, 33, 3)
-    if os.path.exists(cache_path):
-        print(f"Loading pose cache from {cache_path}...")
-        out = torch.load(cache_path, map_location="cpu", weights_only=False)
+    out = load_pose_cache_bundle(cache_path)
+    if out is not None:
         pose_cache = out["pose_cache"]
         if pose_cache.shape[0] == n_expected:
             return pose_cache
@@ -68,15 +72,7 @@ def _build_pose_cache(dataset, list_file, cache_path, seed=42, use_pose=True):
         frame_interval=dataset.frame_interval,
     )
 
-    pose_list = []
-    for i in tqdm_pose_cache_build(len(dataset_raw)):
-        frames, _ = dataset_raw[i]
-        with torch.no_grad():
-            p = pose_estimator.extract_tensor_poses(frames)  # (T, 99)
-        if p.dim() == 2:
-            p = p.view(-1, 33, 3)
-        pose_list.append(p.cpu())
-    pose_cache = torch.stack(pose_list)
+    pose_cache = media_pipe_fill_pose_cache(dataset_raw, pose_estimator)
 
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     torch.save({"pose_cache": pose_cache}, cache_path)
@@ -106,7 +102,7 @@ def train_full(
     if save_path is None:
         save_path = os.path.join(_backend_root, "models", "badminton_model.pth")
     if pose_cache_path is None:
-        pose_cache_path = os.path.join(_backend_root, "models", "pose_cache_staeformer.pt")
+        pose_cache_path = default_pose_cache_path(_backend_root)
 
     # Set up MLFlow tracking
     mlflow.set_experiment("IsoCourt_Training_Full")
