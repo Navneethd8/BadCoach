@@ -24,7 +24,7 @@ import torch
 
 DATA_ROOT = os.path.join(_BACKEND, "data")
 LIST_FILE = os.path.join(_BACKEND, "data", "transformed_combined_rounds_output_en_evals_translated.json")
-POSE_CACHE = os.path.join(_BACKEND, "models", "pose_cache_staeformer.pt")
+POSE_CACHE = os.path.join(_BACKEND, "models", "pose_cache_mediapipe.pt")
 
 DEVICE = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
 
