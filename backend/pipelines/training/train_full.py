@@ -326,10 +326,39 @@ if __name__ == "__main__":
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
-    data_root = os.path.join(backend_root, "data")
-    list_file = os.path.join(backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json")
+    default_data_root = os.path.join(backend_root, "data")
+    default_list_file = os.path.join(
+        backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json"
+    )
 
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-root",
+        default=None,
+        help="Dataset root (contains videos/ or FineBadminton-20K/videos/). Default: backend/data.",
+    )
+    parser.add_argument(
+        "--list-file",
+        default=None,
+        help="Annotations JSON. Default: backend/data/transformed_combined_rounds_output_en_evals_translated.json",
+    )
+    parser.add_argument(
+        "--pose-cache-path",
+        default=None,
+        help="Pose cache .pt for this list (e.g. from smoke bundle). Default: models/pose_cache_mediapipe.pt",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=60,
+        help="Training epochs (use 1 for smoke tests).",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=4,
+        help="Train/val batch size.",
+    )
     parser.add_argument(
         "--registry-experiment",
         action="store_true",
@@ -342,14 +371,19 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    data_root = args.data_root if args.data_root is not None else default_data_root
+    list_file = args.list_file if args.list_file is not None else default_list_file
+
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
 
     train_full(
         data_root=data_root,
         list_file=list_file,
-        epochs=60,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
         device=device,
+        pose_cache_path=args.pose_cache_path,
         registry_experiment=args.registry_experiment,
         use_pose=not args.no_pose,
         # resume_checkpoint=os.path.join(backend_root, "models", "badminton_model.pth_epoch_60.pth"),
