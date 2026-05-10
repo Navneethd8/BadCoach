@@ -6,6 +6,7 @@ Same I/O contract as TimeSformerPoseModel: forward(frames, joint_seq) with joint
 """
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import torch
@@ -32,6 +33,17 @@ MEDIAPIPE_BODY_EDGES: List[Tuple[int, int]] = [
     (27, 31),
     (28, 32),
 ]
+
+
+def default_vit_gcn_checkpoint_path(backend_root: str, use_pose: bool = True) -> str:
+    """
+    Default trainer checkpoint path for ViT+GCN.
+
+    Pose and ViT-only ablation arms use different filenames so runs do not overwrite
+    each other (see ``train_vit_gcn.py --no-pose``).
+    """
+    name = "badminton_model_vit_gcn.pth" if use_pose else "badminton_model_vit_gcn_vit_only.pth"
+    return os.path.join(os.path.abspath(backend_root), "models", name)
 
 
 def _symmetric_normalized_adjacency(

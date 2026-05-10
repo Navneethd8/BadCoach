@@ -35,12 +35,14 @@ def tqdm_train_batches(loader: Iterable[Any], epoch_one_based: int, total_epochs
     return tqdm(loader, **opts)
 
 
-def tqdm_pose_cache_build(length: int, **kwargs: Any) -> tqdm:
-    """Iterate ``range(length)`` while building pose cache over the full annotated dataset."""
+def tqdm_pose_cache_build(length: int, start: int = 0, **kwargs: Any) -> tqdm:
+    """Iterate ``range(start, length)`` while building pose cache (supports resume ``start``)."""
     opts = {
         "desc": "Pose cache (full dataset)",
         "bar_format": _POSE_BAR,
         "unit": "sample",
+        "initial": start,
+        "total": length,
     }
     opts.update(kwargs)
-    return tqdm(range(length), **opts)
+    return tqdm(range(start, length), **opts)

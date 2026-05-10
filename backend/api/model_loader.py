@@ -31,6 +31,7 @@ ARCH_TIMESFORMER = "timesformer"
 ARCH_VIDEOMAE_POSE = "videomae_pose"
 ARCH_VIDEOMAE_TIMESFORMER = "videomae_timesformer"
 ARCH_STAE = "staeformer"
+ARCH_ST_TR = "st_tr"
 ARCH_VIT_GCN = "vit_gcn"
 
 _SCRIPT_TO_ARCH = {
@@ -40,6 +41,7 @@ _SCRIPT_TO_ARCH = {
     "train_videomae.py": ARCH_VIDEOMAE_POSE,
     "train_videomae_timesformer.py": ARCH_VIDEOMAE_TIMESFORMER,
     "train_staeformer.py": ARCH_STAE,
+    "train_st_tr.py": ARCH_ST_TR,
     "train_vit_gcn.py": ARCH_VIT_GCN,
 }
 
@@ -80,6 +82,8 @@ def resolve_architecture(
         return ARCH_VIDEOMAE_POSE
     if "conv3d" in fn:
         return ARCH_CONV3D_POSE
+    if "st_tr" in fn or "sttr" in fn:
+        return ARCH_ST_TR
     if "timesformer" in fn:
         return ARCH_TIMESFORMER
     if "staeformer" in fn and "timesformer" not in fn:
@@ -111,6 +115,12 @@ def build_model(
             "Use `python -m api.inference_model_cli set <category>` with a non-staeformer category."
         )
 
+    if arch == ARCH_ST_TR:
+        raise RuntimeError(
+            "ST-TR checkpoints are not supported by the /analyze API (pose-only model). "
+            "Use `python -m api.inference_model_cli set <category>` with a supported category."
+        )
+
     if arch == ARCH_CNN_LSTM:
         hidden = int(_i("hidden_size", registry_meta.get("hidden_size", 128)))
         use_pose = bool(_i("use_pose", False))
@@ -123,7 +133,7 @@ def build_model(
             task_classes=task_classes,
             num_frames=int(_i("num_frames", 16)),
             video_backbone=str(_i("video_backbone", "r2plus1d_18")),
-            spatial_size=int(_i("spatial_size", 112)),
+            spatial_size=int(_i("spatial_size", 224)),
             pretrained=bool(_i("pretrained", True)),
             freeze_backbone=bool(_i("freeze_3d", True)),
             unfreeze_layer4=bool(_i("unfreeze_layer4", True)),

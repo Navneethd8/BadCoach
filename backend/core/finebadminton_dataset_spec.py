@@ -1,10 +1,15 @@
 """
 Canonical FineBadminton-20K layout for training metadata and API inference.
 
-``prepare_finebadminton_20k.py`` writes merged labels under ``backend/data/`` and
-expects videos under ``backend/data/FineBadminton-20K/videos/``. JPEGs for training
-live under ``backend/data/FineBadminton-20K/dataset/image/`` (contact frames by default;
-``--extract-all-frames`` fills every frame index per video).
+The Hub prep script is ``backend/pipelines/vlm/common/prepare_finebadminton_20k.py``
+(layout only; it is the canonical FineBadminton-20K download + flatten + JPEGs for
+``train_full`` / ``FineBadmintonDataset``, not VLM-only). It writes merged labels
+under ``backend/data/`` and expects videos under ``backend/data/FineBadminton-20K/videos/``.
+For training throughput, run ``--extract-training-frames`` (optionally
+``--extract-sequence-length T`` to match ``train_full.py --sequence-length``) so
+``FineBadminton-20K/dataset/image/`` holds ``{video_stem}_{frame}.jpg`` on the
+``np.linspace`` indices ``FineBadmintonDataset`` uses. Contact-only JPEGs use
+``--extract-frames``; full raster uses ``--extract-all-frames``.
 """
 from __future__ import annotations
 

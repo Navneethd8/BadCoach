@@ -28,6 +28,7 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
     "staeformer",
+    "st_tr",
     "timesformer",
     "videomae_pose",
     "videomae_timesformer",
@@ -39,6 +40,7 @@ CATEGORY_GROUPS: Dict[str, str] = {
     "cnn_lstm": "cnn",
     "conv3d_pose": "video_cnn",
     "staeformer": "graph",
+    "st_tr": "graph",
     "vit_gcn": "graph",
     "timesformer": "video_transformer",
     "videomae_pose": "video_transformer",
@@ -49,6 +51,7 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_full.py": "cnn_lstm",
     "train_conv3d.py": "conv3d_pose",
     "train_staeformer.py": "staeformer",
+    "train_st_tr.py": "st_tr",
     "train_timesformer.py": "timesformer",
     "train_videomae.py": "videomae_pose",
     "train_videomae_timesformer.py": "videomae_timesformer",
@@ -63,6 +66,7 @@ DEFAULT_CATEGORY_FALLBACK_ORDER: Tuple[str, ...] = (
     "conv3d_pose",
     "videomae_pose",
     "vit_gcn",
+    "st_tr",
     "staeformer",
 )
 
@@ -106,6 +110,8 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
         return "timesformer"
     if "vit_gcn" in fn or "vitgcn" in fn:
         return "vit_gcn"
+    if "st_tr" in fn or "sttr" in fn:
+        return "st_tr"
     if "staeformer" in fn:
         return "staeformer"
     return "cnn_lstm"

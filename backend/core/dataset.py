@@ -3,9 +3,24 @@ import torch
 import cv2
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from torch.utils.data import Dataset
 from typing import List, Tuple, Dict, Any, Optional
 from collections import Counter
+
+
+def default_training_jpeg_dir(data_root: str) -> Optional[str]:
+    """
+    Directory where ``prepare_finebadminton_20k.py --extract-training-frames`` writes
+    ``{video_stem}_{frame_index}.jpg`` (same linspace as training). First existing path wins.
+    """
+    for rel in (
+        os.path.join(data_root, "FineBadminton-20K", "dataset", "image"),
+        os.path.join(data_root, "dataset", "image"),
+    ):
+        if os.path.isdir(rel):
+            return rel
+    return None
 
 
 def get_class_weights(
@@ -76,12 +91,32 @@ class FineBadmintonDataset(Dataset):
     - intent (Strategy/Tactics)
     - quality (Execution Score)
     """
-    def __init__(self, data_root: str, list_file: str, transform=None, sequence_length: int = 16, frame_interval: int = 2):
+    def __init__(
+        self,
+        data_root: str,
+        list_file: str,
+        transform=None,
+        sequence_length: int = 16,
+        frame_interval: int = 2,
+        image_dir: Optional[str] = None,
+        prefer_video: bool = False,
+    ):
         self.data_root = data_root
         self.transform = transform
         self.sequence_length = sequence_length
         self.frame_interval = frame_interval
-        
+        self.prefer_video = prefer_video
+        if prefer_video:
+            self.image_dir: Optional[str] = None
+        elif image_dir is not None:
+            self.image_dir = image_dir if os.path.isdir(image_dir) else None
+        else:
+            self.image_dir = default_training_jpeg_dir(data_root)
+
+        # Per-dataset (per DataLoader process) open captures — not a class var, so
+        # multiprocess workers do not share broken fd state across processes.
+        self._video_caps: dict = {}
+
         # Define Class Mappings
         self.classes = {
             "stroke_type": [
@@ -242,7 +277,9 @@ class FineBadmintonDataset(Dataset):
         labels_dict = self._map_labels(sample)
 
         frames = self._load_frames(
-            sample['video_path'], sample['start_frame'], sample['end_frame'],
+            sample['video_path'],
+            sample['start_frame'],
+            sample['end_frame'],
         )
 
         if self.transform:
@@ -259,18 +296,47 @@ class FineBadmintonDataset(Dataset):
     # Frame loading: decode directly from source .mp4 via cv2
     # ------------------------------------------------------------------
 
-    _open_caps: Dict[str, Any] = {}
-
     def _get_cap(self, video_path: str):
         """Return an open cv2.VideoCapture, reusing across calls for the same file."""
-        if video_path not in FineBadmintonDataset._open_caps:
+        if video_path not in self._video_caps:
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 return None
-            FineBadmintonDataset._open_caps[video_path] = cap
-        return FineBadmintonDataset._open_caps[video_path]
+            self._video_caps[video_path] = cap
+        return self._video_caps[video_path]
 
     def _load_frames(
+        self, video_path: str, start_frame: int, end_frame: int,
+    ) -> List[torch.Tensor]:
+        """Sample sequence_length evenly-spaced frames (JPEG cache or MP4 decode)."""
+        if self.image_dir is not None:
+            return self._load_frames_from_jpeg(video_path, start_frame, end_frame)
+        return self._load_frames_from_video(video_path, start_frame, end_frame)
+
+    def _load_frames_from_jpeg(
+        self, video_path: str, start_frame: int, end_frame: int,
+    ) -> List[torch.Tensor]:
+        """Same frame indices as ``extract_training_frames`` / video path (linspace)."""
+        blank = [torch.zeros((3, 224, 224)) for _ in range(self.sequence_length)]
+        duration = end_frame - start_frame
+        if duration <= 0:
+            return blank
+        assert self.image_dir is not None
+        stem = Path(video_path).stem
+        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
+        frames: List[torch.Tensor] = []
+        for idx in indices:
+            fp = os.path.join(self.image_dir, f"{stem}_{int(idx)}.jpg")
+            bgr = cv2.imread(fp, cv2.IMREAD_COLOR)
+            if bgr is None or bgr.size == 0:
+                frames.append(torch.zeros((3, 224, 224)))
+                continue
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            rgb = cv2.resize(rgb, (224, 224))
+            frames.append(torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0)
+        return frames
+
+    def _load_frames_from_video(
         self, video_path: str, start_frame: int, end_frame: int,
     ) -> List[torch.Tensor]:
         """Sample sequence_length evenly-spaced frames from the video clip."""

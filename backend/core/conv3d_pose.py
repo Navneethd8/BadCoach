@@ -62,8 +62,9 @@ class Conv3DPoseMultitaskModel(nn.Module):
 
     ``forward`` expects the same layout as other IsoCourt video models:
     ``frames`` ``(B,T,3,H,W)`` ImageNet-normalized; ``joint_seq`` ``(B,T,33,3)``.
-    Internally resizes spatially to ``spatial_size`` (default **112**) before the 3D trunk
-    so Kinetics400 pretrained weights apply cleanly while the dataset can stay at 224.
+    Internally resizes spatially to ``spatial_size`` (default **224**) so RGB matches
+    ``FineBadmintonDataset`` / ResNet50 / TimeSformer / VideoMAE (all 224²). Kinetics
+    weights still load; spatial stride stacks tolerate 224 before global pooling.
     """
 
     def __init__(
@@ -71,7 +72,7 @@ class Conv3DPoseMultitaskModel(nn.Module):
         task_classes: Dict[str, int],
         num_frames: int = 16,
         video_backbone: str = "r2plus1d_18",
-        spatial_size: int = 112,
+        spatial_size: int = 224,
         pretrained: bool = True,
         freeze_backbone: bool = True,
         unfreeze_layer4: bool = True,
