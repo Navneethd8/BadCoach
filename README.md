@@ -32,6 +32,28 @@ The raw data from the model (e.g., "Backhand Clear, Mid-Back, Quality 4/7") is s
 
 ---
 
+## EC2 GPU training (quick copy-paste)
+
+Use this for **`scripts/ec2/rsync_push.sh`** / **`scripts/ec2/rsync_pull.sh`**: create **`scripts/ec2.env`** at the repo root (that file is gitignored). Example:
+
+```bash
+EC2_HOST=ec2-user@54.202.106.114
+KEY_FILE=scripts/navneeth-keys.pem
+```
+
+Use an absolute path for `KEY_FILE` if you prefer (e.g. where your `.pem` actually lives). Then from the repo root:
+
+```bash
+./scripts/ec2/rsync_push.sh
+./scripts/ec2/rsync_pull.sh
+```
+
+Full flow (bootstrap, tmux, excludes): **[`scripts/ec2/README.md`](scripts/ec2/README.md)**. On a **fresh Ubuntu** GPU instance, install the NVIDIA stack and reboot once with **[`scripts/ec2/install_nvidia_driver_reboot.sh`](scripts/ec2/install_nvidia_driver_reboot.sh)** before `bootstrap_ec2.sh`.
+
+If this repository is public or shared, treat the host and key path as sensitive and prefer placeholders in committed docs.
+
+---
+
 ## 🧠 Deep Learning Engine (Architecture V2)
 
 The core movement analysis is powered by a **CNN-LSTM Hierarchical Model** optimized for temporal badminton actions.
