@@ -34,6 +34,7 @@ wheels/
 *.egg
 
 # Caches
+.hf_hub/
 .pytest_cache/
 .mypy_cache/
 .coverage
@@ -63,6 +64,13 @@ backend/models/*_epoch_*.pth
 backend/models/feature_cache_mtl.pt
 backend/models/badminton_model_fast.pth
 
-
-backend.zip
+# Temp / build artifacts
+.tmp_mpl/
 backend_vlm_colab.zip
+backend.zip
+
+# SSH keys (never commit)
+scripts/*.pem
+# Optional local env (not required for the repo)
+scripts/ec2.env
+logs/.isocourt_tmux_inner.sh
