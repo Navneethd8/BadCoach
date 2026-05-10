@@ -3,23 +3,135 @@
   "models": {
     "architectures": {
       "cnn_lstm": {
-        "primary": null,
+        "primary": {
+          "accuracy": 68.71,
+          "epoch": 43,
+          "hidden_size": 128,
+          "timestamp": "2026-05-09T03:35:26.783848",
+          "script": "train_full.py",
+          "architecture": "cnn_lstm",
+          "inference": {
+            "use_pose": false,
+            "hidden_size": 128,
+            "sequence_length": 16
+          },
+          "file": "badminton_model.pth",
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          },
+          "experiment": false
+        },
         "registrations": []
       },
       "conv3d_pose": {
-        "primary": null,
+        "primary": {
+          "accuracy": 71.31,
+          "epoch": 38,
+          "timestamp": "2026-04-29T18:50:11.600653",
+          "script": "train_conv3d.py",
+          "architecture": "conv3d_pose",
+          "inference": {
+            "num_frames": 16,
+            "video_backbone": "r2plus1d_18",
+            "spatial_size": 112,
+            "pretrained": true,
+            "freeze_3d": true,
+            "unfreeze_layer4": true,
+            "use_pose": true
+          },
+          "file": "badminton_model_conv3d_pose.pth",
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          },
+          "experiment": false
+        },
         "registrations": []
       },
       "staeformer": {
         "primary": null,
         "registrations": []
       },
+      "st_tr": {
+        "primary": {
+          "accuracy": 10.83,
+          "epoch": 7,
+          "timestamp": "2026-05-07T02:38:39.702918",
+          "script": "train_st_tr.py",
+          "architecture": "st_tr",
+          "fusion": "concat",
+          "file": "badminton_model_st_tr.pth",
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          },
+          "experiment": false
+        },
+        "registrations": []
+      },
       "timesformer": {
-        "primary": null,
+        "primary": {
+          "accuracy": 53.49,
+          "epoch": 56,
+          "timestamp": "2026-05-06T14:05:39.763263",
+          "script": "train_timesformer.py",
+          "architecture": "timesformer",
+          "inference": {
+            "embed_dim": 128,
+            "depth": 4,
+            "num_heads": 4,
+            "num_frames": 16,
+            "backbone": "scratch",
+            "vit_model_name": "vit_small_patch16_224",
+            "vit_unfreeze_last_n": 0,
+            "use_pose": true
+          },
+          "file": "badminton_model_timesformer.pth",
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          },
+          "experiment": false
+        },
         "registrations": []
       },
       "videomae_pose": {
-        "primary": null,
+        "primary": {
+          "accuracy": 24.17,
+          "epoch": 1,
+          "timestamp": "2026-05-01T02:45:19.344251",
+          "script": "train_videomae.py",
+          "hf_model_id": "MCG-NJU/videomae-base",
+          "architecture": "videomae_pose",
+          "inference": {
+            "num_frames": 16,
+            "freeze_videomae": true,
+            "videomae_unfreeze_last_n": 0,
+            "use_pose": true
+          },
+          "file": "badminton_model_videomae.pth",
+          "dataset": {
+            "id": "finebadminton_20k",
+            "source": "Moujuruo/Finebadminton-20K",
+            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
+            "data_root_relative": "data/FineBadminton-20K/videos",
+            "frames": "uniform_16_in_hit_span"
+          },
+          "experiment": false
+        },
         "registrations": []
       },
       "videomae_timesformer": {

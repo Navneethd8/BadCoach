@@ -24,13 +24,14 @@ These are the **only** valid keys under `models.architectures.`* and for `infere
 | `cnn_lstm`             | cnn               | `pipelines/training/train_full.py`                 | `core/model.py` (`CNN_LSTM_Model`) | ResNet50 frame features + LSTM; pose optional via cache.                                                                            |
 | `conv3d_pose`          | video_cnn         | `pipelines/training/train_conv3d.py`               | `core/conv3d_pose.py`              | Torchvision R(2+1)D / R3D / MC3 + late-fused MediaPipe joints; optional Grad-CAM on `layer4`.                                       |
 | `staeformer`           | graph             | `pipelines/training/train_staeformer.py`           | `core/staeformer.py`               | Spatio-temporal transformer on pose (+ optional CNN node). **Not supported** by `/analyze` (needs per-frame CNN features in-graph). |
+| `st_tr`                | graph             | `pipelines/training/train_st_tr.py`                | `core/st_tr.py` (`STTRModel`)      | ST-TR dual transformer on MediaPipe pose. **Not supported** by `/analyze` (pose-only).                                              |
 | `timesformer`          | video_transformer | `pipelines/training/train_timesformer.py`          | `core/timesformer.py`              | Divided space–time attention + pose tokens; ViT-style stem when `backbone=vit`.                                                     |
 | `videomae_pose`        | video_transformer | `pipelines/training/train_videomae.py`             | `core/videomae_pose.py`            | Hugging Face VideoMAE encoder + pose fusion (pooled tokens).                                                                        |
 | `videomae_timesformer` | hybrid            | `pipelines/training/train_videomae_timesformer.py` | `core/videomae_timesformer.py`     | VideoMAE tokens + divided ST stack + pose.                                                                                          |
 | `vit_gcn`              | graph             | `pipelines/training/train_vit_gcn.py`              | `core/vit_gcn.py`                  | Per-frame timm ViT CLS + fixed skeleton GCN on MediaPipe joints.                                                                    |
 
 
-**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `staeformer`, `timesformer`, `videomae_pose`, `videomae_timesformer`, `vit_gcn`.
+**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `staeformer`, `st_tr`, `timesformer`, `videomae_pose`, `videomae_timesformer`, `vit_gcn`.
 
 ---
 
@@ -130,7 +131,7 @@ python backend/pipelines/training/train_full.py
 
 # --- conv3d_pose (R(2+1)D / R3D / MC3 + pose, default: badminton_model_conv3d_pose.pth) ---
 python backend/pipelines/training/train_conv3d.py
-# python backend/pipelines/training/train_conv3d.py --epochs 60 --batch-size 4 --video-backbone r2plus1d_18 --spatial-size 112 --aug strong --no-pose
+# python backend/pipelines/training/train_conv3d.py --epochs 60 --batch-size 4 --video-backbone r2plus1d_18 --spatial-size 224 --aug strong --no-pose
 
 # --- staeformer (default: badminton_model_staeformer.pth) ---
 python backend/pipelines/training/train_staeformer.py
@@ -138,6 +139,9 @@ python backend/pipelines/training/train_staeformer.py
 # python backend/pipelines/training/train_staeformer.py --pose-only
 # CNN path but no MediaPipe joints:
 # python backend/pipelines/training/train_staeformer.py --no-pose
+
+# --- st_tr (ST-TR pose dual-stream; default: badminton_model_st_tr.pth; not for /analyze API) ---
+python backend/pipelines/training/train_st_tr.py
 
 # --- timesformer (divided ST + pose; default: badminton_model_timesformer.pth) ---
 python backend/pipelines/training/train_timesformer.py
