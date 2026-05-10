@@ -2,7 +2,12 @@
 import pytest
 import torch
 
-from core.vit_gcn import ViTGCNMultitaskModel, _symmetric_normalized_adjacency, MEDIAPIPE_BODY_EDGES
+from core.vit_gcn import (
+    ViTGCNMultitaskModel,
+    _symmetric_normalized_adjacency,
+    MEDIAPIPE_BODY_EDGES,
+    default_vit_gcn_checkpoint_path,
+)
 
 
 # Matches train_vit_gcn / train_timesformer task head set (stroke_subtype omitted)
@@ -71,3 +76,11 @@ class TestViTGCN:
         assert adj.shape == (33, 33)
         assert torch.allclose(adj, adj.t())
         assert (adj.diagonal() > 0).all()
+
+    def test_default_checkpoint_paths_differ_for_ablation(self):
+        root = "/tmp/isocourt_backend"
+        p_pose = default_vit_gcn_checkpoint_path(root, use_pose=True)
+        p_nopose = default_vit_gcn_checkpoint_path(root, use_pose=False)
+        assert p_pose.endswith("badminton_model_vit_gcn.pth")
+        assert p_nopose.endswith("badminton_model_vit_gcn_vit_only.pth")
+        assert p_pose != p_nopose

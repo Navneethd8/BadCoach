@@ -21,7 +21,7 @@ def test_forward_with_pose():
         TASK_CLASSES,
         num_frames=16,
         video_backbone="r2plus1d_18",
-        spatial_size=112,
+        spatial_size=224,
         pretrained=False,
         freeze_backbone=False,
         use_pose=True,

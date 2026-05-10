@@ -11,6 +11,8 @@ pytest-asyncio
 httpx
 requests
 mediapipe
+positional-encodings
+torchinfo
 google-genai
 python-dotenv
 cachetools
