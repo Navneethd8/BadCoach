@@ -5,6 +5,10 @@ Matches train_timesformer.py: same dataset, video_level_split, augmentations, mu
 losses (stroke_type weighted), sampler, and val stroke_type accuracy for checkpointing.
 Reuses the shared default pose cache (``pose_cache_mediapipe.pt``) so MediaPipe runs once across trainers.
 
+Pose vs ViT-only ablation (same splits/hyperparams; checkpoint names differ):
+  python train_vit_gcn.py --seed 42
+  python train_vit_gcn.py --seed 42 --no-pose
+
 Default ViT is ``vit_tiny_patch16_224`` (faster per epoch than ``vit_small_patch16_224``). Pass
 ``--vit-model vit_small_patch16_224`` to align with TimeSformer’s default backbone.
 """
@@ -31,7 +35,7 @@ from core.pose_cache_build import (
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
-from core.vit_gcn import ViTGCNMultitaskModel
+from core.vit_gcn import ViTGCNMultitaskModel, default_vit_gcn_checkpoint_path
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
 from core.model_registry import register_training_checkpoint
 
@@ -179,12 +183,15 @@ def train_vit_gcn(
     _dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(backend_root, "models", "badminton_model_vit_gcn.pth")
+        save_path = default_vit_gcn_checkpoint_path(backend_root, use_pose)
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
 
     mlflow.set_experiment("IsoCourt_Training_ViT_GCN")
-    with mlflow.start_run():
+    run_name = f"vit_gcn_{'mediapipe_pose' if use_pose else 'vit_only'}"
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tag("vit_gcn_variant", "mediapipe_gcn" if use_pose else "vit_only")
+        mlflow.set_tag("ablation_arm", "pose" if use_pose else "no_pose")
         mlflow.log_params(
             {
                 "epochs": epochs,
@@ -325,7 +332,10 @@ def train_vit_gcn(
         }
         best_acc = 0.0
 
-        print(f"\nStarting ViT + {'GCN + ' if use_pose else ''}multitask training (use_pose={use_pose})...")
+        print(
+            f"\nStarting ViT + {'GCN (MediaPipe) + ' if use_pose else ''}multitask training "
+            f"(use_pose={use_pose}) | checkpoint: {save_path}"
+        )
         print(
             f"lr_mult={lr_mult} | vit_lr_mult={vit_lr_mult} | aug={aug_strength} | "
             f"stroke_loss_weight={stroke_loss_weight} | "
@@ -500,7 +510,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Same data and metrics as train_timesformer.py; compares ViT+GCN fusion.",
+        epilog=(
+            "Pose ablation: run twice with the same --seed — default checkpoint for "
+            "--no-pose is badminton_model_vit_gcn_vit_only.pth (see core.vit_gcn.default_vit_gcn_checkpoint_path)."
+        ),
     )
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument(
@@ -570,6 +583,20 @@ if __name__ == "__main__":
         action="store_true",
         help="ViT-only (no skeleton GCN); skips MediaPipe cache build.",
     )
+    parser.add_argument(
+        "--save-path",
+        type=str,
+        default=None,
+        help="Checkpoint path (.pth). Default: models/badminton_model_vit_gcn.pth (pose) or "
+        "badminton_model_vit_gcn_vit_only.pth (--no-pose).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Reproducibility (dataset shuffle, sampler, transforms where applicable). "
+        "Use the same seed for paired pose vs --no-pose runs.",
+    )
     args = parser.parse_args()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -580,9 +607,10 @@ if __name__ == "__main__":
     )
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
+    use_pose = not args.no_pose
     resume = args.resume_checkpoint
     if resume is None and args.start_epoch > 0:
-        resume = os.path.join(backend_root, "models", "badminton_model_vit_gcn.pth")
+        resume = default_vit_gcn_checkpoint_path(backend_root, use_pose)
         print(f"--start-epoch {args.start_epoch} without --resume-checkpoint: defaulting to {resume}")
     if args.start_epoch > 0:
         if not resume or not os.path.isfile(resume):
@@ -595,8 +623,10 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         lr=args.lr,
         device=device,
+        save_path=args.save_path,
         resume_checkpoint=resume,
         start_epoch=args.start_epoch,
+        seed=args.seed,
         pose_cache_path=args.pose_cache,
         embed_dim=args.embed_dim,
         gcn_layers=args.gcn_layers,
@@ -613,5 +643,5 @@ if __name__ == "__main__":
         stroke_loss_weight=args.stroke_loss_weight,
         aug_strength=args.aug,
         registry_experiment=args.registry_experiment,
-        use_pose=not args.no_pose,
+        use_pose=use_pose,
     )

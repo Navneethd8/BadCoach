@@ -56,7 +56,7 @@ def train_conv3d(
     seed=42,
     max_train_batches=None,
     video_backbone="r2plus1d_18",
-    spatial_size=112,
+    spatial_size=224,
     pretrained=True,
     freeze_3d=True,
     unfreeze_layer4=True,
@@ -396,7 +396,12 @@ if __name__ == "__main__":
         choices=("r2plus1d_18", "r3d_18", "mc3_18"),
         help="torchvision.models.video Kinetics400-pretrained trunk (default: R(2+1)D-18).",
     )
-    parser.add_argument("--spatial-size", type=int, default=112, help="Square spatial size fed to 3D CNN")
+    parser.add_argument(
+        "--spatial-size",
+        type=int,
+        default=224,
+        help="Square spatial size fed to 3D CNN (default 224 to match ResNet/TimeSformer/dataset)",
+    )
     parser.add_argument(
         "--no-pretrained",
         action="store_true",

@@ -109,7 +109,7 @@ class JsonlConversationDataset(Dataset):
     Lazy-loads images on ``__getitem__`` so the full train set is not held in RAM.
 
     Eagerly materializing hundreds of HD PIL images (plus optional MediaPipe upscales)
-    commonly exhausts Colab CPU RAM before the first step.
+    commonly exhausts host RAM before the first step.
     """
 
     def __init__(

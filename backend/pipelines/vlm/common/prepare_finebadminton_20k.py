@@ -2,9 +2,16 @@
 """
 Download Moujuruo/Finebadminton-20K from Hugging Face Hub, flatten annotations to the
 same JSON shape as transformed_combined_rounds_output_en_evals_translated.json, and
-optionally extract JPEGs for VLM / IsoCourt training:
+optionally extract JPEGs for the **shared** 20K snapshot.
+
+Primary consumer for IsoCourt (non-VLM) is ``FineBadmintonDataset`` + ``train_full.py``:
+use ``--extract-training-frames`` and ``--extract-sequence-length T`` matching
+``--sequence-length`` (defaults: 16 frames *per hit* via ``np.linspace`` in each
+``[start_frame, end_frame)``). A separate VLM path may build a JSONL from the same
+labels (see this folder). Extraction modes:
+
   ``--extract-frames`` = one JPEG per stroke at ``hit_frame``;
-  ``--extract-all-frames`` = every decoded frame for each video (very large).
+  ``--extract-all-frames`` = every decoded frame for each full video (very large).
 
 Dataset: https://huggingface.co/datasets/Moujuruo/Finebadminton-20K
 
@@ -12,6 +19,8 @@ Typical usage (from repo):
 
   pip install huggingface_hub opencv-python-headless
   python backend/pipelines/vlm/common/prepare_finebadminton_20k.py
+  python backend/pipelines/vlm/common/prepare_finebadminton_20k.py --skip-download --extract-training-frames
+  # T defaults to 16; set --extract-sequence-length to match train_full --sequence-length.
   python backend/pipelines/vlm/common/prepare_finebadminton_20k.py --extract-frames
   python backend/pipelines/vlm/common/build_finebadminton_jsonl.py
 
@@ -166,12 +175,17 @@ def extract_training_frames(
     *,
     sequence_length: int = 16,
     jpeg_quality: int = 92,
+    overwrite_existing: bool = False,
 ) -> tuple[int, int]:
     """Extract exactly the frames that FineBadmintonDataset samples during training.
 
     For each hit, np.linspace(start_frame, end_frame-1, sequence_length) gives
     the frame indices. Only these are decoded and written as JPEGs, keeping disk
     usage manageable (~326 K frames for 20K hits with T=16).
+
+    Match ``sequence_length`` to the value you pass to training (``--sequence-length``).
+    A run with T=16 includes all linspace frames needed for any smaller T (e.g. T=4)
+    on the same hits; a T=4-only extract is smaller on disk but only valid for T<=4.
     """
     try:
         import cv2  # type: ignore
@@ -223,7 +237,7 @@ def extract_training_frames(
             continue
         for idx in sorted(frame_set):
             out_path = image_dir / f"{stem}_{idx}.jpg"
-            if out_path.is_file():
+            if out_path.is_file() and not overwrite_existing:
                 written += 1
                 continue
             cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
@@ -447,8 +461,22 @@ def main() -> None:
     ap.add_argument(
         "--extract-training-frames",
         action="store_true",
-        help="Extract only the frames that FineBadmintonDataset samples during training "
-             "(np.linspace across each clip, ~326K for T=16). Best balance of coverage and size.",
+        help="T evenly-spaced frames per hit (np.linspace in [start_frame, end_frame)); "
+             "default T=16 via --extract-sequence-length. Same as FineBadmintonDataset / train_full.",
+    )
+    ap.add_argument(
+        "--extract-sequence-length",
+        type=int,
+        default=16,
+        metavar="T",
+        help="For --extract-training-frames: same T as training --sequence-length. "
+        "Default 16 (covers T=4/8/16 on the same hits). Use 4 to cut disk I/O for T=4-only training.",
+    )
+    ap.add_argument(
+        "--overwrite-existing-jpegs",
+        action="store_true",
+        help="For extract modes: re-decode and write even if the JPEG path already exists "
+        "(use after contact-only or wrong extract; slow).",
     )
     ap.add_argument(
         "--extract-all-frames",
@@ -526,10 +554,16 @@ def main() -> None:
         print(f"Extracted contact frames: {w} written, {s} skipped.")
 
     if args.extract_training_frames:
-        print("Starting training-frame extraction (T=16 linspace per hit) …", flush=True)
+        t_ext = max(1, int(args.extract_sequence_length))
+        print(
+            f"Starting training-frame extraction (T={t_ext} linspace per hit) …",
+            flush=True,
+        )
         w, s = extract_training_frames(
             merged, local_dir, args.image_dir.resolve(),
-            sequence_length=16, jpeg_quality=args.jpeg_quality,
+            sequence_length=t_ext,
+            jpeg_quality=args.jpeg_quality,
+            overwrite_existing=bool(args.overwrite_existing_jpegs),
         )
         print(f"Extracted training frames: {w} written, {s} skipped.")
 

@@ -182,7 +182,7 @@ def _parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="If disabled, validation only reports eval_loss (no logits on CPU). "
-        "Much lower host RAM at end of each epoch; use --no-eval_stroke_metrics on Colab.",
+        "Much lower host RAM at end of each epoch; use --no-eval_stroke_metrics on low-RAM machines.",
     )
     p.add_argument(
         "--bf16",
@@ -200,7 +200,7 @@ def _parse_args() -> argparse.Namespace:
         "--dataloader_num_workers",
         type=int,
         default=0,
-        help="Use 0 on Colab to avoid extra RAM from worker processes.",
+        help="Use 0 on low-RAM hosts to avoid extra RAM from worker processes.",
     )
     p.add_argument(
         "--save_total_limit",
