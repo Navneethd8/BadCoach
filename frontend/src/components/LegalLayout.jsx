@@ -1,19 +1,23 @@
 import { useNavigate } from 'react-router-dom'
+import ThemeToggle from './ThemeToggle.jsx'
 
 export default function LegalLayout({ title, children }) {
     const navigate = useNavigate()
     return (
-        <div className="min-h-screen bg-neutral-950 text-neutral-100 px-6 py-10">
-            <div className="max-w-2xl mx-auto">
+        <div className="min-h-screen bg-page font-sans text-foreground px-6 py-12 md:px-10 md:py-16">
+            <div className="mx-auto mb-8 flex max-w-2xl justify-end md:mb-10">
+                <ThemeToggle />
+            </div>
+            <div className="mx-auto max-w-2xl border-l-2 border-brand pl-8 md:pl-12">
                 <button
                     type="button"
                     onClick={() => navigate(-1)}
-                    className="text-sm text-emerald-400 hover:text-emerald-300 mb-8"
+                    className="font-mono text-[11px] uppercase tracking-[0.22em] text-brand transition-colors hover:text-accent"
                 >
                     ← Back
                 </button>
-                <h1 className="text-2xl font-bold text-white tracking-tight mb-6">{title}</h1>
-                <div className="space-y-4 text-sm text-neutral-300 leading-relaxed">{children}</div>
+                <h1 className="font-display mt-10 text-4xl font-normal tracking-tight text-foreground md:text-5xl">{title}</h1>
+                <div className="mt-12 space-y-6 text-base leading-relaxed text-foreground-muted">{children}</div>
             </div>
         </div>
     )

@@ -1,27 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, useReducedMotion, AnimatePresence } from 'framer-motion'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
 import BadmintonNetScene from './BadmintonNetScene'
-import FeaturesPoseRally from './FeaturesPoseRally'
+import { HeroCourtShuttleLayer, ShuttleInline } from './CourtShuttleMotif.jsx'
+import HallCourtBand from './HallCourtBand.jsx'
+import ThemeToggle from './ThemeToggle.jsx'
+import { spineShort, cta, nav as brandNav, landing, flowSteps } from '../brand/isoCourtVoice.js'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
-        <span
-            className={`material-symbols-outlined ${className}`}
-            style={{ fontSize: size }}
-        >
+        <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>
             {name}
         </span>
     )
 }
 
 const HERO_MICRO_LINES = [
-    'Sideline or behind the baseline: if we can see the swing, we can read it.',
-    'Ten stroke families, from net brushes to full rear-court power.',
-    'Built between sessions by someone who burns through grips, not slide decks.',
+    'Tramlines to baseline: if the shuttle and your swing are on frame, IsoCourt can read it fairly.',
+    'Ten stroke families — net brushes, slices, standing smashes — the taxonomy you argue about between ends.',
+    'Built between club nights by someone who restrings before opening analytics tabs.',
 ]
 
 function RotatingMicroLine({ lines }) {
@@ -34,21 +34,19 @@ function RotatingMicroLine({ lines }) {
     }, [shouldReduceMotion, lines.length])
     if (shouldReduceMotion) {
         return (
-            <p className="text-sm text-emerald-500/85 text-center max-w-lg mx-auto mt-3 font-medium leading-snug">
-                {lines[0]}
-            </p>
+            <p className="mt-6 max-w-md text-sm leading-relaxed text-stone-400">{lines[0]}</p>
         )
     }
     return (
-        <div className="mt-3 min-h-[2.75rem] max-w-lg mx-auto flex items-center justify-center px-2">
+        <div className="mt-6 min-h-[3rem] max-w-md">
             <AnimatePresence mode="wait">
                 <motion.p
                     key={i}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
+                    exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.35, ease: 'easeOut' }}
-                    className="text-sm text-emerald-500/90 text-center font-medium leading-snug"
+                    className="text-sm leading-relaxed text-stone-400"
                 >
                     {lines[i]}
                 </motion.p>
@@ -62,10 +60,10 @@ function FadeUp({ children, delay = 0, className = '' }) {
     return (
         <motion.div
             className={className}
-            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 24 }}
+            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 14 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-60px' }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.55, delay, ease: 'easeOut' }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.5, delay, ease: 'easeOut' }}
         >
             {children}
         </motion.div>
@@ -77,19 +75,19 @@ const features = [
         icon: 'directions_run',
         label: 'Pose tracing',
         description:
-            'Split-step late? Contact behind you? See your body frame by frame so you can fix the same miss twice, not twenty times.',
+            'Split-step late? Contact behind you? Your body frame, frame by frame—so you fix the same miss twice, not twenty times.',
     },
     {
         icon: 'query_stats',
         label: 'Stroke reads',
         description:
-            'What you hit, roughly where it went, and how clean it looked, across ten real-world strokes, not textbook labels nobody says out loud.',
+            'What you hit, roughly where it went, and how clean it looked—ten real-world strokes, not textbook labels nobody says out loud.',
     },
     {
         icon: 'tips_and_updates',
-        label: 'Coaching notes',
+        label: 'Plain-language cues',
         description:
-            'Short, specific cues you can take to the hall: what to try on the next rep, not a wall of generic “keep practising.”',
+            'Short notes you can take to the hall: what to try on the next rep—never a wall of generic “keep practising.”',
     },
 ]
 
@@ -97,56 +95,63 @@ const steps = [
     {
         n: '01',
         icon: 'upload',
-        title: 'Toss us a clip',
-        description: 'One hard smash, a messy rally, or a drill. Keep the camera steady and the shuttle in frame.',
+        title: 'Send a clip',
+        description: 'One smash, a messy rally, or a drill. Steady camera, shuttle in frame.',
     },
     {
         n: '02',
         icon: 'model_training',
-        title: 'We do the tedious bit',
-        description: 'Poses, strokes, and scores get stitched together while you grab water. No manual tagging.',
+        title: 'We trace & score',
+        description: 'Poses and strokes stitch together while you grab water. No tagging.',
     },
     {
         n: '03',
         icon: 'emoji_events',
-        title: 'Walk back on court smarter',
-        description: 'A clear read on what broke down, plus a few cues to try before your next session.',
+        title: 'Walk back smarter',
+        description: 'What broke down, plus a few cues before your next session.',
     },
 ]
 
 const stats = [
-    { value: '10', label: 'Strokes in the book', icon: 'sports' },
-    { value: '4', label: 'Court reads', icon: 'explore' },
-    { value: '1', label: 'Clip per analysis', icon: 'movie' },
-    { value: 'Free', label: 'No signup to start', icon: 'lock_open' },
+    { value: '10', label: 'Stroke families', hint: 'From serves to rear-court attack' },
+    { value: '4', label: 'Court reads', hint: 'Front, mid, rear, net' },
+    { value: '1', label: 'Clip per run', hint: 'One rally or one stroke' },
+    { value: '0', label: 'Accounts required', hint: 'Feather shuttle brain, not SaaS login' },
 ]
 
-const navCtaClass =
-    'text-sm font-medium px-3.5 sm:px-4 py-2 rounded-lg border border-emerald-600/45 bg-emerald-950/30 text-emerald-100 hover:bg-emerald-950/45 hover:border-emerald-500/65 transition-colors flex items-center justify-center gap-2'
+const FB_MESSAGE_MAX = 8000
 
 export default function LandingPage() {
     const navigate = useNavigate()
 
-    // Feedback form state
     const [fbName, setFbName] = useState('')
     const [fbEmail, setFbEmail] = useState('')
     const [fbMessage, setFbMessage] = useState('')
-    const [fbStatus, setFbStatus] = useState('idle') // idle | sending | sent | error
+    const [fbStatus, setFbStatus] = useState('idle')
     const [fbError, setFbError] = useState('')
 
     const API = import.meta.env.VITE_API_URL || ''
 
+    const resetFeedbackError = useCallback(() => {
+        setFbError('')
+        setFbStatus((s) => (s === 'error' ? 'idle' : s))
+    }, [])
+
     const handleFeedbackSubmit = async (e) => {
         e.preventDefault()
-        if (!fbName.trim() || !fbEmail.trim() || !fbMessage.trim()) return
+        const name = fbName.trim()
+        const email = fbEmail.trim()
+        const message = fbMessage.trim()
+        if (!name || !email || !message) return
+        if (message.length > FB_MESSAGE_MAX) {
+            setFbStatus('error')
+            setFbError(`Please shorten your message (max ${FB_MESSAGE_MAX.toLocaleString()} characters).`)
+            return
+        }
         setFbStatus('sending')
         setFbError('')
         try {
-            await axios.post(`${API}/feedback`, {
-                name: fbName.trim(),
-                email: fbEmail.trim(),
-                message: fbMessage.trim(),
-            })
+            await axios.post(`${API}/feedback`, { name, email, message })
             setFbStatus('sent')
             setFbName('')
             setFbEmail('')
@@ -158,449 +163,452 @@ export default function LandingPage() {
         }
     }
 
-    return (
-        <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 overflow-x-hidden">
+    const navLink =
+        'font-mono text-[11px] uppercase tracking-[0.22em] text-foreground-muted hover:text-foreground border-b border-transparent hover:border-brand pb-0.5 transition-colors'
 
-            {/* Navbar */}
-            <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/85 backdrop-blur-md">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-14 py-2 flex items-center justify-between gap-3">
+    return (
+        <div className="min-h-screen w-screen bg-page text-foreground overflow-x-hidden font-sans antialiased">
+
+            {/* Navigation — flat, no pill CTAs */}
+            <header className="sticky top-0 z-50 border-b-2 border-brand/20 bg-page/90 backdrop-blur-sm">
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-4">
                     <button
                         type="button"
                         onClick={() => navigate('/analyze')}
-                        className="flex items-center gap-2 shrink-0 min-w-0 rounded-md"
-                        aria-label="IsoCourt home"
+                        className="flex min-w-0 items-baseline gap-3 text-left"
+                        aria-label={brandNav.clipLabAria}
                     >
-                        <Logo size={22} className="text-emerald-500 shrink-0" />
-                        <span className="text-base font-semibold tracking-tight hidden sm:inline truncate">
-                            Iso<span className="text-emerald-500">Court</span>
+                        <Logo size={26} className="shrink-0 text-brand" />
+                        <span className="font-display text-xl tracking-tight text-foreground">
+                            Iso<span className="text-brand">Court</span>
                         </span>
                     </button>
-                    <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0">
-                        <motion.button
-                            type="button"
-                            onClick={() => {
-                                ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_nav' })
-                                navigate('/analyze')
-                            }}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.98 }}
-                            className={navCtaClass}
-                        >
-                            Drop a clip
-                        </motion.button>
-                        <motion.button
-                            type="button"
-                            onClick={() => {
-                                ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_nav' })
-                                navigate('/live')
-                            }}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.98 }}
-                            className={navCtaClass}
-                        >
-                            <Icon name="sensors" size={18} className="text-emerald-400" />
-                            <span className="hidden sm:inline">Live coaching</span>
-                            <span className="sm:hidden">Live</span>
-                        </motion.button>
+                    <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 md:gap-x-8">
+                        <nav className="flex flex-wrap items-center gap-x-8 gap-y-2" aria-label="Primary">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_nav' })
+                                    navigate('/analyze')
+                                }}
+                                className={navLink}
+                            >
+                                Analyze
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_nav' })
+                                    navigate('/live')
+                                }}
+                                className={navLink}
+                            >
+                                Live
+                            </button>
+                        </nav>
+                        <ThemeToggle />
                     </div>
                 </div>
-            </nav>
+            </header>
 
-            {/* Hero: net scene */}
-            <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 px-6 text-center overflow-hidden bg-black min-h-[min(88vh,720px)]">
-                <div className="pointer-events-none absolute inset-0 z-0">
-                    <BadmintonNetScene className="w-full h-full object-cover opacity-[0.92]" />
+            {/* Hero — daylight court, editorial type, asymmetry */}
+            <section className="relative min-h-[min(90vh,820px)] bg-stone-950 text-stone-100">
+                <div className="pointer-events-none absolute inset-0">
+                    <BadmintonNetScene className="h-full w-full object-cover opacity-[0.88]" />
                 </div>
                 <div
-                    className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,rgba(0,0,0,0.72)_0%,transparent_68%)]"
+                    className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_80%_70%_at_50%_38%,rgba(0,0,0,0.78)_0%,transparent_62%)]"
                     aria-hidden
                 />
+                <HeroCourtShuttleLayer className="z-[2]" />
                 <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-40 z-[2] bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent"
+                    className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] h-[min(32vh,300px)] bg-gradient-to-t from-court-mat via-court-mat/55 to-transparent"
                     aria-hidden
                 />
-                <div className="relative z-10 max-w-3xl mx-auto">
-                    <FadeUp delay={0}>
-                        <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
-                            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                            Made for people who actually play
-                        </div>
-                    </FadeUp>
 
-                    <FadeUp delay={0.08}>
-                        <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
-                            Your{' '}
-                            <span className="text-emerald-400">AI second pair of eyes</span>
-                            <br />
-                            on court.
-                        </h1>
-                    </FadeUp>
-
-                    <FadeUp delay={0.16} className="mb-10">
-                        <p className="text-lg text-neutral-400 max-w-xl mx-auto mb-2 leading-relaxed">
-                            Upload a video clip (rally or single stroke). Our AI reads footwork, contact, and shot type like a club coach who had coffee first: fast,
-                            specific, zero corporate fluff.
+                <div className="relative z-10 mx-auto grid max-w-6xl gap-14 px-5 pb-24 pt-16 md:gap-20 md:pb-32 md:pt-24 lg:grid-cols-12 lg:items-end">
+                    <div className="lg:col-span-7">
+                        <p className="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.35em] text-orange-200/85">
+                            <ShuttleInline className="text-orange-200/90" />
+                            <span>{landing.heroKicker}</span>
                         </p>
+                        <h1 className="font-display mt-6 text-[2.65rem] font-normal leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
+                            Read the rally.
+                            <br />
+                            <span className="italic text-orange-200">Like you&apos;re beside the court tape.</span>
+                        </h1>
+                        <p className="mt-8 max-w-md text-lg leading-relaxed text-stone-400">{landing.heroLead}</p>
                         <RotatingMicroLine lines={HERO_MICRO_LINES} />
-                    </FadeUp>
 
-                    <FadeUp delay={0.22}>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
-                            <motion.button
+                        <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                            <button
+                                type="button"
                                 onClick={() => navigate('/analyze')}
-                                whileHover={{ scale: 1.04 }}
-                                whileTap={{ scale: 0.97 }}
-                                className="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
+                                className="inline-flex items-center justify-center border-2 border-orange-500 bg-orange-600 px-8 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:bg-orange-500"
                             >
-                                Drop a clip, it’s free
-                            </motion.button>
-                            <motion.button
+                                {cta.primary}
+                            </button>
+                            <button
                                 type="button"
                                 onClick={() => {
                                     ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_hero' })
                                     navigate('/live')
                                 }}
-                                whileHover={{ scale: 1.04 }}
-                                whileTap={{ scale: 0.97 }}
-                                className="w-full sm:w-auto px-8 py-3 border border-emerald-600/40 hover:border-emerald-500/70 bg-emerald-950/20 text-emerald-100 hover:text-white font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                                className="inline-flex items-center justify-center gap-2 border border-orange-400/40 bg-black/30 px-8 py-4 text-xs font-medium uppercase tracking-[0.14em] text-orange-50 transition-colors hover:border-orange-300/70 hover:bg-black/45"
                             >
-                                <Icon name="sensors" size={18} className="text-emerald-400" />
-                                Live while you play
-                            </motion.button>
+                                <Icon name="sensors" size={16} className="text-teal-300" />
+                                {cta.secondary}
+                            </button>
                         </div>
-                    </FadeUp>
+                        <p className="mt-8 max-w-lg font-mono text-[10px] uppercase tracking-[0.24em] text-stone-500/90">{spineShort}</p>
+                    </div>
 
-                    {/* Mock analysis card */}
-                    <FadeUp delay={0.32}>
-                        <div className="mt-16 mx-auto max-w-sm bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-left shadow-2xl">
-                            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                                <span className="text-xs text-neutral-500 font-medium flex items-center gap-1.5">
-                                    <Icon name="analytics" size={14} className="text-emerald-500" />
-                                    Analysis Results
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] uppercase tracking-wide text-neutral-500 font-semibold border border-neutral-600/70 px-2 py-0.5 rounded">
-                                        Example
-                                    </span>
-                                    <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-                                        Advanced
-                                    </span>
+                    {/* Sample read — sideline ticket, not a SaaS card */}
+                    <div className="lg:col-span-5">
+                        <FadeUp delay={0.15}>
+                            <div className="border-2 border-orange-400/25 bg-black/45 p-6 backdrop-blur-[2px]">
+                                <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-4">
+                                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">{landing.sampleReadLabel}</span>
+                                    <span className="font-mono text-[10px] text-orange-300/90">8 / 10</span>
                                 </div>
-                            </div>
-                            <div className="flex justify-between items-end mb-2">
-                                <span className="text-2xl font-bold text-emerald-400">Advanced</span>
-                                <span className="text-sm text-neutral-400 font-mono">8 / 10</span>
-                            </div>
-                            <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden mb-3">
-                                <motion.div
-                                    initial={{ width: 0 }}
-                                    whileInView={{ width: '80%' }}
-                                    viewport={{ once: true }}
-                                    transition={{ duration: 0.9, ease: 'easeOut', delay: 0.6 }}
-                                    className="h-full bg-emerald-500 rounded-full"
-                                />
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-3">
-                                <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] font-medium text-blue-400 flex items-center gap-1.5">
-                                    <Icon name="pan_tool_alt" size={12} />
-                                    Forehand Clear
+                                <p className="mt-4 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-teal-300/85">
+                                    <span className="border border-teal-400/35 px-2 py-0.5">FH clear</span>
+                                    <span className="border border-teal-400/35 px-2 py-0.5">Rear tramline</span>
+                                </p>
+                                <p className="font-display mt-5 text-3xl text-orange-200">Advanced</p>
+                                <div className="mt-4 h-1 w-full bg-stone-800">
+                                    <div className="h-full w-4/5 bg-teal-500/90" />
                                 </div>
-                                <div className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-purple-400 flex items-center gap-1.5">
-                                    <Icon name="explore" size={12} />
-                                    Deep Lift
-                                </div>
-                                <div className="px-2 py-1 bg-rose-500/10 border border-rose-500/30 rounded text-[10px] font-medium text-rose-400 flex items-center gap-1.5">
-                                    <Icon name="location_on" size={12} />
-                                    Rear Court
-                                </div>
-                                <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400 flex items-center gap-1.5">
-                                    <Icon name="psychology" size={12} />
-                                    Offensive
-                                </div>
-                            </div>
-                            <div className="mt-3 pt-3 border-t border-neutral-800">
-                                <p className="text-xs text-neutral-300 leading-relaxed">
-                                    <span className="text-emerald-500">•</span> Rotate your non-racket shoulder further back at the start of the swing to generate more power and increase shuttle speed.
+                                <dl className="mt-6 space-y-3 border-t border-white/10 pt-5 font-mono text-[11px]">
+                                    <div className="flex justify-between gap-4 text-stone-500">
+                                        <dt>Technique</dt>
+                                        <dd className="text-stone-300">Forehand clear</dd>
+                                    </div>
+                                    <div className="flex justify-between gap-4 text-stone-500">
+                                        <dt>Placement</dt>
+                                        <dd className="text-stone-300">Deep lift</dd>
+                                    </div>
+                                    <div className="flex justify-between gap-4 text-stone-500">
+                                        <dt>Position</dt>
+                                        <dd className="text-stone-300">Rear court</dd>
+                                    </div>
+                                </dl>
+                                <p className="mt-6 border-t border-white/10 pt-5 text-sm leading-relaxed text-stone-500">
+                                    <span className="text-orange-400">→</span> Open your non-racket shoulder earlier so contact stays in front.
                                 </p>
                             </div>
-                        </div>
-                    </FadeUp>
+                        </FadeUp>
+                    </div>
                 </div>
             </section>
 
-            {/* Stats Bar */}
-            <section className="border-y border-neutral-800 bg-neutral-900/40">
-                <div className="max-w-5xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
-                    {stats.map(({ value, label, icon }, i) => (
-                        <FadeUp key={label} delay={i * 0.07} className="text-center">
-                            <Icon name={icon} size={22} className="text-emerald-500 mb-2" />
-                            <div className="text-3xl font-bold text-white tracking-tight">{value}</div>
-                            <div className="text-sm text-neutral-500 mt-0.5">{label}</div>
+            <HallCourtBand />
+
+            {/* Stats — scoreboard strip (tramline tape) */}
+            <section className="relative border-y-2 border-border bg-page-muted/80">
+                <div
+                    className="pointer-events-none absolute inset-x-0 top-0 h-[3px] border-b border-dashed border-brand/25"
+                    aria-hidden
+                />
+                <p className="mx-auto max-w-2xl px-5 pt-12 text-center font-mono text-[11px] uppercase tracking-[0.22em] text-foreground-muted">
+                    {landing.statsIntro}
+                </p>
+                <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-y-10 px-5 pb-14 pt-8 md:flex-nowrap md:divide-x md:divide-border">
+                    {stats.map(({ value, label, hint }) => (
+                        <div key={label} className="min-w-[45%] flex-1 text-center md:min-w-0 md:px-10 md:first:pl-0 md:last:pr-0">
+                            <div className="font-display text-4xl tabular-nums text-foreground md:text-5xl">{value}</div>
+                            <div className="font-mono mt-3 text-[10px] uppercase tracking-[0.24em] text-foreground-muted">{label}</div>
+                            <p className="mx-auto mt-2 max-w-[12rem] font-sans text-[11px] leading-snug normal-case tracking-normal text-foreground-subtle">{hint}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            {/* Features — editorial stack, ruled sections */}
+            <section id="features" className="relative mx-auto max-w-3xl px-5 py-20 md:py-28">
+                <div
+                    className="pointer-events-none absolute -left-4 top-24 hidden h-48 w-px bg-gradient-to-b from-brand/50 via-brand/15 to-transparent md:block"
+                    aria-hidden
+                />
+                <div
+                    className="pointer-events-none absolute -left-2 top-24 hidden h-48 w-px bg-gradient-to-b from-brand/25 via-transparent to-transparent md:block"
+                    aria-hidden
+                />
+                <p className="sunrise-kicker flex flex-wrap items-center gap-2 text-foreground-muted">
+                    <ShuttleInline className="text-brand/70" />
+                    {landing.featuresKicker}
+                </p>
+                <h2 className="font-display mt-5 text-4xl leading-tight text-foreground md:text-5xl">{landing.featuresHeadline}</h2>
+                <p className="mt-6 text-lg leading-relaxed text-foreground-muted">{landing.featuresLead}</p>
+
+                <div className="mt-16 space-y-0">
+                    {features.map(({ icon, label, description }) => (
+                        <FadeUp key={label}>
+                            <article className="border-t border-border py-14 first:border-t-0 first:pt-0">
+                                <div className="mb-4 inline-flex h-11 w-11 items-center justify-center border border-border bg-page-muted text-brand">
+                                    <Icon name={icon} size={22} />
+                                </div>
+                                <h3 className="font-display text-2xl text-foreground md:text-3xl">{label}</h3>
+                                <p className="mt-4 text-[17px] leading-relaxed text-foreground-muted">{description}</p>
+                            </article>
                         </FadeUp>
                     ))}
                 </div>
             </section>
 
-            {/* Features */}
-            <section id="features" className="relative py-16 md:py-28 px-6 overflow-visible">
-                <div className="max-w-5xl mx-auto relative z-10">
-                    <FadeUp className="text-center mb-16">
-                        <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">Features</span>
-                        <h2 className="text-3xl md:text-4xl font-bold mt-3 tracking-tight">
-                            The stuff coaches nag you about,<br />
-                            without the side-eye
-                        </h2>
-                        <p className="text-neutral-400 mt-4 max-w-lg mx-auto leading-relaxed">
-                            Pose lines, stroke calls, and plain-language cues. The same details you’d get from a good training block, compressed into the minutes
-                            between rallies.
-                        </p>
-                    </FadeUp>
-
-                    <div className="relative mt-10 md:mt-12">
-                        <div
-                            className="pointer-events-none absolute inset-x-0 bottom-full z-10 flex h-[5.5rem] sm:h-24 items-end justify-stretch"
-                            aria-hidden
-                        >
-                            <FeaturesPoseRally className="w-full h-[4.75rem] sm:h-[5.25rem] shrink-0" />
-                        </div>
-                        <div className="relative z-0 grid md:grid-cols-3 gap-5">
-                        {features.map(({ icon, label, description }, i) => (
-                            <FadeUp key={label} delay={i * 0.1}>
-                                <div className="h-full bg-neutral-900 border border-neutral-800 hover:border-emerald-500/25 hover:-translate-y-0.5 rounded-xl p-6 transition-all duration-300">
-                                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-4">
-                                        <Icon name={icon} size={22} className="text-emerald-400" />
-                                    </div>
-                                    <h3 className="text-base font-semibold text-white mb-2">{label}</h3>
-                                    <p className="text-sm text-neutral-400 leading-relaxed">{description}</p>
-                                </div>
-                            </FadeUp>
-                        ))}
+            {/* Film */}
+            <section className="border-t border-border bg-page-muted/50 px-5 py-20 md:py-28">
+                <div className="mx-auto max-w-4xl">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-foreground-muted">{landing.filmKicker}</p>
+                    <h2 className="font-display mt-4 text-3xl text-foreground md:text-4xl">{landing.filmHeadline}</h2>
+                    <p className="mt-4 max-w-2xl text-foreground-muted">{landing.filmLead}</p>
+                    <div className="mt-10 border-2 border-court-mat bg-court-mat/[0.07] p-2 shadow-none ring-1 ring-court-line/25 md:p-3 dark:bg-court-mat/15 dark:ring-white/10">
+                        <div className="aspect-video border border-court-mat/40 bg-black">
+                            <iframe
+                                src="https://www.youtube-nocookie.com/embed/UA3KPoj0j70?rel=0&modestbranding=1&color=white"
+                                title="IsoCourt — rally read on tape"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                className="h-full w-full"
+                            />
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* Demo Video */}
-            <section className="py-16 md:py-20 px-6">
-                <div className="max-w-4xl mx-auto">
-                    <FadeUp className="text-center mb-8">
-                        <p className="text-xs text-neutral-500 uppercase tracking-widest font-semibold flex items-center justify-center gap-2">
-                            <Icon name="play_circle" size={14} className="text-emerald-500" />
-                            Real footage, real breakdown
-                        </p>
-                    </FadeUp>
-                    <FadeUp delay={0.1}>
-                        <div className="relative rounded-xl overflow-hidden border border-neutral-800 shadow-2xl shadow-black/60">
-                            <div className="aspect-video">
-                                <iframe
-                                    src="https://www.youtube-nocookie.com/embed/UA3KPoj0j70?rel=0&modestbranding=1&color=white"
-                                    title="IsoCourt Demo"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                    className="w-full h-full"
-                                />
+            {/* Flow — sideline timeline */}
+            <section id="how-it-works" className="mx-auto max-w-2xl px-5 py-20 md:py-28">
+                <p className="sunrise-kicker text-foreground-muted">{landing.flowKicker}</p>
+                <h2 className="font-display mt-4 text-4xl text-foreground md:text-5xl">{landing.flowHeadline}</h2>
+
+                <div className="relative mt-16 ml-2 border-l-2 border-brand pl-10 md:ml-4">
+                    {flowSteps.map(({ n, icon, title, description }) => (
+                        <FadeUp key={n}>
+                            <div className="relative pb-16 last:pb-0">
+                                <span className="absolute -left-[31px] top-1.5 flex h-[14px] w-[14px] border-2 border-brand bg-page" aria-hidden />
+                                <p className="font-mono text-xs text-brand">{n}</p>
+                                <div className="mt-3 inline-flex h-9 w-9 items-center justify-center border border-border bg-page-muted text-brand">
+                                    <Icon name={icon} size={18} />
+                                </div>
+                                <h3 className="font-display mt-4 text-2xl text-foreground">{title}</h3>
+                                <p className="mt-3 leading-relaxed text-foreground-muted">{description}</p>
                             </div>
-                        </div>
-                    </FadeUp>
+                        </FadeUp>
+                    ))}
                 </div>
             </section>
 
-            {/* How It Works */}
-            <section id="how-it-works" className="py-16 md:py-28 px-6 bg-neutral-900/30">
-                <div className="max-w-4xl mx-auto">
-                    <FadeUp className="text-center mb-16">
-                        <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">How It Works</span>
-                        <h2 className="text-3xl md:text-4xl font-bold mt-3 tracking-tight">
-                            Clip in. Notes out.<br />
-                            Three steps.
-                        </h2>
-                    </FadeUp>
-
-                    <div className="grid md:grid-cols-3 gap-8">
-                        {steps.map(({ n, icon, title, description }, i) => (
-                            <FadeUp key={n} delay={i * 0.12}>
-                                <div className="relative flex flex-col items-start">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <span className="text-4xl font-black text-neutral-600 leading-none select-none">{n}</span>
-                                        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                                            <Icon name={icon} size={20} className="text-emerald-400" />
-                                        </div>
-                                    </div>
-                                    <h3 className="text-base font-semibold text-white mb-2">{title}</h3>
-                                    <p className="text-sm text-neutral-400 leading-relaxed">{description}</p>
-                                </div>
-                            </FadeUp>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* Final CTA */}
-            <section className="relative py-16 md:py-28 px-6 overflow-hidden">
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <div className="w-[600px] h-[400px] bg-emerald-700/10 rounded-full blur-[100px]" />
-                </div>
-                <FadeUp className="relative max-w-2xl mx-auto text-center">
-                    <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 leading-[1.1]">
-                        Same session tomorrow.
+            {/* Closing — flat band, no glow orb */}
+            <section className="border-y-2 border-border bg-orange-500/[0.06] px-5 py-24 md:py-32">
+                <div className="mx-auto max-w-2xl text-center">
+                    <h2 className="font-display text-4xl leading-tight text-foreground md:text-5xl">
+                        {landing.closingHeadline}
                         <br />
-                        Fewer blind spots.
+                        {landing.closingSub}
                     </h2>
-                    <p className="text-neutral-400 mb-10 text-lg">
-                        No signup circus. One clip is enough to see how it reads your game.
-                    </p>
-                    <motion.button
+                    <p className="mt-8 text-lg text-foreground-muted">{landing.closingLead}</p>
+                    <button
                         type="button"
                         onClick={() => navigate('/analyze')}
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="inline-flex items-center gap-2 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
+                        className="mt-12 inline-flex items-center gap-2 border-2 border-brand bg-accent px-10 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-onaccent transition-colors hover:bg-accent-hover"
                     >
                         <Icon name="upload" size={18} />
-                        Drop a clip
-                    </motion.button>
-                    <p className="mt-8 text-sm text-neutral-500">
-                        Prefer feedback between points?{' '}
+                        {cta.primary}
+                    </button>
+                    <p className="mt-10 font-mono text-[11px] uppercase tracking-[0.2em] text-foreground-muted">
+                        Want cues between points instead?{' '}
                         <button
                             type="button"
                             onClick={() => {
                                 ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_footer_cta' })
                                 navigate('/live')
                             }}
-                            className="text-emerald-400 hover:text-emerald-300 font-medium underline-offset-2 hover:underline"
+                            className="border-b border-brand text-brand transition-colors hover:text-accent"
                         >
-                            Open live coaching
+                            {cta.liveFooter}
                         </button>
                     </p>
-                </FadeUp>
+                </div>
             </section>
 
-            {/* Feedback / Contact */}
-            <section id="feedback" className="py-16 md:py-24 px-6 bg-neutral-900/30">
-                <div className="max-w-xl mx-auto">
-                    <FadeUp className="text-center mb-10">
-                        <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">Feedback</span>
-                        <h2 className="text-3xl md:text-4xl font-bold mt-3 tracking-tight">
-                            Court notes welcome
+            {/* Letters — optimized layout: intro column + sideline form */}
+            <section
+                id="feedback"
+                className="border-t-2 border-border bg-page-muted/35 px-5 py-20 md:py-28"
+                aria-labelledby="feedback-heading"
+            >
+                <div className="mx-auto grid max-w-5xl gap-14 lg:grid-cols-12 lg:gap-16 lg:items-start">
+                    <div className="lg:col-span-5">
+                        <p className="sunrise-kicker text-foreground-muted">{landing.feedbackKicker}</p>
+                        <h2 id="feedback-heading" className="font-display mt-4 text-4xl text-foreground md:text-[2.5rem] md:leading-tight">
+                            {landing.feedbackHeadline}
                         </h2>
-                        <p className="text-neutral-400 mt-4 max-w-md mx-auto leading-relaxed">
-                            Wrong call, wild idea, or “this saved my smash.” We read every message between training blocks.
-                        </p>
-                    </FadeUp>
+                        <p className="mt-6 text-lg leading-relaxed text-foreground-muted">{landing.feedbackLead}</p>
+                        <ul className="mt-10 space-y-3 border-l-2 border-brand/40 pl-5 text-sm leading-snug text-foreground-muted">
+                            <li>
+                                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-brand">Reads</span>
+                                <span className="mt-1 block">Stroke labels, live coaching, anything that felt off in a rally.</span>
+                            </li>
+                            <li className="pt-2">
+                                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-brand">Reply</span>
+                                <span className="mt-1 block">No SLA wallpaper—we answer when we&apos;re back from the hall.</span>
+                            </li>
+                        </ul>
+                    </div>
 
-                    <FadeUp delay={0.1}>
+                    <div className="lg:col-span-7">
                         {fbStatus === 'sent' ? (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="bg-emerald-950/40 border border-emerald-800/50 rounded-xl p-8 text-center"
+                            <div
+                                className="border-2 border-brand-secondary/50 bg-surface px-8 py-12 text-center shadow-none"
+                                role="status"
+                                aria-live="polite"
                             >
-                                <Icon name="check_circle" size={40} className="text-emerald-400 mx-auto mb-3" />
-                                <h3 className="text-lg font-semibold text-emerald-300 mb-2">Thanks for your feedback!</h3>
-                                <p className="text-sm text-neutral-400 mb-5">We've received your message and will get back to you soon.</p>
+                                <Icon name="check_circle" size={40} className="mx-auto text-brand-secondary" aria-hidden />
+                                <p className="font-display mt-6 text-3xl text-foreground">On the list.</p>
+                                <p className="mt-4 max-w-sm mx-auto text-sm leading-relaxed text-foreground-muted">
+                                    Thanks—we&apos;ll get back when we can. If it&apos;s urgent, say so in the line above next time.
+                                </p>
                                 <button
+                                    type="button"
                                     onClick={() => setFbStatus('idle')}
-                                    className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+                                    className="font-mono mt-10 text-[11px] uppercase tracking-[0.22em] text-brand transition-colors hover:text-accent"
                                 >
-                                    Send another message
+                                    Send another note
                                 </button>
-                            </motion.div>
+                            </div>
                         ) : (
-                            <form onSubmit={handleFeedbackSubmit} className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4">
-                                <div className="grid sm:grid-cols-2 gap-4">
+                            <form
+                                onSubmit={handleFeedbackSubmit}
+                                className="border border-border border-l-[3px] border-l-brand bg-surface p-6 sm:p-8 shadow-none"
+                                aria-busy={fbStatus === 'sending'}
+                            >
+                                <p id="feedback-form-desc" className="sr-only">
+                                    Contact form: your name, email, and message. Required fields are marked.
+                                </p>
+                                <div className="grid gap-6 sm:grid-cols-2">
                                     <div>
-                                        <label htmlFor="fb-name" className="text-xs text-neutral-500 font-medium block mb-1.5">Name</label>
+                                        <label htmlFor="fb-name" className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground-muted">
+                                            Name <span className="text-brand">*</span>
+                                        </label>
                                         <input
                                             id="fb-name"
+                                            name="name"
                                             type="text"
+                                            autoComplete="name"
                                             value={fbName}
-                                            onChange={(e) => setFbName(e.target.value)}
-                                            placeholder="Your name"
+                                            onChange={(e) => {
+                                                resetFeedbackError()
+                                                setFbName(e.target.value)
+                                            }}
+                                            placeholder="How we should address you"
                                             required
-                                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 transition-colors"
+                                            className="mt-2 w-full border border-border bg-inset px-4 py-3 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
                                         />
                                     </div>
                                     <div>
-                                        <label htmlFor="fb-email" className="text-xs text-neutral-500 font-medium block mb-1.5">Email</label>
+                                        <label htmlFor="fb-email" className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground-muted">
+                                            Email <span className="text-brand">*</span>
+                                        </label>
                                         <input
                                             id="fb-email"
+                                            name="email"
                                             type="email"
+                                            autoComplete="email"
+                                            inputMode="email"
                                             value={fbEmail}
-                                            onChange={(e) => setFbEmail(e.target.value)}
+                                            onChange={(e) => {
+                                                resetFeedbackError()
+                                                setFbEmail(e.target.value)
+                                            }}
                                             placeholder="you@example.com"
                                             required
-                                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 transition-colors"
+                                            className="mt-2 w-full border border-border bg-inset px-4 py-3 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
                                         />
                                     </div>
                                 </div>
-                                <div>
-                                    <label htmlFor="fb-message" className="text-xs text-neutral-500 font-medium block mb-1.5">Message</label>
+
+                                <div className="mt-6">
+                                    <label htmlFor="fb-message" className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground-muted">
+                                        Message <span className="text-brand">*</span>
+                                    </label>
                                     <textarea
                                         id="fb-message"
+                                        name="message"
                                         value={fbMessage}
-                                        onChange={(e) => setFbMessage(e.target.value)}
-                                        placeholder="e.g. love the clears read, wish it saw doubles rotation…"
+                                        onChange={(e) => {
+                                            resetFeedbackError()
+                                            setFbMessage(e.target.value.slice(0, FB_MESSAGE_MAX))
+                                        }}
+                                        placeholder="Clears read wrong on clip X, love the coach tips, idea for doubles footwork…"
                                         required
-                                        rows={4}
-                                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-600 text-neutral-100 placeholder-neutral-600 text-sm rounded-lg px-3.5 py-2.5 transition-colors resize-none"
+                                        rows={6}
+                                        aria-describedby="fb-char-count"
+                                        className="mt-2 min-h-[140px] w-full resize-y border border-border bg-inset px-4 py-3 text-sm leading-relaxed text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
                                     />
+                                    <p id="fb-char-count" className="mt-2 text-right font-mono text-[10px] text-foreground-subtle tabular-nums">
+                                        {fbMessage.length.toLocaleString()} / {FB_MESSAGE_MAX.toLocaleString()}
+                                    </p>
                                 </div>
 
-                                {fbStatus === 'error' && (
-                                    <div className="flex items-center gap-2 text-rose-400 text-xs bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
-                                        <Icon name="error" size={14} />
-                                        {fbError}
+                                {fbStatus === 'error' && fbError && (
+                                    <div
+                                        id="fb-error"
+                                        role="alert"
+                                        aria-live="assertive"
+                                        className="mt-6 flex gap-3 border border-rose-500/35 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-800 dark:text-rose-200"
+                                    >
+                                        <Icon name="error" size={18} className="mt-0.5 shrink-0" aria-hidden />
+                                        <span>{fbError}</span>
                                     </div>
                                 )}
 
-                                <motion.button
+                                <button
                                     type="submit"
                                     disabled={fbStatus === 'sending'}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    className="mt-8 flex w-full items-center justify-center gap-2 border-2 border-brand bg-accent py-4 text-xs font-semibold uppercase tracking-[0.18em] text-onaccent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {fbStatus === 'sending' ? (
                                         <>
-                                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Sending...
+                                            <span
+                                                className="h-4 w-4 animate-spin rounded-full border-2 border-onaccent/30 border-t-onaccent"
+                                                aria-hidden
+                                            />
+                                            Sending…
                                         </>
                                     ) : (
                                         <>
-                                            <Icon name="send" size={16} />
-                                            Send Feedback
+                                            <Icon name="send" size={16} aria-hidden />
+                                            Send note
                                         </>
                                     )}
-                                </motion.button>
+                                </button>
                             </form>
                         )}
-                    </FadeUp>
+                    </div>
                 </div>
             </section>
 
             {/* Footer */}
-            <footer className="border-t border-neutral-800 py-8 px-6">
-                <div className="max-w-5xl mx-auto flex flex-col gap-5">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-2">
-                            <Logo size={18} className="text-emerald-500" />
-                            <span className="text-sm font-semibold">
-                                Iso<span className="text-emerald-500">Court</span>
+            <footer className="border-t-2 border-border bg-page-muted/40 px-5 py-12">
+                <div className="mx-auto flex max-w-6xl flex-col gap-10 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <div className="flex items-baseline gap-3">
+                            <Logo size={20} className="text-brand" />
+                            <span className="font-display text-lg tracking-tight">
+                                Iso<span className="text-brand">Court</span>
                             </span>
                         </div>
-                        <p className="text-xs text-neutral-600 text-center sm:text-right max-w-md sm:max-w-none leading-relaxed">
-                            Stroke analysis for people who know what a feather costs · Shipped by someone who still chases shuttles off-court
-                        </p>
+                        <p className="mt-6 max-w-sm text-sm leading-relaxed text-foreground-muted">{landing.footerLead}</p>
                     </div>
-                    <nav className="flex flex-wrap items-center justify-center sm:justify-end gap-x-6 gap-y-2 text-xs text-neutral-500" aria-label="Legal">
-                        <Link to="/privacy" className="hover:text-emerald-400 transition-colors">
+                    <nav className="font-mono flex flex-wrap gap-x-10 gap-y-3 text-[11px] uppercase tracking-[0.22em] text-foreground-muted" aria-label="Legal">
+                        <Link to="/privacy" className="hover:text-brand">
                             Privacy
                         </Link>
-                        <Link to="/terms" className="hover:text-emerald-400 transition-colors">
+                        <Link to="/terms" className="hover:text-brand">
                             Terms
                         </Link>
-                        <a href="#feedback" className="hover:text-emerald-400 transition-colors">
-                            Contact
+                        <a href="#feedback" className="hover:text-brand">
+                            {landing.contactLink}
                         </a>
                     </nav>
                 </div>

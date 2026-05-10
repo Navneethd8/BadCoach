@@ -2,33 +2,147 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Sunrise Court — semantic tokens (light / dark).
+ * Tweak hues here without touching components.
+ */
 :root {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+  --color-page: #fbf7f2;
+  --color-page-muted: #f4efe8;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #fffefc;
+  --color-muted: #f0ebe4;
+  --color-inset: #ebe5dd;
+  --color-border: #e7e5e4;
+  --color-border-strong: #d6d3d1;
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --color-text-subtle: #78716c;
+  --color-overlay: rgba(28, 25, 23, 0.55);
+
+  --color-accent: #ea580c;
+  --color-accent-hover: #c2410c;
+  --color-accent-muted: rgba(234, 88, 12, 0.12);
+  --color-on-accent: #ffffff;
+
+  --color-brand: #ea580c;
+  --color-brand-secondary: #0d9488;
+
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  --color-coach-tint: rgba(13, 148, 136, 0.12);
+  --color-coach-border: rgba(13, 148, 136, 0.28);
+  --color-coach-text: #0f766e;
+
+  --color-focus-ring: #ea580c;
+
+  --color-quality-elite: #047857;
+  --color-quality-advanced: #059669;
+  --color-quality-proficient: #0891b2;
+  --color-quality-competent: #d97706;
+  --color-quality-developing: #ea580c;
+  --color-quality-low: #e11d48;
+
+  /* Indoor hall — reads “badminton court” before anything else */
+  --court-mat: #155e4b;
+  --court-mat-deep: #0e4034;
+  --court-line: rgba(255, 255, 255, 0.92);
+  --court-on: #ecfdf5;
+
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #171717;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+.dark {
+  color-scheme: dark;
+  --color-page: #1c1917;
+  --color-page-muted: #292524;
+  --color-surface: #292524;
+  --color-surface-elevated: #44403c;
+  --color-muted: #292524;
+  --color-inset: #1c1917;
+  --color-border: #44403c;
+  --color-border-strong: #57534e;
+  --color-text: #e7e5e4;
+  --color-text-muted: #a8a29e;
+  --color-text-subtle: #78716c;
+  --color-overlay: rgba(0, 0, 0, 0.72);
+
+  --color-accent: #fb923c;
+  --color-accent-hover: #fdba74;
+  --color-accent-muted: rgba(251, 146, 60, 0.15);
+  --color-on-accent: #1c1917;
+
+  --color-brand: #fb923c;
+  --color-brand-secondary: #2dd4bf;
+
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #fb7185;
+
+  --color-coach-tint: rgba(45, 212, 191, 0.12);
+  --color-coach-border: rgba(45, 212, 191, 0.28);
+  --color-coach-text: #5eead4;
+
+  --color-focus-ring: #fb923c;
+
+  --color-quality-elite: #34d399;
+  --color-quality-advanced: #10b981;
+  --color-quality-proficient: #22d3ee;
+  --color-quality-competent: #fbbf24;
+  --color-quality-developing: #fb923c;
+  --color-quality-low: #fb7185;
+
+  --court-mat: #134a3c;
+  --court-mat-deep: #0c3028;
+  --court-line: rgba(255, 255, 255, 0.9);
+  --court-on: #d1fae5;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--color-page);
+  color: var(--color-text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
 }
 
-/* Keyboard focus: visible ring for interactive controls (does not remove mouse click outline where browsers hide it) */
+/* Editorial kickers / sideline labels — Sunrise Court */
+.sunrise-kicker {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--color-brand);
+}
+
+.sunrise-rule {
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-border-strong) 12%,
+    var(--color-border-strong) 88%,
+    transparent
+  );
+}
+
+/* Keyboard focus — uses accent token */
 button:focus-visible,
 a:focus-visible,
 [role='button']:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid rgb(52, 211, 153);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -53,20 +167,18 @@ select:focus-visible {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #404040;
+  background: var(--color-border-strong);
   border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #525252;
+  background: var(--color-text-subtle);
 }
 
-/* Landing “alive” motion (disabled when user prefers reduced motion) */
 @media (prefers-reduced-motion: no-preference) {
   .badminton-net-mesh {
     animation: net-mesh-breathe 6s ease-in-out infinite;
   }
-
 }
 
 @keyframes net-mesh-breathe {
@@ -76,6 +188,50 @@ select:focus-visible {
   }
   50% {
     opacity: 1;
+  }
+}
+
+/* Shuttle trajectory — subtle dash flow (badminton “flight path”) */
+@media (prefers-reduced-motion: no-preference) {
+  .shuttle-trajectory-stroke {
+    stroke-dashoffset: 0;
+    animation: shuttle-dash-flow 3.2s linear infinite;
+  }
+}
+
+@keyframes shuttle-dash-flow {
+  to {
+    stroke-dashoffset: -64;
+  }
+}
+
+/* Steep rear-court attack — reads as smash / hanging lift */
+@keyframes shuttle-smash-run {
+  0% {
+    transform: translate3d(12%, -8%, 0) rotate(-42deg) scale(1);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-38%, 52%, 0) rotate(68deg) scale(0.92);
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shuttle-smash-sprite {
+    animation: shuttle-smash-run 1.05s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+    animation-delay: 0.6s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shuttle-smash-sprite {
+    animation: none !important;
+    opacity: 0.85;
+    transform: translate3d(-10%, 10%, 0) rotate(15deg);
   }
 }
 
