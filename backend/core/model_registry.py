@@ -29,8 +29,6 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "conv3d_pose",
     "st_tr",
     "timesformer",
-    "videomae_pose",
-    "videomae_timesformer",
     "vit_gcn",
 )
 
@@ -41,8 +39,6 @@ CATEGORY_GROUPS: Dict[str, str] = {
     "st_tr": "graph",
     "vit_gcn": "graph",
     "timesformer": "video_transformer",
-    "videomae_pose": "video_transformer",
-    "videomae_timesformer": "hybrid",
 }
 
 SCRIPT_TO_CATEGORY: Dict[str, str] = {
@@ -50,18 +46,14 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_conv3d.py": "conv3d_pose",
     "train_st_tr.py": "st_tr",
     "train_timesformer.py": "timesformer",
-    "train_videomae.py": "videomae_pose",
-    "train_videomae_timesformer.py": "videomae_timesformer",
     "train_vit_gcn.py": "vit_gcn",
 }
 
 # When nothing is configured, prefer first hit (API-safe order).
 DEFAULT_CATEGORY_FALLBACK_ORDER: Tuple[str, ...] = (
-    "videomae_timesformer",
     "timesformer",
     "cnn_lstm",
     "conv3d_pose",
-    "videomae_pose",
     "vit_gcn",
     "st_tr",
 )
@@ -96,10 +88,8 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
     if script in SCRIPT_TO_CATEGORY:
         return SCRIPT_TO_CATEGORY[script]
     fn = filename.lower()
-    if "videomae" in fn and "timesformer" in fn:
-        return "videomae_timesformer"
     if "videomae" in fn:
-        return "videomae_pose"
+        return "cnn_lstm"
     if "conv3d" in fn:
         return "conv3d_pose"
     if "timesformer" in fn:

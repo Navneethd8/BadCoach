@@ -96,7 +96,7 @@ Example:
 export ISOCOURT_RSYNC_DEST="you@home:~/IsoCourt/"
 export ISOCOURT_SHUTDOWN=1
 # export ISOCOURT_SHUTDOWN_ON_ERROR=1   # optional: halt instance when training fails
-./scripts/ec2/run_train_tmux.sh videomae
+./scripts/ec2/run_train_tmux.sh timesformer
 ```
 
 ## 4. Pull checkpoints home
@@ -116,7 +116,6 @@ Same as the **Pull** row in [Rsync quick reference](#rsync-quick-reference) abov
 | `conv3d`      | `train_conv3d.py`        |
 | `timesformer` | `train_timesformer.py`   |
 | `st_tr`       | `train_st_tr.py`         |
-| `videomae`    | `train_videomae.py`      |
 | `bst_prep`    | `prepare_bst_finebadminton_collated.py` |
 | `bst_baseline`| `train_bst_baseline.py`  |
 

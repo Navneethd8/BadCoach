@@ -1,5 +1,5 @@
 """
-R(2+1)D / R3D / MC3 (torchvision) + MediaPipe late fusion — same training contract as ``train_videomae.py``:
+R(2+1)D / R3D / MC3 (torchvision) + MediaPipe late fusion — same training contract as ``train_timesformer.py``:
 
 ``video_level_split``, weighted sampler, augmentations, multitask losses, MLflow, registry category
 ``conv3d_pose``, checkpoint ``badminton_model_conv3d_pose.pth`` by default.

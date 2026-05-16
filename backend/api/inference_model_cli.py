@@ -9,7 +9,7 @@ Examples:
 
 ``set`` writes ``models/inference_selection.json`` plus ``deploy/docker-inference.env``
 and ``deploy/ci_inference_category`` (Docker Compose + GitHub Actions deploy).
-Override at runtime without those files: ``ISOCOURT_INFERENCE_CATEGORY=videomae_timesformer``.
+Override at runtime without those files: ``ISOCOURT_INFERENCE_CATEGORY=timesformer``.
 """
 from __future__ import annotations
 

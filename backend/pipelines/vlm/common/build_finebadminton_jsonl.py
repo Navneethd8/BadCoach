@@ -59,7 +59,7 @@ def _hit_to_label_sample(hit: dict) -> dict:
 
 def multitask_vlm_instruction(ds: FineBadmintonDataset) -> str:
     """
-    Prompt that asks for IsoCourt's discrete labels (aligned with CNN / VideoMAE / Timesformer heads).
+    Prompt that asks for IsoCourt's discrete labels (aligned with CNN / TimeSformer heads).
     Vocabularies come from ``ds.classes`` (same source as non-VLM training).
     """
 

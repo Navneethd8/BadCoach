@@ -28,8 +28,6 @@ from core.model_registry import (
 ARCH_CNN_LSTM = "cnn_lstm"
 ARCH_CONV3D_POSE = "conv3d_pose"
 ARCH_TIMESFORMER = "timesformer"
-ARCH_VIDEOMAE_POSE = "videomae_pose"
-ARCH_VIDEOMAE_TIMESFORMER = "videomae_timesformer"
 ARCH_ST_TR = "st_tr"
 ARCH_VIT_GCN = "vit_gcn"
 
@@ -37,8 +35,6 @@ _SCRIPT_TO_ARCH = {
     "train_full.py": ARCH_CNN_LSTM,
     "train_conv3d.py": ARCH_CONV3D_POSE,
     "train_timesformer.py": ARCH_TIMESFORMER,
-    "train_videomae.py": ARCH_VIDEOMAE_POSE,
-    "train_videomae_timesformer.py": ARCH_VIDEOMAE_TIMESFORMER,
     "train_st_tr.py": ARCH_ST_TR,
     "train_vit_gcn.py": ARCH_VIT_GCN,
 }
@@ -74,10 +70,8 @@ def resolve_architecture(
     if script in _SCRIPT_TO_ARCH:
         return _SCRIPT_TO_ARCH[script]
     fn = filename.lower()
-    if "videomae" in fn and "timesformer" in fn:
-        return ARCH_VIDEOMAE_TIMESFORMER
     if "videomae" in fn:
-        return ARCH_VIDEOMAE_POSE
+        return ARCH_CNN_LSTM
     if "conv3d" in fn:
         return ARCH_CONV3D_POSE
     if "st_tr" in fn or "sttr" in fn:
@@ -103,6 +97,12 @@ def build_model(
         if key in inf:
             return inf[key]
         return default
+
+    if arch in ("videomae_pose", "videomae_timesformer"):
+        raise RuntimeError(
+            "VideoMAE stroke checkpoints are no longer supported in this repository. "
+            "Use `python -m api.inference_model_cli set <category>` with timesformer, conv3d_pose, or cnn_lstm."
+        )
 
     if arch == ARCH_ST_TR:
         raise RuntimeError(
@@ -143,33 +143,6 @@ def build_model(
             backbone=str(_i("backbone", "scratch")),
             vit_model_name=str(_i("vit_model_name", "vit_small_patch16_224")),
             vit_unfreeze_last_n=int(_i("vit_unfreeze_last_n", 0)),
-            use_pose=bool(_i("use_pose", True)),
-        )
-
-    if arch == ARCH_VIDEOMAE_POSE:
-        from core.videomae_pose import VideoMAEPoseModel
-
-        return VideoMAEPoseModel(
-            task_classes=task_classes,
-            hf_model_id=str(_i("hf_model_id", "MCG-NJU/videomae-base")),
-            num_frames=int(_i("num_frames", 16)),
-            freeze_backbone=bool(_i("freeze_videomae", _i("freeze_backbone", True))),
-            unfreeze_last_n=int(_i("videomae_unfreeze_last_n", _i("unfreeze_last_n", 0))),
-            use_pose=bool(_i("use_pose", True)),
-        )
-
-    if arch == ARCH_VIDEOMAE_TIMESFORMER:
-        from core.videomae_timesformer import VideoMAETimeSformerPoseModel
-
-        return VideoMAETimeSformerPoseModel(
-            task_classes=task_classes,
-            hf_model_id=str(_i("hf_model_id", "MCG-NJU/videomae-base")),
-            num_frames=int(_i("num_frames", 16)),
-            embed_dim=int(_i("embed_dim", 128)),
-            num_heads=int(_i("num_heads", 4)),
-            depth=int(_i("depth", 4)),
-            freeze_videomae=bool(_i("freeze_videomae", True)),
-            videomae_unfreeze_last_n=int(_i("videomae_unfreeze_last_n", 0)),
             use_pose=bool(_i("use_pose", True)),
         )
 

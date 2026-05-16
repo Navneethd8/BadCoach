@@ -63,7 +63,7 @@ class Conv3DPoseMultitaskModel(nn.Module):
     ``forward`` expects the same layout as other IsoCourt video models:
     ``frames`` ``(B,T,3,H,W)`` ImageNet-normalized; ``joint_seq`` ``(B,T,33,3)``.
     Internally resizes spatially to ``spatial_size`` (default **224**) so RGB matches
-    ``FineBadmintonDataset`` / ResNet50 / TimeSformer / VideoMAE (all 224²). Kinetics
+    ``FineBadmintonDataset`` / ResNet50 / TimeSformer (all 224²). Kinetics
     weights still load; spatial stride stacks tolerate 224 before global pooling.
     """
 
@@ -176,7 +176,7 @@ class Conv3DPoseMultitaskModel(nn.Module):
 
 
 def backbone_parameter_groups(model: "Conv3DPoseMultitaskModel") -> Tuple[list, list]:
-    """Split 3D trunk vs fusion+heads for differential LR (matches VideoMAE trainer pattern)."""
+    """Split 3D trunk vs fusion+heads for differential LR (matches other two-stream video trainers)."""
     bb, other = [], []
     for name, p in model.named_parameters():
         if not p.requires_grad:

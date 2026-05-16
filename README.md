@@ -96,8 +96,6 @@ A single pass provides 7 distinct layers of analysis:
 | Script | Purpose | Focus | Use Case |
 | :--- | :--- | :--- | :--- |
 | `train_timesformer.py` | TimeSformer | Divided space–time ViT + pose token | Same split/cache as other video trainers; default `--backbone vit` uses **ImageNet** `timm` ViT; tuning ranges in `pipelines/training/TIMESFORMER_HYPERPARAMS.md` |
-| `train_videomae.py` | VideoMAE + pose | HF **VideoMAE** clip encoder + pose fusion | Same pipeline; **pooled** VideoMAE features + pose MLP — `badminton_model_videomae.pth` |
-| `train_videomae_timesformer.py` | VideoMAE + pose + **divided ST** | VideoMAE tokens → reshape → `DividedSTBlock` (tube time **T_tube=8** for 16 frames, tubelet 2) | Same pipeline; checkpoint `badminton_model_videomae_timesformer.pth`, registry `script: train_videomae_timesformer.py` |
 | `train_full.py` | Baseline | CNN-LSTM | Domain shift & court color invariance (Overnight) |
 | `fine_tune.py` | Domain Adaptation | Heads-Only | Custom court floor & lighting (20 mins) |
 
@@ -112,4 +110,4 @@ Calibrated on one Apple Silicon (MPS) box with the current dataset (~318 train c
 
 **TimeSformer:** Smoke runs that only train **part** of an epoch (e.g. `--max-train-batches` ≈ **50** steps) were **~2.5–3 min** on the same machine. A **full** epoch scales about linearly with batches: multiply that wall time by `(batches_per_epoch / 50)`. With **~80** train batches (batch 4, this split), expect **~4–5 min/epoch** and **~4–5 h** for 60 epochs—not the much larger “laptop day” guess you get if you assume tens of minutes per epoch. If your tqdm total per epoch is much higher (smaller batch size or different sampler length), scale up accordingly.
 
-Install **`timm`** (ViT TimeSformer) and **`transformers`** (VideoMAE) via `pip install -r backend/requirements.txt`. Use **val loss** and **val type acc** in MLflow to compare runs (train/val split stays **video-level** only).
+Install **`timm`** (ViT TimeSformer) via `pip install -r backend/requirements.txt`. Use **val loss** and **val type acc** in MLflow to compare runs (train/val split stays **video-level** only).

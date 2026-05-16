@@ -25,12 +25,10 @@ These are the **only** valid keys under `models.architectures.`* and for `infere
 | `conv3d_pose`          | video_cnn         | `pipelines/training/train_conv3d.py`               | `core/conv3d_pose.py`              | Torchvision R(2+1)D / R3D / MC3 + late-fused MediaPipe joints; optional Grad-CAM on `layer4`.                                       |
 | `st_tr`                | graph             | `pipelines/training/train_st_tr.py`                | `core/st_tr.py` (`STTRModel`)      | ST-TR dual transformer on MediaPipe pose. **Not supported** by `/analyze` (pose-only).                                              |
 | `timesformer`          | video_transformer | `pipelines/training/train_timesformer.py`          | `core/timesformer.py`              | Divided space–time attention + pose tokens; ViT-style stem when `backbone=vit`.                                                     |
-| `videomae_pose`        | video_transformer | `pipelines/training/train_videomae.py`             | `core/videomae_pose.py`            | Hugging Face VideoMAE encoder + pose fusion (pooled tokens).                                                                        |
-| `videomae_timesformer` | hybrid            | `pipelines/training/train_videomae_timesformer.py` | `core/videomae_timesformer.py`     | VideoMAE tokens + divided ST stack + pose.                                                                                          |
 | `vit_gcn`              | graph             | `pipelines/training/train_vit_gcn.py`              | `core/vit_gcn.py`                  | Per-frame timm ViT CLS + fixed skeleton GCN on MediaPipe joints.                                                                    |
 
 
-**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `st_tr`, `timesformer`, `videomae_pose`, `videomae_timesformer`, `vit_gcn`.
+**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `st_tr`, `timesformer`, `vit_gcn`.
 
 ---
 
@@ -141,22 +139,12 @@ python backend/pipelines/training/train_timesformer.py
 # python backend/pipelines/training/train_timesformer.py --backbone vit --vit-model vit_small_patch16_224
 # python backend/pipelines/training/train_timesformer.py --no-pose
 
-# --- videomae_pose (HF VideoMAE + pose; default: badminton_model_videomae.pth) ---
-python backend/pipelines/training/train_videomae.py
-# python backend/pipelines/training/train_videomae.py --hf-model-id MCG-NJU/videomae-base --no-pose
-
-# --- videomae_timesformer (VideoMAE + divided ST + pose; default: badminton_model_videomae_timesformer.pth) ---
-python backend/pipelines/training/train_videomae_timesformer.py
-# Shorter default epochs (30) than other scripts; optional preset:
-# python backend/pipelines/training/train_videomae_timesformer.py --preset conservative
-# python backend/pipelines/training/train_videomae_timesformer.py --checkpoint-metric val_loss
-
 # --- vit_gcn (timm ViT CLS + skeleton GCN; default: badminton_model_vit_gcn.pth) ---
 python backend/pipelines/training/train_vit_gcn.py
 # python backend/pipelines/training/train_vit_gcn.py --vit-model vit_small_patch16_224 --no-pose
 ```
 
-Heavy scripts (`train_conv3d.py`, `train_timesformer.py`, `train_videomae.py`, `train_videomae_timesformer.py`, `train_vit_gcn.py`) accept shared-style flags such as `--epochs`, `--batch-size`, `--lr`, `--pose-cache /path/to.pt`, `--max-train-batches N` (smoke tests), `--aug {strong,medium,mild}`, `--accum-steps`, `--stroke-loss-weight`, `--registry-experiment`, and `--no-pose` where listed. Use each file’s `--help` for the full list.
+Heavy scripts (`train_conv3d.py`, `train_timesformer.py`, `train_vit_gcn.py`) accept shared-style flags such as `--epochs`, `--batch-size`, `--lr`, `--pose-cache /path/to.pt`, `--max-train-batches N` (smoke tests), `--aug {strong,medium,mild}`, `--accum-steps`, `--stroke-loss-weight`, `--registry-experiment`, and `--no-pose` where listed. Use each file’s `--help` for the full list.
 
 ---
 
@@ -173,7 +161,7 @@ python3 -m api.inference_model_cli promote vit_gcn 0
 
 `**set**` also rewrites `**backend/deploy/docker-inference.env**` (used by `**docker compose**` via `docker-compose.yml`) and `**backend/deploy/ci_inference_category**` (one line; the HF deploy workflow loads it into `ISOCOURT_INFERENCE_CATEGORY` before copying the single checkpoint). Commit those files with `models/inference_selection.json` so you are not hand-editing Docker or GitHub YAML.
 
-**Environment (overrides the JSON file):** `ISOCOURT_INFERENCE_CATEGORY=videomae_timesformer`
+**Environment (overrides the JSON file):** `ISOCOURT_INFERENCE_CATEGORY=timesformer`
 
 **Resolution order for category:** env → `inference_selection.json` → legacy v1 `active_model` hint (migration) → first category in the built-in fallback list that has a valid `primary` file on disk.
 
