@@ -55,10 +55,6 @@
         },
         "registrations": []
       },
-      "staeformer": {
-        "primary": null,
-        "registrations": []
-      },
       "st_tr": {
         "primary": {
           "accuracy": 10.83,

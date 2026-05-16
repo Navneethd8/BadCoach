@@ -1,7 +1,7 @@
 """
 TimeSformer-style divided space-time attention on video patches, with a prepended
 pose token (MediaPipe 33x3 projected to embed_dim) per frame — same fusion idea as
-STAEformer (RGB structure + pose), but spatial reasoning is on patch tokens.
+other RGB+pose trainers, but spatial reasoning is on patch tokens.
 
 Backbone options:
   - scratch (default): Conv2d patch embedding (random init) — no timm ViT.

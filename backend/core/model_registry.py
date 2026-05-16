@@ -27,7 +27,6 @@ ENV_INFERENCE_CATEGORY = "ISOCOURT_INFERENCE_CATEGORY"
 ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
-    "staeformer",
     "st_tr",
     "timesformer",
     "videomae_pose",
@@ -39,7 +38,6 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
 CATEGORY_GROUPS: Dict[str, str] = {
     "cnn_lstm": "cnn",
     "conv3d_pose": "video_cnn",
-    "staeformer": "graph",
     "st_tr": "graph",
     "vit_gcn": "graph",
     "timesformer": "video_transformer",
@@ -50,7 +48,6 @@ CATEGORY_GROUPS: Dict[str, str] = {
 SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_full.py": "cnn_lstm",
     "train_conv3d.py": "conv3d_pose",
-    "train_staeformer.py": "staeformer",
     "train_st_tr.py": "st_tr",
     "train_timesformer.py": "timesformer",
     "train_videomae.py": "videomae_pose",
@@ -58,7 +55,7 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_vit_gcn.py": "vit_gcn",
 }
 
-# When nothing is configured, prefer first hit (API-safe: skip staeformer primary).
+# When nothing is configured, prefer first hit (API-safe order).
 DEFAULT_CATEGORY_FALLBACK_ORDER: Tuple[str, ...] = (
     "videomae_timesformer",
     "timesformer",
@@ -67,7 +64,6 @@ DEFAULT_CATEGORY_FALLBACK_ORDER: Tuple[str, ...] = (
     "videomae_pose",
     "vit_gcn",
     "st_tr",
-    "staeformer",
 )
 
 
@@ -112,8 +108,6 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
         return "vit_gcn"
     if "st_tr" in fn or "sttr" in fn:
         return "st_tr"
-    if "staeformer" in fn:
-        return "staeformer"
     return "cnn_lstm"
 
 

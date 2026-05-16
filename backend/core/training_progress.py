@@ -11,7 +11,7 @@ from typing import Any, Iterable
 
 from tqdm import tqdm
 
-# CNN-LSTM / STAEformer default; TimeSformer matches for comparable runs.
+# CNN-LSTM default; TimeSformer matches for comparable runs.
 DEFAULT_TRAIN_BATCH_SIZE = 4
 
 _TRAIN_BAR = (

@@ -30,7 +30,6 @@ ARCH_CONV3D_POSE = "conv3d_pose"
 ARCH_TIMESFORMER = "timesformer"
 ARCH_VIDEOMAE_POSE = "videomae_pose"
 ARCH_VIDEOMAE_TIMESFORMER = "videomae_timesformer"
-ARCH_STAE = "staeformer"
 ARCH_ST_TR = "st_tr"
 ARCH_VIT_GCN = "vit_gcn"
 
@@ -40,7 +39,6 @@ _SCRIPT_TO_ARCH = {
     "train_timesformer.py": ARCH_TIMESFORMER,
     "train_videomae.py": ARCH_VIDEOMAE_POSE,
     "train_videomae_timesformer.py": ARCH_VIDEOMAE_TIMESFORMER,
-    "train_staeformer.py": ARCH_STAE,
     "train_st_tr.py": ARCH_ST_TR,
     "train_vit_gcn.py": ARCH_VIT_GCN,
 }
@@ -86,8 +84,6 @@ def resolve_architecture(
         return ARCH_ST_TR
     if "timesformer" in fn:
         return ARCH_TIMESFORMER
-    if "staeformer" in fn and "timesformer" not in fn:
-        return ARCH_STAE
     if "vit_gcn" in fn or "vitgcn" in fn:
         return ARCH_VIT_GCN
     return ARCH_CNN_LSTM
@@ -107,13 +103,6 @@ def build_model(
         if key in inf:
             return inf[key]
         return default
-
-    if arch == ARCH_STAE:
-        raise RuntimeError(
-            "STAEformer checkpoints are not supported by the /analyze API "
-            "(they need per-frame CNN features). "
-            "Use `python -m api.inference_model_cli set <category>` with a non-staeformer category."
-        )
 
     if arch == ARCH_ST_TR:
         raise RuntimeError(

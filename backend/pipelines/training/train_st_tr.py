@@ -2,7 +2,7 @@
 ST-TR (Spatial Transformer – Temporal Transformer) training script.
 
 Pose-only model: two parallel transformer streams on MediaPipe skeleton.
-Same data pipeline as train_staeformer.py — shares the same pose cache.
+Same data pipeline as other trainers that use the shared MediaPipe pose cache.
 
 Reference: Plizzari et al., arXiv 2008.07404 (ICPR 2021).
 """
@@ -51,7 +51,7 @@ class PoseOnlyDataset(Dataset):
 
 
 def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
-    """Build or load pose cache (same format as train_staeformer)."""
+    """Build or load pose cache (same format as other pose-fusion trainers)."""
     n_expected = len(dataset)
     T = dataset.sequence_length
     out = load_pose_cache_bundle(cache_path)

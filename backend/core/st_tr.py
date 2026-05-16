@@ -14,8 +14,8 @@ Two *parallel* transformer streams operating on a skeleton sequence (B, T, J, 3)
 Stream outputs are fused (concat → projection), globally pooled, and fed to
 multitask classification heads.
 
-This differs from STAEformer which applies temporal then spatial *sequentially*
-with residual connections.  ST-TR's parallel design lets both streams see the
+This differs from sequential graph transformers that apply temporal then spatial
+attention in a single stack with residual connections.  ST-TR's parallel design lets both streams see the
 raw embedding rather than one stream's output.
 """
 

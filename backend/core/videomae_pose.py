@@ -6,7 +6,7 @@ This is the **video-native** counterpart to `TimeSformerPoseModel` with `--backb
 - **VideoMAE path (here)**: one **spatiotemporal** encoder over the clip → pooled embedding,
   fused with a projected pose vector → same style MLP heads as other IsoCourt trainers.
 
-Same labels, same pose tensor (T, 33, 3), same task heads pattern as CNN/STAEformer/TimeSformer.
+Same labels, same pose tensor (T, 33, 3), same task heads pattern as CNN-LSTM/TimeSformer.
 """
 from __future__ import annotations
 

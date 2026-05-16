@@ -1,5 +1,5 @@
 """
-VideoMAE (HF) + pose fusion — same training pipeline as train_timesformer.py / train_staeformer.py:
+VideoMAE (HF) + pose fusion — same training pipeline as ``train_timesformer.py``:
 
 - `video_level_split`, weighted sampler, augmentations, multi-task losses, MLflow.
 - **Visual trunk**: Hugging Face `VideoMAEModel` (video-pretrained), **not** timm ViT and **not**

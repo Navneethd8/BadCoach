@@ -1,7 +1,7 @@
 """
 TimeSformer (divided space-time) + MediaPipe pose token training.
 
-Same dataset, video_level_split, augmentations, losses, and sampler as train_staeformer.py.
+Same dataset, video_level_split, augmentations, losses, and sampler as ``train_full.py``.
 Default pose cache path is ``models/pose_cache_mediapipe.pt`` (shared across trainers; legacy ``pose_cache_staeformer.pt`` is still read if present).
 
 Train/val indices come only from video_level_split (no random clip leakage). Default visual
@@ -50,7 +50,7 @@ def _multitask_loss(logits_dict, labels, device, criterion_st, criterion_default
 
 
 def _build_train_transform(aug_strength: str):
-    """strong = same as STAEformer; medium/mild shrink aug for val alignment experiments."""
+    """strong = same as CNN-LSTM trainers; medium/mild shrink aug for val alignment experiments."""
     if aug_strength == "strong":
         return v2.Compose(
             [
@@ -187,7 +187,7 @@ def train_timesformer(
     if save_path is None:
         save_path = os.path.join(backend_root, "models", "badminton_model_timesformer.pth")
     if pose_cache_path is None:
-        # Share cache with STAEformer training when present
+        # Shared default pose cache path (legacy filename still supported)
         pose_cache_path = default_pose_cache_path(backend_root)
 
     mlflow.set_experiment("IsoCourt_Training_TimeSformer")
@@ -521,7 +521,7 @@ if __name__ == "__main__":
         "--batch-size",
         type=int,
         default=DEFAULT_TRAIN_BATCH_SIZE,
-        help=f"Train/val minibatch size (default {DEFAULT_TRAIN_BATCH_SIZE}, same as CNN/STAEformer)",
+        help=f"Train/val minibatch size (default {DEFAULT_TRAIN_BATCH_SIZE}, same as CNN-LSTM)",
     )
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--embed-dim", type=int, default=128)
