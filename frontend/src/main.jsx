@@ -7,7 +7,6 @@ import LandingPage from './components/LandingPage.jsx'
 import LiveSession from './components/LiveSession.jsx'
 import PrivacyPage from './components/PrivacyPage.jsx'
 import TermsPage from './components/TermsPage.jsx'
-import { ThemeProvider } from './ThemeContext.jsx'
 import './index.css'
 
 ReactGA.initialize("G-TET6JN36Q4")
@@ -15,7 +14,6 @@ ReactGA.initialize("G-TET6JN36Q4")
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <BrowserRouter>
-            <ThemeProvider>
             <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/analyze" element={<App />} />
@@ -24,7 +22,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-            </ThemeProvider>
         </BrowserRouter>
     </React.StrictMode>,
 )

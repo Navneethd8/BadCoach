@@ -1,10 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { nav as brandNav } from '../brand/isoCourtVoice.js'
-import { motion, AnimatePresence } from 'framer-motion'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
-import ThemeToggle from './ThemeToggle.jsx'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -236,49 +233,37 @@ export default function LiveSession() {
 
     const getQualityColor = (q) => {
         const s = String(q).toLowerCase()
-        if (s.includes('elite') || s.includes('expert')) return 'text-[color:var(--color-quality-elite)]'
-        if (s.includes('advanced')) return 'text-[color:var(--color-quality-advanced)]'
-        if (s.includes('proficient')) return 'text-[color:var(--color-quality-proficient)]'
-        if (s.includes('competent')) return 'text-[color:var(--color-quality-competent)]'
-        if (s.includes('developing')) return 'text-[color:var(--color-quality-developing)]'
-        return 'text-[color:var(--color-quality-low)]'
+        if (s.includes('elite') || s.includes('expert')) return 'text-emerald-400'
+        if (s.includes('advanced')) return 'text-emerald-500'
+        if (s.includes('proficient')) return 'text-cyan-400'
+        if (s.includes('competent')) return 'text-amber-400'
+        if (s.includes('developing')) return 'text-orange-400'
+        return 'text-red-400'
     }
 
     const fmtTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
 
     return (
-        <div className="min-h-screen bg-page font-sans text-foreground">
-            <nav className="sticky top-0 z-50 border-b-2 border-brand/20 bg-page/90 backdrop-blur-sm">
-                <div className="mx-auto flex h-auto max-w-[min(1920px,calc(100vw-1.25rem))] items-center justify-between gap-4 px-4 py-4 sm:px-6">
-                    <button type="button" onClick={() => navigate('/')} className="flex min-w-0 items-baseline gap-3 focus:outline-none">
-                        <Logo size={24} className="shrink-0 text-brand" />
-                        <span className="font-display truncate text-lg tracking-tight text-foreground">
-                            Iso<span className="text-brand">Court</span>
-                        </span>
+        <div className="min-h-screen bg-neutral-950 text-neutral-100">
+            <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/80 backdrop-blur-md">
+                <div className="mx-auto flex h-14 max-w-[min(1920px,calc(100vw-1.25rem))] items-center justify-between px-3 sm:px-5">
+                    <button onClick={() => navigate('/')} className="flex items-center gap-2 focus:outline-none">
+                        <Logo size={22} className="text-emerald-500" />
+                        <span className="text-base font-semibold tracking-tight">Iso<span className="text-emerald-500">Court</span></span>
                     </button>
-                    <div className="flex shrink-0 items-center gap-4 sm:gap-6">
-                        <ThemeToggle />
-                        <button
-                            type="button"
-                            onClick={() => navigate('/analyze')}
-                            className="font-mono text-[11px] uppercase tracking-[0.2em] text-foreground-muted transition-colors hover:text-foreground"
-                        >
-                            {brandNav.analyzeClip}
-                        </button>
-                    </div>
+                    <button onClick={() => navigate('/analyze')} className="text-sm text-neutral-400 hover:text-white transition-colors">
+                        Clip Analysis
+                    </button>
                 </div>
             </nav>
 
-            <div className="mx-auto max-w-[min(1920px,calc(100vw-1.25rem))] px-4 py-8 sm:px-6">
-                <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-foreground-muted">Live hall</p>
-                <h1 className="font-display mt-2 text-3xl font-normal tracking-tight text-foreground md:text-4xl">
-                    Live <span className="text-brand">session</span>
-                </h1>
-                <p className="mt-3 max-w-lg text-foreground-muted">Point the camera at the court. Feedback lands in the rail beside the picture.</p>
+            <div className="mx-auto max-w-[min(1920px,calc(100vw-1.25rem))] px-3 py-6 sm:px-5">
+                <h1 className="text-2xl font-bold mb-1 tracking-tight">Live <span className="text-emerald-500">Session</span></h1>
+                <p className="text-sm text-neutral-500 mb-5">Point your camera at the court and get real-time feedback.</p>
 
                 {/* Capacity / error banners */}
                 {status === 'capacity' && (
-                    <div className="mb-4 flex items-start gap-3 border border-amber-700/60 bg-amber-950/90 px-5 py-3.5 text-sm text-amber-200">
+                    <div className="mb-4 flex items-start gap-3 bg-amber-950/90 border border-amber-700/60 text-amber-200 text-sm px-5 py-3.5 rounded-xl">
                         <Icon name="hourglass_top" size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-amber-300 mb-0.5">Live sessions at capacity</p>
@@ -288,7 +273,7 @@ export default function LiveSession() {
                     </div>
                 )}
                 {(status === 'error' || cameraError) && (
-                    <div className="mb-4 flex items-start gap-3 border border-red-700/50 bg-red-950/80 px-5 py-3.5 text-sm text-red-200">
+                    <div className="mb-4 flex items-start gap-3 bg-red-950/80 border border-red-700/50 text-red-200 text-sm px-5 py-3.5 rounded-xl">
                         <Icon name="error" size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-red-300 mb-0.5">Something went wrong</p>
@@ -301,24 +286,24 @@ export default function LiveSession() {
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-4 xl:gap-5 min-[1700px]:gap-6">
 
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                        <div className="relative aspect-video w-full overflow-hidden border-2 border-border bg-surface shadow-none">
+                        <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-lg shadow-black/20">
                             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                             <canvas ref={canvasRef} className="hidden" />
 
                             {status === 'idle' && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-surface/90">
-                                    <Icon name="videocam" size={48} className="text-foreground-subtle" />
-                                    <motion.button onClick={startSession} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                                        className="border-2 border-brand bg-accent px-8 py-3 font-mono text-xs font-semibold uppercase tracking-[0.15em] text-onaccent transition-colors hover:bg-accent-hover rounded-none">
-                                        Start
-                                    </motion.button>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-neutral-900/90">
+                                    <Icon name="videocam" size={48} className="text-neutral-700" />
+                                    <button onClick={startSession}
+                                        className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30">
+                                        Start Game
+                                    </button>
                                 </div>
                             )}
 
                             {status === 'connecting' && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-surface/80">
-                                    <div className="flex items-center gap-3 text-foreground-muted">
-                                        <span className="w-5 h-5 border-2 border-brand-secondary/30 border-t-accent rounded-full animate-spin" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
+                                    <div className="flex items-center gap-3 text-neutral-400">
+                                        <span className="w-5 h-5 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full" />
                                         <span className="text-sm">Starting session...</span>
                                     </div>
                                 </div>
@@ -328,45 +313,43 @@ export default function LiveSession() {
                             {(status === 'live' || status === 'paused') && (
                                 <div className="absolute top-3 left-3 flex items-center gap-2">
                                     {status === 'live' ? (
-                                        <div className="flex items-center gap-1.5 bg-red-600/90 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-white shadow-none">
-                                            <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                        <div className="flex items-center gap-1.5 bg-red-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg">
+                                            <span className="w-2 h-2 bg-white rounded-full" />
                                             LIVE
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-1.5 bg-amber-600/90 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-white shadow-none">
+                                        <div className="flex items-center gap-1.5 bg-amber-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg">
                                             <Icon name="pause" size={12} />
                                             PAUSED
                                         </div>
                                     )}
-                                    <AnimatePresence mode="wait">
                                         {statusMsg && status === 'live' && (
-                                            <motion.div key={statusMsg} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
-                                                className="bg-surface/80 px-3 py-1.5 font-mono text-[10px] text-foreground-muted backdrop-blur-sm">
+                                            <div key={statusMsg}
+                                                className="bg-neutral-900/80 backdrop-blur-sm text-neutral-300 text-xs px-3 py-1.5 rounded-full">
                                                 {statusMsg}
-                                            </motion.div>
+                                            </div>
                                         )}
-                                    </AnimatePresence>
                                 </div>
                             )}
 
                             {/* Paused overlay */}
                             {status === 'paused' && (
-                                <div className="absolute inset-0 bg-page/50 flex items-center justify-center">
-                                    <motion.button onClick={resumeSession} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                                        className="border-2 border-brand bg-accent px-6 py-2.5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-onaccent transition-colors hover:bg-accent-hover rounded-none">
+                                <div className="absolute inset-0 bg-neutral-950/50 flex items-center justify-center">
+                                    <button onClick={resumeSession}
+                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg">
                                         <Icon name="play_arrow" size={16} className="align-middle mr-1" />Resume
-                                    </motion.button>
+                                    </button>
                                 </div>
                             )}
 
                             {(status === 'live' || status === 'paused') && (
                                 <div className="absolute top-3 right-3 flex items-center gap-2">
                                     {status === 'live' && (
-                                        <button onClick={pauseSession} className="bg-muted/80 px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-foreground transition-colors hover:bg-surface-elevated rounded-none">
+                                        <button onClick={pauseSession} className="bg-neutral-800/80 hover:bg-neutral-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
                                             <Icon name="pause" size={13} className="align-middle mr-0.5" />Pause
                                         </button>
                                     )}
-                                    <button onClick={endSession} className="bg-red-900/60 px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-red-200 transition-colors hover:bg-red-800/80 rounded-none">
+                                    <button onClick={endSession} className="bg-red-900/60 hover:bg-red-800/80 text-red-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
                                         End Session
                                     </button>
                                 </div>
@@ -374,68 +357,66 @@ export default function LiveSession() {
 
                             {/* Break overlay */}
                             {onBreak && status === 'live' && (
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                                    className={`absolute bottom-0 inset-x-0 rounded-b-lg px-4 py-3 flex items-center justify-center gap-2 ${onBreak === 'no_badminton' ? 'bg-amber-950/80' : 'bg-page/80'} backdrop-blur-sm`}>
+                                <div
+                                    className={`absolute bottom-0 inset-x-0 rounded-b-lg px-4 py-3 flex items-center justify-center gap-2 ${onBreak === 'no_badminton' ? 'bg-amber-950/80' : 'bg-neutral-950/80'} backdrop-blur-sm`}>
                                     <Icon name={onBreak === 'no_badminton' ? 'videocam_off' : 'pause_circle'} size={16}
-                                        className={onBreak === 'no_badminton' ? 'text-amber-500' : 'text-foreground-muted'} />
-                                    <span className={`text-xs ${onBreak === 'no_badminton' ? 'text-amber-300' : 'text-foreground-muted'}`}>
+                                        className={onBreak === 'no_badminton' ? 'text-amber-500' : 'text-neutral-500'} />
+                                    <span className={`text-xs ${onBreak === 'no_badminton' ? 'text-amber-300' : 'text-neutral-400'}`}>
                                         {onBreak === 'no_badminton'
                                             ? 'No badminton detected. Point camera at the court'
                                             : 'Break in play. Waiting for action'}
                                     </span>
-                                </motion.div>
+                                </div>
                             )}
 
                             {/* Metrics HUD overlay */}
-                            <AnimatePresence>
                                 {lastResult && !onBreak && (status === 'live' || status === 'paused') && (
-                                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                                        className="absolute bottom-0 inset-x-0 rounded-b-lg bg-black/70 backdrop-blur-sm px-3 py-2.5">
+                                    <div
+                                        className="absolute bottom-0 inset-x-0 rounded-b-lg bg-neutral-950/75 backdrop-blur-sm px-3 py-2.5">
                                         <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-center">
                                             <div>
-                                                <p className="text-[8px] text-white/55 uppercase tracking-wider">Stroke</p>
+                                                <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Stroke</p>
                                                 <p className="text-xs font-bold text-white truncate">{lastResult.label}</p>
                                             </div>
                                             <div>
-                                                <p className="text-[8px] text-white/55 uppercase tracking-wider">Technique</p>
-                                                <p className="text-[11px] font-medium text-white/95 truncate">{lastResult.metrics?.technique?.label || '-'}</p>
+                                                <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Technique</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.technique?.label || '-'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-[8px] text-white/55 uppercase tracking-wider">Placement</p>
-                                                <p className="text-[11px] font-medium text-white/95 truncate">{lastResult.metrics?.placement?.label || '-'}</p>
+                                                <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Placement</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.placement?.label || '-'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-[8px] text-white/55 uppercase tracking-wider">Position</p>
-                                                <p className="text-[11px] font-medium text-white/95 truncate">{lastResult.metrics?.position?.label || '-'}</p>
+                                                <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Position</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.position?.label || '-'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-[8px] text-white/55 uppercase tracking-wider">Intent</p>
-                                                <p className="text-[11px] font-medium text-white/95 truncate">{lastResult.metrics?.intent?.label || '-'}</p>
+                                                <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Intent</p>
+                                                <p className="text-[11px] font-medium text-neutral-200 truncate">{lastResult.metrics?.intent?.label || '-'}</p>
                                             </div>
                                             <div>
-                                                <p className="text-[8px] text-white/55 uppercase tracking-wider">Quality</p>
+                                                <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Quality</p>
                                                 <p className={`text-[11px] font-semibold truncate ${getQualityColor(lastResult.metrics?.quality)}`}>{lastResult.metrics?.quality || '-'}</p>
                                             </div>
                                         </div>
-                                    </motion.div>
+                                    </div>
                                 )}
-                            </AnimatePresence>
                         </div>
                     </div>
 
                     <aside
-                        className="flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden border-2 border-border bg-surface sm:h-[min(20rem,44vh)] lg:min-h-0 lg:max-h-[min(40rem,calc(100dvh-9rem))] lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96 rounded-none"
+                        className="flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 sm:h-[min(20rem,44vh)] lg:min-h-0 lg:max-h-[min(40rem,calc(100dvh-9rem))] lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
                         aria-label="AI Coach chat"
                     >
-                        <div className="flex items-center gap-2 px-4 py-3 border-b border-border flex-shrink-0">
-                            <Icon name="smart_toy" size={16} className="text-brand" />
-                            <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">AI Coach</span>
+                        <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800 flex-shrink-0">
+                            <Icon name="smart_toy" size={16} className="text-emerald-500" />
+                            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">AI Coach</span>
                             <div className="ml-auto flex items-center gap-2">
                                 {chatLog.length > 0 && (
-                                    <span className="text-[10px] text-foreground-subtle">{chatLog.length} messages</span>
+                                    <span className="text-[10px] text-neutral-600">{chatLog.length} messages</span>
                                 )}
                                 <button onClick={toggleVoice} title={voiceEnabled ? 'Mute voice' : 'Unmute voice'}
-                                    className={`p-1 rounded transition-colors ${voiceEnabled ? 'text-brand hover:text-accent' : 'text-foreground-subtle hover:text-foreground-muted'}`}>
+                                    className={`p-1 rounded transition-colors ${voiceEnabled ? 'text-emerald-500 hover:text-emerald-400' : 'text-neutral-600 hover:text-neutral-400'}`}>
                                     <Icon name={voiceEnabled ? 'volume_up' : 'volume_off'} size={16} />
                                 </button>
                             </div>
@@ -449,29 +430,27 @@ export default function LiveSession() {
                         >
                             {chatLog.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
-                                    <Icon name="sports" size={28} className="text-border-strong" />
-                                    <p className="text-xs text-foreground-subtle">Start a game to see live coaching commentary here.</p>
+                                    <Icon name="sports" size={28} className="text-neutral-800" />
+                                    <p className="text-xs text-neutral-600">Start a game to see live coaching commentary here.</p>
                                 </div>
                             )}
-                            <AnimatePresence initial={false}>
                                 {chatLog.map(msg => (
-                                    <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+                                    <div key={msg.id}
                                         className="flex gap-2.5 items-start">
-                                        <span className="text-[10px] text-foreground-subtle font-mono mt-1 flex-shrink-0 w-12">{fmtTime(msg.ts)}</span>
+                                        <span className="text-[10px] text-neutral-700 font-mono mt-1 flex-shrink-0 w-12">{fmtTime(msg.ts)}</span>
                                         {msg.type === 'coach' ? (
-                                            <div className="bg-coach-tint border border-coach-border rounded-lg px-3 py-2.5 text-xs text-coach-fg leading-relaxed flex-1 min-w-0">
+                                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2.5 text-xs text-emerald-300 leading-relaxed flex-1 min-w-0">
                                                 {msg.text}
                                             </div>
                                         ) : msg.type === 'analysis' ? (
-                                            <div className="bg-muted/60 rounded-lg px-3 py-1.5 text-[11px] text-foreground-muted flex-1 min-w-0">
-                                                <Icon name="sports_tennis" size={11} className="text-foreground-subtle align-middle mr-1" />{msg.text}
+                                            <div className="bg-neutral-800/60 rounded-lg px-3 py-1.5 text-[11px] text-neutral-400 flex-1 min-w-0">
+                                                <Icon name="sports_tennis" size={11} className="text-neutral-600 align-middle mr-1" />{msg.text}
                                             </div>
                                         ) : (
-                                            <div className="text-[11px] text-foreground-muted italic flex-1 min-w-0">{msg.text}</div>
+                                            <div className="text-[11px] text-neutral-500 italic flex-1 min-w-0">{msg.text}</div>
                                         )}
-                                    </motion.div>
+                                    </div>
                                 ))}
-                            </AnimatePresence>
                         </div>
                     </aside>
 

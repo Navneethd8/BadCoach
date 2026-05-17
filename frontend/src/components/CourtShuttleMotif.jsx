@@ -1,8 +1,5 @@
-import { motion, useReducedMotion } from 'framer-motion'
-
 /**
  * Decorative court lines + shuttlecock motifs for the landing hero.
- * Smash loop + drift respect prefers-reduced-motion.
  */
 
 function TrajectoryArc({ className = '', steep = false }) {
@@ -12,7 +9,6 @@ function TrajectoryArc({ className = '', steep = false }) {
     return (
         <svg className={className} viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
             <path
-                className="shuttle-trajectory-stroke"
                 d={d}
                 stroke="currentColor"
                 strokeWidth={steep ? '1.35' : '1.25'}
@@ -24,7 +20,6 @@ function TrajectoryArc({ className = '', steep = false }) {
     )
 }
 
-/** Top-down doubles court slice */
 function CourtFloorSvg({ className = '' }) {
     return (
         <svg
@@ -49,7 +44,6 @@ function CourtFloorSvg({ className = '' }) {
     )
 }
 
-/** Feather shuttle — skirt reads like cork + feathers, not a random triangle */
 function ShuttleGlyph({ className = '' }) {
     return (
         <svg
@@ -60,7 +54,7 @@ function ShuttleGlyph({ className = '' }) {
             aria-hidden
         >
             <ellipse cx="24" cy="50" rx="8.5" ry="11" className="fill-white dark:fill-white" opacity="0.96" />
-            <ellipse cx="24" cy="50" rx="6" ry="8" fill="rgba(234,88,12,0.45)" />
+            <ellipse cx="24" cy="50" rx="6" ry="8" fill="rgba(255,255,255,0.35)" />
             <g stroke="rgba(120,113,108,0.35)" strokeWidth="0.5">
                 {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => (
                     <line
@@ -85,84 +79,35 @@ function ShuttleGlyph({ className = '' }) {
     )
 }
 
-const shuttleEase = [0.22, 1, 0.36, 1]
-
 export function HeroCourtShuttleLayer({ className = '' }) {
-    const reduce = useReducedMotion()
-
     return (
         <div className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`} aria-hidden>
-            <div className="absolute -right-4 top-[8%] w-[min(92vw,520px)] text-orange-100/22 md:right-[6%] md:top-[12%] md:w-[480px]">
+            <div className="absolute -right-4 top-[8%] w-[min(92vw,520px)] text-page/20 md:right-[6%] md:top-[12%] md:w-[480px]">
                 <CourtFloorSvg className="h-auto w-full" />
             </div>
-            <div className="absolute -left-8 bottom-[18%] hidden w-[min(85vw,380px)] rotate-[8deg] text-teal-200/14 sm:block md:left-[4%] md:bottom-[22%]">
+            <div className="absolute -left-8 bottom-[18%] hidden w-[min(85vw,380px)] rotate-[8deg] text-page/15 sm:block md:left-[4%] md:bottom-[22%]">
                 <CourtFloorSvg className="h-auto w-full scale-x-[-1]" />
             </div>
 
-            <TrajectoryArc className="absolute left-[4%] top-[22%] h-24 w-[min(70vw,360px)] text-orange-200/45 md:left-[8%]" />
-            <TrajectoryArc className="absolute bottom-[28%] right-[2%] h-20 w-[min(65vw,320px)] rotate-12 scale-x-[-1] text-teal-200/30 md:right-[6%]" />
+            <TrajectoryArc className="absolute left-[4%] top-[22%] h-24 w-[min(70vw,360px)] text-page/40 md:left-[8%]" />
+            <TrajectoryArc className="absolute bottom-[28%] right-[2%] h-20 w-[min(65vw,320px)] rotate-12 scale-x-[-1] text-page/25 md:right-[6%]" />
             <TrajectoryArc
                 steep
-                className="absolute right-[6%] top-[14%] h-28 w-[min(72vw,380px)] text-orange-100/55 md:right-[10%]"
+                className="absolute right-[6%] top-[14%] h-28 w-[min(72vw,380px)] text-page/50 md:right-[10%]"
             />
 
-            {/* Rear-court attack — steep arc */}
             <div className="absolute right-[8%] top-[18%] h-14 w-11 md:right-[12%] md:top-[16%]">
-                {!reduce && (
-                    <div className="relative h-full w-full">
-                        <ShuttleGlyph className="shuttle-smash-sprite h-full w-full drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)]" />
-                    </div>
-                )}
-                {reduce && (
-                    <ShuttleGlyph className="h-full w-full opacity-90 drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)]" />
-                )}
+                <ShuttleGlyph className="h-full w-full opacity-90 drop-shadow-[0_3px_14px_rgba(0,0,0,0.55)]" />
             </div>
-
-            <motion.div
-                className="absolute left-[10%] top-[30%] h-12 w-10 md:left-[14%] md:top-[28%]"
-                animate={
-                    reduce
-                        ? undefined
-                        : {
-                              y: [0, -14, 4, 0],
-                              x: [0, 10, -4, 0],
-                              rotate: [-6, 4, -2, -6],
-                          }
-                }
-                transition={reduce ? undefined : { duration: 7.5, repeat: Infinity, ease: shuttleEase }}
-            >
+            <div className="absolute left-[10%] top-[30%] h-12 w-10 md:left-[14%] md:top-[28%]">
                 <ShuttleGlyph className="h-full w-full drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" />
-            </motion.div>
-            <motion.div
-                className="absolute right-[16%] top-[38%] h-10 w-8 md:right-[22%]"
-                animate={
-                    reduce
-                        ? undefined
-                        : {
-                              y: [0, 12, -6, 0],
-                              x: [0, -16, 8, 0],
-                              rotate: [8, -10, 6, 8],
-                          }
-                }
-                transition={reduce ? undefined : { duration: 8.8, repeat: Infinity, ease: shuttleEase, delay: 0.8 }}
-            >
+            </div>
+            <div className="absolute right-[16%] top-[38%] h-10 w-8 md:right-[22%]">
                 <ShuttleGlyph className="h-full w-full drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]" />
-            </motion.div>
-            <motion.div
-                className="absolute bottom-[32%] left-[22%] h-9 w-7 md:bottom-[36%]"
-                animate={
-                    reduce
-                        ? undefined
-                        : {
-                              y: [0, -10, 8, 0],
-                              x: [0, 22, -6, 0],
-                              rotate: [-4, 12, -8, -4],
-                          }
-                }
-                transition={reduce ? undefined : { duration: 9.5, repeat: Infinity, ease: shuttleEase, delay: 1.6 }}
-            >
+            </div>
+            <div className="absolute bottom-[32%] left-[22%] h-9 w-7 md:bottom-[36%]">
                 <ShuttleGlyph className="h-full w-full opacity-90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]" />
-            </motion.div>
+            </div>
         </div>
     )
 }

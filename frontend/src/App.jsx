@@ -1,12 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import Logo from './components/Logo'
-import ThemeToggle from './components/ThemeToggle.jsx'
+import Logo from './components/Logo';
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import ReactGA from "react-ga4"
-import { clipLab, analyzeUi, cta } from './brand/isoCourtVoice.js'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -30,11 +27,6 @@ export default function App() {
     const [queueAhead, setQueueAhead] = useState(null)          // clip queue position (SSE event:queue)
     const videoRef = useRef(null)
     const loadingTimers = useRef([])
-    const shouldReduceMotion = useReducedMotion()
-    const [lightboxEvent, setLightboxEvent] = useState(null)
-    const [frameTip, setFrameTip] = useState(null)
-    const [frameTipLoading, setFrameTipLoading] = useState(false)
-    const frameTipCacheRef = useRef({})
     const retryTimerRef = useRef(null)
 
     // Mobile detection
@@ -60,7 +52,12 @@ export default function App() {
     // Native Camera Reference
     const nativeVideoInputRef = useRef(null)
 
-    const loadingSteps = analyzeUi.loadingSteps
+    const loadingSteps = [
+        { icon: 'movie_filter', label: 'Splitting clip into frames' },
+        { icon: 'directions_run', label: 'Tracing poses' },
+        { icon: 'query_stats', label: 'Analyzing strokes' },
+        { icon: 'rate_review', label: 'Generating feedback' },
+    ]
 
     // Weighted distribution: frame splitting is fast, pose tracing and stroke analysis are the bulk
     const stepWeights = [0.10, 0.35, 0.45, 0.10]
@@ -234,51 +231,6 @@ export default function App() {
         document.addEventListener('fullscreenchange', handleFullscreenChange)
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }, [])
-
-    // Close lightbox on ESC
-    useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') setLightboxEvent(null) }
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [])
-
-    // Fetch per-frame Gemini tip when lightbox opens
-    useEffect(() => {
-        if (!lightboxEvent) { setFrameTip(null); return }
-
-        const m = lightboxEvent.metrics || {}
-        const cacheKey = `${lightboxEvent.label}|${m.subtype?.label || m.subtype || ''}|${m.technique?.label || m.technique || ''}|${m.placement?.label || m.placement || ''}|${m.position?.label || m.position || ''}|${m.intent?.label || m.intent || ''}|${m.quality || ''}`
-
-        if (frameTipCacheRef.current[cacheKey]) {
-            setFrameTip(frameTipCacheRef.current[cacheKey])
-            return
-        }
-
-        setFrameTip(null)
-        setFrameTipLoading(true)
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-        fetch(`${apiUrl}/frame-tip`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                label: lightboxEvent.label,
-                subtype: m.subtype?.label || m.subtype || 'None',
-                technique: m.technique?.label || m.technique || 'Unknown',
-                placement: m.placement?.label || m.placement || 'Unknown',
-                position: m.position?.label || m.position || 'Unknown',
-                intent: m.intent?.label || m.intent || 'None',
-                quality: m.quality || 'Developing',
-                confidence: lightboxEvent.confidence || 0,
-            })
-        })
-            .then(r => r.json())
-            .then(data => {
-                frameTipCacheRef.current[cacheKey] = data.tip
-                setFrameTip(data.tip)
-            })
-            .catch(() => setFrameTip(null))
-            .finally(() => setFrameTipLoading(false))
-    }, [lightboxEvent])
 
     const formatSeconds = (s) => {
         const m = Math.floor(s / 60).toString().padStart(2, '0')
@@ -506,162 +458,35 @@ export default function App() {
     }
 
     const getQualityColor = (quality) => {
+        // Updated for 10-point scale
         const q = String(quality).toLowerCase()
-        if (q.includes('elite') || q.includes('expert')) return 'text-[color:var(--color-quality-elite)]'
-        if (q.includes('advanced')) return 'text-[color:var(--color-quality-advanced)]'
-        if (q.includes('proficient')) return 'text-[color:var(--color-quality-proficient)]'
-        if (q.includes('competent')) return 'text-[color:var(--color-quality-competent)]'
-        if (q.includes('developing') || q.includes('emerging')) return 'text-[color:var(--color-quality-developing)]'
-        return 'text-[color:var(--color-quality-low)]'
+        if (q.includes('elite') || q.includes('expert')) return 'text-emerald-400'
+        if (q.includes('advanced')) return 'text-emerald-500' // New cyan/emerald
+        if (q.includes('proficient')) return 'text-cyan-400'
+        if (q.includes('competent')) return 'text-amber-400'
+        if (q.includes('developing') || q.includes('emerging')) return 'text-orange-400'
+        return 'text-rose-400'
     }
 
     const getQualityBarColor = (quality) => {
+        // Updated for 10-point scale
         const q = String(quality).toLowerCase()
-        if (q.includes('elite') || q.includes('expert')) return 'bg-[color:var(--color-quality-elite)]'
-        if (q.includes('advanced')) return 'bg-[color:var(--color-quality-advanced)]'
-        if (q.includes('proficient')) return 'bg-[color:var(--color-quality-proficient)]'
-        if (q.includes('competent')) return 'bg-[color:var(--color-quality-competent)]'
-        if (q.includes('developing') || q.includes('emerging')) return 'bg-[color:var(--color-quality-developing)]'
-        return 'bg-[color:var(--color-quality-low)]'
+        if (q.includes('elite') || q.includes('expert')) return 'bg-emerald-500'
+        if (q.includes('advanced')) return 'bg-emerald-600'
+        if (q.includes('proficient')) return 'bg-cyan-500'
+        if (q.includes('competent')) return 'bg-amber-500'
+        if (q.includes('developing') || q.includes('emerging')) return 'bg-orange-500'
+        return 'bg-rose-500'
     }
 
     return (
-        <div className="min-h-screen w-screen bg-page font-sans text-foreground p-5 md:p-10 md:px-12">
-            {/* Pose Image Lightbox Modal */}
-            <AnimatePresence>
-                {lightboxEvent && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8"
-                        onClick={() => setLightboxEvent(null)}
-                    >
-                        {/* Backdrop */}
-                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+        <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 p-6 md:p-10">
 
-                        {/* Modal Content */}
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            transition={{ duration: 0.25, ease: 'easeOut' }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-hidden border-2 border-border-strong bg-surface shadow-2xl"
-                        >
-                            {/* Close button */}
-                            <button
-                                onClick={() => setLightboxEvent(null)}
-                                className="absolute top-3 right-3 z-20 p-1.5 rounded-full bg-muted/80 hover:bg-surface-elevated text-foreground-muted hover:text-foreground transition-colors backdrop-blur-sm"
-                            >
-                                <Icon name="close" size={18} />
-                            </button>
-
-                            {/* Pose Image */}
-                            {lightboxEvent.pose_image && (
-                                <div className="w-full bg-black flex items-center justify-center">
-                                    <img
-                                        src={`data:image/jpeg;base64,${lightboxEvent.pose_image}`}
-                                        alt={lightboxEvent.label}
-                                        className="w-full max-h-[50vh] object-contain"
-                                    />
-                                </div>
-                            )}
-
-                            {/* Event Details */}
-                            <div className="p-5 space-y-4">
-                                {/* Header */}
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <span className="text-xs font-mono text-foreground-muted block">{lightboxEvent.timestamp}</span>
-                                        <span className={`text-lg font-bold ${lightboxEvent.label === 'Other' ? 'text-foreground-muted' : 'text-foreground'}`}>
-                                            {lightboxEvent.label?.replace(/_/g, ' ')}
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-xs text-foreground-muted block">Confidence</span>
-                                        <span className="text-lg font-semibold text-brand-secondary">
-                                            {(lightboxEvent.confidence * 100).toFixed(0)}%
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Metrics Grid */}
-                                {lightboxEvent.metrics && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="border border-blue-500/20 bg-blue-500/10 px-2.5 py-2 rounded-sm">
-                                            <span className="text-[9px] text-blue-400/60 uppercase tracking-wider font-semibold block mb-0.5">Technique</span>
-                                            <span className="text-xs text-blue-300 font-medium flex items-center gap-1.5">
-                                                <Icon name="pan_tool_alt" size={12} />
-                                                {lightboxEvent.metrics.technique?.label || lightboxEvent.metrics.technique || 'Unknown'}
-                                            </span>
-                                        </div>
-                                        <div className="px-2.5 py-2 bg-purple-500/10 border border-purple-500/20 rounded-sm">
-                                            <span className="text-[9px] text-purple-400/60 uppercase tracking-wider font-semibold block mb-0.5">Placement</span>
-                                            <span className="text-xs text-purple-300 font-medium flex items-center gap-1.5">
-                                                <Icon name="explore" size={12} />
-                                                {lightboxEvent.metrics.placement?.label || lightboxEvent.metrics.placement || 'Unknown'}
-                                            </span>
-                                        </div>
-                                        <div className="px-2.5 py-2 bg-rose-500/10 border border-rose-500/20 rounded-sm">
-                                            <span className="text-[9px] text-rose-400/60 uppercase tracking-wider font-semibold block mb-0.5">Position</span>
-                                            <span className="text-xs text-rose-300 font-medium flex items-center gap-1.5">
-                                                <Icon name="location_on" size={12} />
-                                                {lightboxEvent.metrics.position?.label || lightboxEvent.metrics.position || 'Unknown'}
-                                            </span>
-                                        </div>
-                                        <div className="px-2.5 py-2 bg-amber-500/10 border border-amber-500/20 rounded-sm">
-                                            <span className="text-[9px] text-amber-400/60 uppercase tracking-wider font-semibold block mb-0.5">Intent</span>
-                                            <span className="text-xs text-amber-300 font-medium flex items-center gap-1.5">
-                                                <Icon name="psychology" size={12} />
-                                                {lightboxEvent.metrics.intent?.label || lightboxEvent.metrics.intent || 'None'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Quality */}
-                                {lightboxEvent.metrics?.quality && (
-                                    <div className="flex items-center gap-2 pt-2 border-t border-border">
-                                        <Icon name="star" size={14} className="text-amber-500" />
-                                        <span className="text-xs text-foreground-muted">Quality:</span>
-                                        <span className={`text-xs font-semibold ${getQualityColor(lightboxEvent.metrics.quality)}`}>
-                                            {lightboxEvent.metrics.quality}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {/* Per-Frame Gemini Coaching Tip */}
-                                <div className="pt-3 border-t border-border">
-                                    <span className="text-[9px] text-brand/70 uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
-                                        <Icon name="tips_and_updates" size={12} />
-                                        AI Coach Tip
-                                    </span>
-                                    {frameTipLoading ? (
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3 h-3 border-2 border-brand-secondary/30 border-t-accent rounded-full animate-spin" />
-                                            <span className="text-xs text-foreground-muted italic">Generating tip...</span>
-                                        </div>
-                                    ) : frameTip ? (
-                                        <p className="text-sm text-foreground-muted leading-relaxed">
-                                            {frameTip}
-                                        </p>
-                                    ) : (
-                                        <p className="text-xs text-foreground-subtle italic">Tip unavailable</p>
-                                    )}
-                                </div>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            <div className="mx-auto max-w-3xl">
+            <div className="max-w-2xl mx-auto">
 
                 {/* Capacity toast banner */}
                 {capacityError !== null && (
-                    <div className="fixed top-4 left-1/2 z-50 flex max-w-sm w-full -translate-x-1/2 items-start gap-3 border border-amber-700/60 bg-amber-950/90 px-5 py-3.5 text-sm text-amber-200 shadow-lg backdrop-blur-sm">
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-start gap-3 bg-amber-950/90 border border-amber-700/60 text-amber-200 text-sm px-5 py-3.5 rounded-xl shadow-2xl backdrop-blur-sm max-w-sm w-full">
                         <Icon name="hourglass_top" size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-amber-300 mb-0.5">IsoCourt is fully loaded right now 🏸</p>
@@ -674,7 +499,7 @@ export default function App() {
                 )}
 
                 {queueAhead !== null && loading && (
-                    <div className="fixed top-4 left-1/2 z-50 mt-[4.5rem] flex max-w-sm w-full -translate-x-1/2 items-start gap-3 border border-sky-700/50 bg-sky-950/90 px-5 py-3 text-sm text-sky-100 shadow-lg backdrop-blur-sm">
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-start gap-3 bg-sky-950/90 border border-sky-700/50 text-sky-100 text-sm px-5 py-3 rounded-xl shadow-2xl backdrop-blur-sm max-w-sm w-full mt-[4.5rem]">
                         <Icon name="pending_actions" size={18} className="text-sky-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold text-sky-200 mb-0.5">You&apos;re in the queue</p>
@@ -687,49 +512,42 @@ export default function App() {
                     </div>
                 )}
 
-                <header className="mb-10 flex items-start justify-between gap-4 border-b-2 border-brand/15 pb-6">
-                    <div className="flex min-w-0 items-baseline gap-3">
+                <header className="flex items-center gap-2 mb-8">
+                    {true && (
                         <button
                             onClick={() => navigate('/')}
-                            className="-ml-1 p-1 text-foreground-subtle transition-colors hover:text-foreground-muted"
+                            className="mr-1 -ml-1 p-1 rounded text-neutral-600 hover:text-neutral-300 transition-colors"
                             aria-label="Back to home"
                         >
-                            <Icon name="arrow_back" size={20} />
+                            <Icon name="arrow_back" size={18} />
                         </button>
-                        <Logo size={28} className="shrink-0 text-brand" />
-                        <div className="min-w-0">
-                            <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-foreground-muted">{clipLab.kicker}</p>
-                            <h1 className="font-display text-2xl font-normal tracking-tight text-foreground md:text-3xl">
-                                Iso<span className="text-brand">Court</span>
-                            </h1>
-                            <p className="mt-2 max-w-md font-mono text-[11px] leading-relaxed text-foreground-muted">{clipLab.promise}</p>
-                        </div>
-                    </div>
-                    <ThemeToggle className="mt-1" />
+                    )}
+                    <Logo size={24} className="text-emerald-500" />
+                    <h1 className="text-xl font-semibold tracking-tight">
+                        Iso<span className="text-emerald-500">Court</span>
+                    </h1>
                 </header>
 
                 {/* Upload / Record */}
-                <section className="mb-8 border-2 border-border bg-surface p-6 md:p-8">
+                <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 mb-6">
 
-                    {/* Tab switcher — ruled, not pill */}
-                    <div className="mb-8 flex gap-10 border-b border-border">
+                    {/* Tab switcher */}
+                    <div className="flex items-center gap-1 mb-4 p-1 bg-neutral-800/60 rounded-lg w-fit">
                         <button
-                            type="button"
                             onClick={() => switchMode('upload')}
-                            className={`flex items-center gap-2 pb-3 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${inputMode === 'upload'
-                                ? '-mb-px border-b-2 border-brand text-foreground'
-                                : 'text-foreground-muted hover:text-foreground'
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${inputMode === 'upload'
+                                ? 'bg-neutral-700 text-neutral-100 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-300'
                                 }`}
                         >
                             <Icon name="upload" size={14} />
                             Upload
                         </button>
                         <button
-                            type="button"
                             onClick={() => switchMode('record')}
-                            className={`flex items-center gap-2 pb-3 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${inputMode === 'record'
-                                ? '-mb-px border-b-2 border-brand text-foreground'
-                                : 'text-foreground-muted hover:text-foreground'
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${inputMode === 'record'
+                                ? 'bg-neutral-700 text-neutral-100 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-300'
                                 }`}
                         >
                             <Icon name="videocam" size={14} />
@@ -742,10 +560,10 @@ export default function App() {
                         <div
                             {...getRootProps()}
                             className={`
-                                flex min-h-[220px] cursor-pointer flex-col items-center justify-center border-2 border-dashed transition-colors rounded-none
+                                border border-dashed rounded-md min-h-[220px] flex flex-col items-center justify-center cursor-pointer transition-colors
                                 ${isDragActive
-                                    ? 'border-brand-secondary bg-accent-muted'
-                                    : 'border-border-strong hover:border-border-strong'
+                                    ? 'border-emerald-500 bg-emerald-500/5'
+                                    : 'border-neutral-700 hover:border-neutral-500'
                                 }
                             `}
                         >
@@ -758,30 +576,30 @@ export default function App() {
                                         className="w-full max-h-[300px] object-contain bg-black"
                                         controls
                                     />
-                                    <div className="flex items-center justify-between px-3 py-2 bg-surface border-t border-border/50">
-                                        <span className="text-xs text-foreground-muted flex items-center gap-1.5">
-                                            <Icon name="check_circle" size={13} className="text-brand" />
-                                            {analyzeUi.clipReady}
+                                    <div className="flex items-center justify-between px-3 py-2 bg-neutral-900 border-t border-neutral-800/50">
+                                        <span className="text-xs text-neutral-400 flex items-center gap-1.5">
+                                            <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                            Clip ready to analyze
                                         </span>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null) }}
-                                            className="text-xs text-foreground-muted hover:text-foreground-muted flex items-center gap-1 transition-colors"
+                                            className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
                                         >
-                                            <Icon name="replay" size={13} /> {analyzeUi.changeVideo}
+                                            <Icon name="replay" size={13} /> Change Video
                                         </button>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center text-foreground-muted p-6">
-                                    <Icon name="video_file" size={36} className="block mx-auto mb-3 text-foreground-subtle" />
-                                    <p className="text-sm font-medium text-foreground-muted">{analyzeUi.dropTitle}</p>
-                                    <p className="text-xs mt-1 text-foreground-muted">{analyzeUi.dropHint}</p>
+                                <div className="text-center text-neutral-500 p-6">
+                                    <Icon name="video_file" size={36} className="block mx-auto mb-3 text-neutral-600" />
+                                    <p className="text-sm font-medium text-neutral-300">Drag &amp; drop video here</p>
+                                    <p className="text-xs mt-1 text-neutral-500">or click to select file</p>
                                 </div>
                             )}
                         </div>
                     ) : (
                         /* ── Record mode ─── */
-                        <div className="rounded-md overflow-hidden border border-border min-h-[220px] flex flex-col bg-black relative">
+                        <div className="rounded-md overflow-hidden border border-neutral-800 min-h-[220px] flex flex-col bg-black relative">
                             {isMobile ? (
                                 /* Native Mobile Camera Button View */
                                 preview ? (
@@ -793,14 +611,14 @@ export default function App() {
                                             className="w-full max-h-[300px] object-contain bg-black"
                                             controls
                                         />
-                                        <div className="flex items-center justify-between px-3 py-2 bg-surface/80 border-t border-border/50">
-                                            <span className="text-xs text-foreground-muted flex items-center gap-1.5">
-                                                <Icon name="check_circle" size={13} className="text-brand" />
-                                                {analyzeUi.clipReady}
+                                        <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80 border-t border-neutral-800/50">
+                                            <span className="text-xs text-neutral-400 flex items-center gap-1.5">
+                                                <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                                Clip ready
                                             </span>
                                             <button
                                                 onClick={() => { setFile(null); setPreview(null); nativeVideoInputRef.current?.click() }}
-                                                className="text-xs text-foreground-muted hover:text-foreground-muted flex items-center gap-1 transition-colors"
+                                                className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
                                             >
                                                 <Icon name="replay" size={13} /> Re-record
                                             </button>
@@ -816,16 +634,16 @@ export default function App() {
                                         />
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8 bg-surface/50 text-center min-h-[220px]">
-                                        <div className="text-foreground-muted">
+                                    <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8 bg-neutral-900/50 text-center min-h-[220px]">
+                                        <div className="text-neutral-400">
                                             <Icon name="photo_camera" size={48} className="opacity-50 mb-2 block mx-auto" />
-                                            <p className="text-sm font-medium text-foreground-muted mb-1">Record on Device</p>
-                                            <p className="text-xs text-foreground-muted mb-4 max-w-[200px]">Use your device's native camera for the best quality and zoom.</p>
+                                            <p className="text-sm font-medium text-neutral-300 mb-1">Record on Device</p>
+                                            <p className="text-xs text-neutral-500 mb-4 max-w-[200px]">Use your device's native camera for the best quality and zoom.</p>
                                         </div>
 
                                         <button
                                             onClick={() => nativeVideoInputRef.current?.click()}
-                                            className="flex items-center justify-center gap-2 w-full py-3 bg-muted hover:bg-surface-elevated text-foreground border border-border-strong rounded-md transition-colors shadow-sm"
+                                            className="flex items-center justify-center gap-2 w-full py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-md transition-colors shadow-sm"
                                         >
                                             <Icon name="videocam" size={18} />
                                             <span className="text-sm font-medium">Open Camera</span>
@@ -847,11 +665,11 @@ export default function App() {
                                 cameraError ? (
                                     /* Permission / device error */
                                     <div className="flex flex-col items-center justify-center flex-1 gap-3 p-6 text-center min-h-[220px]">
-                                        <Icon name="videocam_off" size={36} className="text-foreground-subtle" />
-                                        <p className="text-sm text-foreground-muted">{cameraError}</p>
+                                        <Icon name="videocam_off" size={36} className="text-neutral-600" />
+                                        <p className="text-sm text-neutral-400">{cameraError}</p>
                                         <button
                                             onClick={openCamera}
-                                            className="mt-1 px-4 py-1.5 bg-muted hover:bg-surface-elevated text-foreground text-xs rounded-md transition-colors"
+                                            className="mt-1 px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded-md transition-colors"
                                         >
                                             Try again
                                         </button>
@@ -865,14 +683,14 @@ export default function App() {
                                             className="w-full max-h-[300px] object-contain bg-black"
                                             controls
                                         />
-                                        <div className="flex items-center justify-between px-3 py-2 bg-surface/80">
-                                            <span className="text-xs text-foreground-muted flex items-center gap-1.5">
-                                                <Icon name="check_circle" size={13} className="text-brand" />
-                                                {analyzeUi.clipReady}
+                                        <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80">
+                                            <span className="text-xs text-neutral-400 flex items-center gap-1.5">
+                                                <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                                Clip ready to analyze
                                             </span>
                                             <button
                                                 onClick={() => { setFile(null); setPreview(null); openCamera() }}
-                                                className="text-xs text-foreground-muted hover:text-foreground-muted flex items-center gap-1 transition-colors"
+                                                className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
                                             >
                                                 <Icon name="replay" size={13} /> Re-record
                                             </button>
@@ -941,7 +759,7 @@ export default function App() {
 
                             {/* Standard Record / Stop button for Desktop (hidden if full screen) */}
                             {!isMobile && !cameraError && !preview && !isFullScreen && (
-                                <div className="flex justify-center py-3 bg-surface/90 border-t border-border">
+                                <div className="flex justify-center py-3 bg-neutral-900/90 border-t border-neutral-800">
                                     {isRecording ? (
                                         <button
                                             onClick={stopRecording}
@@ -967,24 +785,22 @@ export default function App() {
                     <button
                         onClick={handleStreamAnalysis}
                         disabled={!file || loading}
-                        className="mt-6 w-full border-2 border-brand bg-accent py-3.5 font-mono text-xs font-semibold uppercase tracking-[0.16em] text-onaccent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40 rounded-none"
+                        className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-md transition-colors"
                     >
                         {loadingStep >= 0 ? (
                             <span className="flex items-center justify-center gap-2">
                                 <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                {cta.primaryBusy}
+                                Analyzing...
                             </span>
-                        ) : (
-                            cta.primary
-                        )}
+                        ) : 'Analyze Stroke'}
                     </button>
                 </section>
 
                 {/* Results */}
-                <section className="border-2 border-border bg-surface p-6 md:p-8">
-                    <h2 className="font-display mb-6 flex items-center gap-2 text-lg font-normal text-foreground md:text-xl">
+                <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
+                    <h2 className="text-sm font-medium text-neutral-400 mb-4 flex items-center gap-2">
                         <Icon name="analytics" size={18} />
-                        {analyzeUi.resultsTitle}
+                        Analysis Results
                     </h2>
 
                     {loadingStep >= 0 ? (
@@ -996,26 +812,26 @@ export default function App() {
                                     return (
                                         <div
                                             key={idx}
-                                            className={`flex items-center gap-3 py-2 px-3 rounded-md transition-all duration-300 ${isActive ? 'bg-muted' : ''
+                                            className={`flex items-center gap-3 py-2 px-3 rounded-md transition-all duration-300 ${isActive ? 'bg-neutral-800' : ''
                                                 }`}
                                         >
-                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300 ${isDone ? 'bg-accent' : isActive ? 'bg-surface-elevated' : 'bg-muted'
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300 ${isDone ? 'bg-emerald-600' : isActive ? 'bg-neutral-700' : 'bg-neutral-800'
                                                 }`}>
                                                 {isDone ? (
-                                                    <Icon name="check" size={14} className="text-onaccent" />
+                                                    <Icon name="check" size={14} className="text-white" />
                                                 ) : isActive ? (
-                                                    <span className="w-2 h-2 bg-brand-secondary rounded-full animate-pulse" />
+                                                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                                                 ) : (
-                                                    <span className="w-1.5 h-1.5 bg-border-strong rounded-full" />
+                                                    <span className="w-1.5 h-1.5 bg-neutral-600 rounded-full" />
                                                 )}
                                             </div>
                                             <Icon
                                                 name={step.icon}
                                                 size={18}
-                                                className={`transition-colors duration-300 ${isDone ? 'text-brand' : isActive ? 'text-foreground' : 'text-foreground-subtle'
+                                                className={`transition-colors duration-300 ${isDone ? 'text-emerald-500' : isActive ? 'text-neutral-200' : 'text-neutral-600'
                                                     }`}
                                             />
-                                            <span className={`text-sm transition-colors duration-300 ${isDone ? 'text-foreground-muted' : isActive ? 'text-foreground font-medium' : 'text-foreground-subtle'
+                                            <span className={`text-sm transition-colors duration-300 ${isDone ? 'text-neutral-400' : isActive ? 'text-neutral-200 font-medium' : 'text-neutral-600'
                                                 }`}>
                                                 {step.label}{isActive ? '...' : ''}
                                             </span>
@@ -1026,7 +842,7 @@ export default function App() {
                         </div>
                     ) : result?.validation_error ? (
                         <div className="py-8 px-4">
-                            <div className={`border-2 rounded-none p-6 ${result.over_duration_limit
+                            <div className={`border rounded-lg p-6 ${result.over_duration_limit
                                 ? 'bg-amber-950/30 border-amber-800/50'
                                 : 'bg-red-950/30 border-red-900/50'
                                 }`}>
@@ -1043,12 +859,12 @@ export default function App() {
                                             }`}>
                                             {result.over_duration_limit ? 'Video Too Long' : 'Not a Badminton Video'}
                                         </h3>
-                                        <p className="text-sm text-foreground-muted mb-4">
+                                        <p className="text-sm text-neutral-300 mb-4">
                                             {result.error_message}
                                         </p>
 
                                         {result.over_duration_limit && (
-                                            <div className="mt-2 mb-4 p-3 bg-amber-900/20 border border-amber-700/30 rounded-sm">
+                                            <div className="mt-2 mb-4 p-3 bg-amber-900/20 border border-amber-700/30 rounded-lg">
                                                 <p className="text-xs text-amber-200/80 leading-relaxed">
                                                     <span className="font-semibold text-amber-300">💡 Tip:</span> For full-game analysis, upload each rally or quarter separately. This keeps analysis times fast and results more accurate for each play.
                                                 </p>
@@ -1056,12 +872,12 @@ export default function App() {
                                         )}
 
                                         {!result.over_duration_limit && result.validation_details && (
-                                            <div className="mt-4 p-3 bg-inset/50 rounded border border-border">
-                                                <span className="text-xs text-foreground-muted block mb-2">Detection Details</span>
+                                            <div className="mt-4 p-3 bg-neutral-950/50 rounded border border-neutral-800">
+                                                <span className="text-xs text-neutral-500 block mb-2">Detection Details</span>
                                                 <div className="space-y-1.5 text-xs">
                                                     {result.validation_details.pose_confidence !== undefined && (
                                                         <div className="flex justify-between">
-                                                            <span className="text-foreground-muted">Pose Detection Score:</span>
+                                                            <span className="text-neutral-400">Pose Detection Score:</span>
                                                             <span className={result.validation_details.pose_confidence > 0.3 ? 'text-green-400' : 'text-red-400'}>
                                                                 {(result.validation_details.pose_confidence * 100).toFixed(1)}%
                                                             </span>
@@ -1069,7 +885,7 @@ export default function App() {
                                                     )}
                                                     {result.validation_details.model_confidence !== undefined && (
                                                         <div className="flex justify-between">
-                                                            <span className="text-foreground-muted">Model Confidence:</span>
+                                                            <span className="text-neutral-400">Model Confidence:</span>
                                                             <span className={result.validation_details.model_confidence > 0.5 ? 'text-green-400' : 'text-red-400'}>
                                                                 {(result.validation_details.model_confidence * 100).toFixed(1)}%
                                                             </span>
@@ -1077,7 +893,7 @@ export default function App() {
                                                     )}
                                                     {result.validation_details.overhead_score !== undefined && (
                                                         <div className="flex justify-between">
-                                                            <span className="text-foreground-muted">Overhead Motion:</span>
+                                                            <span className="text-neutral-400">Overhead Motion:</span>
                                                             <span className={result.validation_details.overhead_score > 0.3 ? 'text-green-400' : 'text-red-400'}>
                                                                 {(result.validation_details.overhead_score * 100).toFixed(1)}%
                                                             </span>
@@ -1089,7 +905,7 @@ export default function App() {
 
                                         <button
                                             onClick={() => { setResult(null); setFile(null); setPreview(null); }}
-                                            className="mt-4 px-4 py-2 bg-muted hover:bg-surface-elevated text-foreground text-sm rounded transition-colors"
+                                            className="mt-4 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
                                         >
                                             Try Another Video
                                         </button>
@@ -1101,39 +917,37 @@ export default function App() {
                         <div className="space-y-4">
                             {/* Cache hit badge */}
                             {result.cache_hit && (
-                                <div className="flex items-center gap-2 text-[11px] text-brand-secondary/70 font-medium px-1">
-                                    <Icon name="bolt" size={13} className="text-brand" />
+                                <div className="flex items-center gap-2 text-[11px] text-emerald-400/70 font-medium px-1">
+                                    <Icon name="bolt" size={13} className="text-emerald-500" />
                                     Instant result: same clip analyzed before
                                 </div>
                             )}
                             <div className="space-y-3">
                                 {/* Performance & Tactical Analysis */}
-                                <div className="p-4 bg-inset rounded-md border border-border">
+                                <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <span className="text-xs text-foreground-muted block mb-1">Execution Quality</span>
+                                            <span className="text-xs text-neutral-500 block mb-1">Execution Quality</span>
                                             <div className={`text-xl font-bold ${getQualityColor(result.quality)}`}>
                                                 {result.quality}
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-xs font-mono text-foreground-muted block mb-1">Score</span>
-                                            <div className="text-lg font-semibold text-foreground">{result.quality_numeric || 0} / 10</div>
+                                            <span className="text-xs font-mono text-neutral-400 block mb-1">Score</span>
+                                            <div className="text-lg font-semibold text-white">{result.quality_numeric || 0} / 10</div>
                                         </div>
                                     </div>
 
-                                    <div className="w-full bg-muted h-1.5 rounded-full mb-6 overflow-hidden">
-                                        <motion.div
-                                            initial={{ width: shouldReduceMotion ? `${((result.quality_numeric || 0) / 10) * 100}%` : 0 }}
-                                            animate={{ width: `${((result.quality_numeric || 0) / 10) * 100}%` }}
-                                            transition={{ duration: shouldReduceMotion ? 0 : 0.8, ease: "easeOut" }}
+                                    <div className="w-full bg-neutral-800 h-1.5 rounded-full mb-6 overflow-hidden">
+                                        <div
                                             className={`h-full rounded-full ${getQualityBarColor(result.quality)}`}
+                                            style={{ width: `${((result.quality_numeric || 0) / 10) * 100}%` }}
                                         />
                                     </div>
 
                                     {result.tactical_analysis && (
-                                        <div className="pt-4 border-t border-border/50">
-                                            <span className="text-xs text-foreground-muted block mb-3">Tactical Metrics</span>
+                                        <div className="pt-4 border-t border-neutral-800/50">
+                                            <span className="text-xs text-neutral-500 block mb-3">Tactical Metrics</span>
                                             <div className="flex flex-wrap gap-2">
                                                 <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] font-medium text-blue-400 flex items-center gap-1.5">
                                                     <Icon name="pan_tool_alt" size={12} />
@@ -1171,15 +985,15 @@ export default function App() {
 
                             {/* Coach's Recommendations */}
                             {result.recommendations && result.recommendations.length > 0 && (
-                                <div className="p-4 bg-coach-tint rounded-md border border-coach-border">
-                                    <span className="text-xs text-coach-fg flex items-center gap-1.5 mb-3 font-medium">
+                                <div className="p-4 bg-emerald-950/20 rounded-md border border-emerald-900/40">
+                                    <span className="text-xs text-emerald-500/80 flex items-center gap-1.5 mb-3 font-medium">
                                         <Icon name="tips_and_updates" size={14} />
                                         Coach's Recommendations
                                     </span>
                                     <ul className="space-y-2">
                                         {result.recommendations.map((tip, idx) => (
-                                            <li key={idx} className="text-sm text-foreground-muted flex items-start gap-2">
-                                                <span className="text-brand mt-1">•</span>
+                                            <li key={idx} className="text-sm text-neutral-300 flex items-start gap-2">
+                                                <span className="text-emerald-500 mt-1">•</span>
                                                 {tip}
                                             </li>
                                         ))}
@@ -1189,49 +1003,31 @@ export default function App() {
 
                             {/* Timeline Breakdown */}
                             {result.timeline && (
-                                <div className="p-4 bg-inset rounded-md border border-border">
-                                    <span className="text-xs text-foreground-muted flex items-center gap-1.5 mb-4">
+                                <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
+                                    <span className="text-xs text-neutral-500 flex items-center gap-1.5 mb-4">
                                         <Icon name="timeline" size={14} />
                                         Play-by-Play Breakdown
                                     </span>
 
-                                    {/* Mobile: vertical text timeline */}
-                                    <div className="block md:hidden relative border-l border-border ml-2 space-y-6 py-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                    <div className="relative border-l border-neutral-800 ml-2 space-y-6 py-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                         {result.timeline.map((event, idx) => (
                                             <div
                                                 key={idx}
                                                 onClick={() => handleTimelineClick(event.timestamp)}
-                                                className="relative pl-6 py-2 rounded hover:bg-surface transition-colors cursor-pointer group"
+                                                className="relative pl-6 py-2 rounded hover:bg-neutral-900 transition-colors cursor-pointer group"
                                             >
                                                 <div className={`absolute -left-[5.5px] top-4 w-2.5 h-2.5 rounded-full border-2 ${event.label === 'Other'
-                                                    ? 'bg-inset border-border-strong'
-                                                    : 'bg-inset border-brand-secondary'
+                                                    ? 'bg-neutral-950 border-neutral-600'
+                                                    : 'bg-neutral-950 border-emerald-500'
                                                     }`} />
                                                 <div className="flex flex-col gap-3">
-                                                    <div className="flex items-start justify-between">
-                                                        <div>
-                                                            <span className="text-xs font-mono text-foreground-muted block">{event.timestamp}</span>
-                                                            <span className={`text-base font-semibold ${event.label === 'Other' ? 'text-foreground-muted' : 'text-foreground'}`}>
+                                                    <div>
+                                                        <span className="text-xs font-mono text-neutral-500 block">{event.timestamp}</span>
+                                                            <span className={`text-base font-semibold ${event.label === 'Other' ? 'text-neutral-500' : 'text-neutral-100'}`}>
                                                                 {event.label.replace(/_/g, ' ')}
                                                             </span>
-                                                            <span className="text-[10px] text-foreground-subtle ml-2">{(event.confidence * 100).toFixed(0)}%</span>
+                                                            <span className="text-[10px] text-neutral-600 ml-2">{(event.confidence * 100).toFixed(0)}%</span>
                                                         </div>
-                                                        {event.pose_image && (
-                                                            <div
-                                                                onClick={(e) => { e.stopPropagation(); setLightboxEvent(event) }}
-                                                                className="w-24 h-16 rounded overflow-hidden bg-black/50 border border-border flex-shrink-0 cursor-zoom-in hover:border-accent transition-colors relative group/pose"
-                                                            >
-                                                                <img
-                                                                    src={`data:image/jpeg;base64,${event.pose_image}`}
-                                                                    alt={event.label}
-                                                                    className="w-full h-full object-contain"
-                                                                />
-                                                                <div className="absolute inset-0 bg-black/0 group-hover/pose:bg-black/30 transition-colors flex items-center justify-center">
-                                                                    <Icon name="zoom_in" size={16} className="text-white opacity-0 group-hover/pose:opacity-80 transition-opacity" />
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
 
                                                     {event.metrics && (
                                                         <div className="flex flex-wrap gap-1.5">
@@ -1254,73 +1050,13 @@ export default function App() {
                                         ))}
                                     </div>
 
-                                    {/* Desktop: horizontal skeleton strip */}
-                                    <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-2 custom-scrollbar">
-                                        {result.timeline.map((event, idx) => (
-                                            <div
-                                                key={idx}
-                                                onClick={() => handleTimelineClick(event.timestamp)}
-                                                className="flex-shrink-0 cursor-pointer group w-44"
-                                            >
-                                                <div
-                                                    onClick={(e) => { if (event.pose_image) { e.stopPropagation(); setLightboxEvent(event) } }}
-                                                    className={`w-44 h-32 rounded overflow-hidden bg-black border transition-all duration-300 relative ${event.pose_image ? 'border-border group-hover:border-accent group-hover:scale-[1.02] cursor-zoom-in' : 'border-border flex items-center justify-center'}`}
-                                                >
-                                                    {event.pose_image ? (
-                                                        <>
-                                                            <img
-                                                                src={`data:image/jpeg;base64,${event.pose_image}`}
-                                                                alt={event.label}
-                                                                className="w-full h-full object-contain"
-                                                            />
-                                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                                                                <Icon name="zoom_in" size={20} className="text-white opacity-0 group-hover:opacity-80 transition-opacity" />
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <Icon name="hide_image" size={24} className="text-foreground-subtle" />
-                                                    )}
-                                                </div>
-                                                <div className="mt-3 space-y-2 px-1">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-mono text-foreground-muted">{event.timestamp}</span>
-                                                        <span className="text-[10px] text-foreground-subtle">{(event.confidence * 100).toFixed(0)}%</span>
-                                                    </div>
-                                                    <span className={`text-sm block truncate group-hover:text-brand-secondary transition-colors ${event.label === 'Other' ? 'text-foreground-muted' : 'text-foreground font-semibold'}`}>
-                                                        {event.label.replace(/_/g, ' ')}
-                                                    </span>
-
-                                                    {event.metrics && (
-                                                        <div className="grid grid-cols-2 gap-1 mt-2 border-t border-border/30 pt-2">
-                                                            <div className="flex items-center gap-1 text-[8px] text-foreground-muted uppercase font-bold tracking-tighter truncate">
-                                                                <Icon name="pan_tool_alt" size={10} className="text-blue-500/50" />
-                                                                {event.metrics.technique?.label || event.metrics.technique || '???'}
-                                                            </div>
-                                                            <div className="flex items-center gap-1 text-[8px] text-foreground-muted uppercase font-bold tracking-tighter truncate">
-                                                                <Icon name="explore" size={10} className="text-purple-500/50" />
-                                                                {event.metrics.placement?.label || event.metrics.placement || '???'}
-                                                            </div>
-                                                            <div className="flex items-center gap-1 text-[8px] text-foreground-muted uppercase font-bold tracking-tighter truncate">
-                                                                <Icon name="location_on" size={10} className="text-rose-500/50" />
-                                                                {event.metrics.position?.label || event.metrics.position || '???'}
-                                                            </div>
-                                                            <div className="flex items-center gap-1 text-[8px] text-foreground-muted uppercase font-bold tracking-tighter truncate">
-                                                                <Icon name="psychology" size={10} className="text-amber-500/50" />
-                                                                {event.metrics.intent?.label || event.metrics.intent || '???'}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
                                 </div>
                             )}
 
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-16 text-foreground-subtle">
-                            <Icon name="pending" size={32} className="mb-3 text-foreground-subtle" />
+                        <div className="flex flex-col items-center justify-center py-16 text-neutral-600">
+                            <Icon name="pending" size={32} className="mb-3 text-neutral-700" />
                             <p className="text-sm">Upload a clip to get started</p>
                         </div>
                     )}
@@ -1332,7 +1068,7 @@ export default function App() {
                         <a
                             href="/#feedback"
                             onClick={() => ReactGA.event({ category: 'Feedback', action: 'feedback_link_clicked', label: 'analyze_page' })}
-                            className="inline-flex items-center gap-1.5 text-xs text-foreground-muted hover:text-brand-secondary transition-colors"
+                            className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-emerald-400 transition-colors"
                         >
                             <Icon name="chat" size={14} />
                             Have feedback? Let us know
