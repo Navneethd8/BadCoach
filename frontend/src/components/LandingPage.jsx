@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
-import BadmintonNetScene from './BadmintonNetScene'
+import HeroRacketShaft from './HeroRacketShaft'
+
 function Icon({ name, size = 20, className = '' }) {
     return (
         <span
@@ -168,19 +169,7 @@ export default function LandingPage() {
                 </div>
             </nav>
 
-            {/* Hero: net scene */}
-            <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 px-6 text-center overflow-hidden bg-black min-h-[min(88vh,720px)]">
-                <div className="pointer-events-none absolute inset-0 z-0">
-                    <BadmintonNetScene className="w-full h-full object-cover opacity-[0.92]" />
-                </div>
-                <div
-                    className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,rgba(0,0,0,0.72)_0%,transparent_68%)]"
-                    aria-hidden
-                />
-                <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-40 z-[2] bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent"
-                    aria-hidden
-                />
+            <section className="hero-with-racket relative pt-16 md:pt-24 px-6 text-center bg-neutral-950">
                 <div className="relative z-10 max-w-3xl mx-auto">
                     <FadeUp delay={0}>
                         <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
@@ -198,7 +187,7 @@ export default function LandingPage() {
                         </h1>
                     </FadeUp>
 
-                    <FadeUp delay={0.16} className="mb-10">
+                    <FadeUp delay={0.16}>
                         <p className="text-lg text-neutral-400 max-w-xl mx-auto mb-2 leading-relaxed">
                             Upload a video clip (rally or single stroke). Our AI reads footwork, contact, and shot type like a club coach who had coffee first: fast,
                             specific, zero corporate fluff.
@@ -206,9 +195,14 @@ export default function LandingPage() {
                         <RotatingMicroLine lines={HERO_MICRO_LINES} />
                     </FadeUp>
 
-                    <FadeUp delay={0.22}>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
-                            <button
+                    <FadeUp delay={0.22} className="mt-6">
+                        <div className="hero-cta-row">
+                            <div className="hero-shaft-layer" aria-hidden>
+                                <HeroRacketShaft className="hero-shaft-svg text-white" />
+                            </div>
+                            <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
+                                <button
+                                type="button"
                                 onClick={() => navigate('/analyze')}
                                 className="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30"
                             >
@@ -225,55 +219,6 @@ export default function LandingPage() {
                                 <Icon name="sensors" size={18} className="text-emerald-400" />
                                 Live while you play
                             </button>
-                        </div>
-                    </FadeUp>
-
-                    {/* Mock analysis card */}
-                    <FadeUp delay={0.32}>
-                        <div className="mt-16 mx-auto max-w-sm bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-left shadow-2xl">
-                            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                                <span className="text-xs text-neutral-500 font-medium flex items-center gap-1.5">
-                                    <Icon name="analytics" size={14} className="text-emerald-500" />
-                                    Analysis Results
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] uppercase tracking-wide text-neutral-500 font-semibold border border-neutral-600/70 px-2 py-0.5 rounded">
-                                        Example
-                                    </span>
-                                    <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-                                        Advanced
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex justify-between items-end mb-2">
-                                <span className="text-2xl font-bold text-emerald-400">Advanced</span>
-                                <span className="text-sm text-neutral-400 font-mono">8 / 10</span>
-                            </div>
-                            <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden mb-3">
-                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '80%' }} />
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-3">
-                                <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] font-medium text-blue-400 flex items-center gap-1.5">
-                                    <Icon name="pan_tool_alt" size={12} />
-                                    Forehand Clear
-                                </div>
-                                <div className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-purple-400 flex items-center gap-1.5">
-                                    <Icon name="explore" size={12} />
-                                    Deep Lift
-                                </div>
-                                <div className="px-2 py-1 bg-rose-500/10 border border-rose-500/30 rounded text-[10px] font-medium text-rose-400 flex items-center gap-1.5">
-                                    <Icon name="location_on" size={12} />
-                                    Rear Court
-                                </div>
-                                <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400 flex items-center gap-1.5">
-                                    <Icon name="psychology" size={12} />
-                                    Offensive
-                                </div>
-                            </div>
-                            <div className="mt-3 pt-3 border-t border-neutral-800">
-                                <p className="text-xs text-neutral-300 leading-relaxed">
-                                    <span className="text-emerald-500">•</span> Rotate your non-racket shoulder further back at the start of the swing to generate more power and increase shuttle speed.
-                                </p>
                             </div>
                         </div>
                     </FadeUp>
@@ -281,7 +226,7 @@ export default function LandingPage() {
             </section>
 
             {/* Stats Bar */}
-            <section className="border-y border-neutral-800 bg-neutral-900/40">
+            <section className="hero-stats-bar border-y border-neutral-800 bg-neutral-900/40">
                 <div className="max-w-5xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
                     {stats.map(({ value, label, icon }, i) => (
                         <FadeUp key={label} delay={i * 0.07} className="text-center">

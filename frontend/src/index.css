@@ -65,6 +65,47 @@ select:focus-visible {
   opacity: 1;
 }
 
+/* Hero: extra space for racket art (no overflow clipping / scroll trap) */
+.hero-with-racket {
+  overflow: visible;
+  padding-bottom: 80px;
+  --shaft-gap: 1.5rem;
+}
+
+.hero-cta-row {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.hero-cta-row .hero-shaft-layer {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  z-index: 0;
+  width: 100vw;
+  transform: translate(-50%, calc(-49.5% + var(--shaft-gap)));
+  pointer-events: none;
+  line-height: 0;
+}
+
+.hero-cta-row .hero-shaft-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0.92;
+}
+
+.hero-stats-bar {
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .hero-with-racket {
+    --shaft-gap: 1.75rem;
+  }
+}
+
 *,
 *::before,
 *::after {
