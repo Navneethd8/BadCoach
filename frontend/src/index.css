@@ -6,13 +6,16 @@
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #171717;
+  color-scheme: light;
+  color: #0a0a0a;
+  background-color: #fafafa;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --brand: #6c9c8d;
+  --page: #fafafa;
 }
 
 body {
@@ -21,14 +24,13 @@ body {
   min-height: 100vh;
 }
 
-/* Keyboard focus: visible ring for interactive controls (does not remove mouse click outline where browsers hide it) */
 button:focus-visible,
 a:focus-visible,
 [role='button']:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid rgb(52, 211, 153);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -43,6 +45,241 @@ select:focus-visible {
   vertical-align: middle;
 }
 
+.font-display {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+.text-brand {
+  color: var(--brand);
+}
+
+/* —— Figma landing (node 216-334) —— */
+
+.figma-landing {
+  --figma-brand: #6c9c8d;
+}
+
+/* Hero: scale 1512×870 Figma artboard to viewport width */
+.figma-hero {
+  --figma-artboard-w: 1512;
+  --figma-artboard-h: 870;
+  --hero-scale: calc(100vw / var(--figma-artboard-w));
+  position: relative;
+  width: 100%;
+  min-height: max(640px, calc(var(--figma-artboard-h) * var(--hero-scale) * 1px));
+  background-color: var(--page);
+  isolation: isolate;
+}
+
+.figma-hero-scale-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.figma-hero-artboard {
+  position: absolute;
+  left: 50%;
+  top: -4rem;
+  width: 1512px;
+  height: 870px;
+  margin-left: -756px;
+  transform: scale(var(--hero-scale));
+  transform-origin: top center;
+}
+
+/* Net shenanigans — node 216:335 */
+.figma-layer-net {
+  position: absolute;
+  left: -751px;
+  top: -1206px;
+  width: 3647.55px;
+  height: 4188.04px;
+}
+
+.figma-layer-net-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: fill;
+}
+
+/* Racket — node 216:366 wrapper */
+.figma-layer-racket-wrap {
+  position: absolute;
+  left: -1872px;
+  top: -476px;
+  width: 3554.12px;
+  height: 3554.12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.figma-layer-racket-rot {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  transform: rotate(135deg);
+}
+
+.figma-layer-racket-v2 {
+  position: relative;
+  width: 3861.12px;
+  height: 1165.17px;
+}
+
+.figma-racket-shaft-slot {
+  position: absolute;
+  inset: 0 62.42% 0 0;
+}
+
+.figma-racket-head-slot {
+  position: absolute;
+  inset: 35.37% 0 39.95% 36.75%;
+}
+
+.figma-racket-part {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: fill;
+}
+
+.figma-hero-content {
+  position: relative;
+  z-index: 10;
+}
+
+.figma-display-title {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 4.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+.figma-section {
+  padding-top: clamp(3rem, 8vw, 6rem);
+  padding-bottom: clamp(2rem, 6vw, 4rem);
+}
+
+.figma-section-title {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(2rem, 5.5vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.figma-video-frame {
+  border-radius: 0;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+}
+
+.figma-feature-card {
+  background-color: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 1.75rem 1.5rem;
+  min-height: 226px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.figma-phone-frame {
+  flex-shrink: 0;
+}
+
+.figma-flow-label {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 4vw, 2.75rem);
+  line-height: 1.1;
+  text-transform: lowercase;
+}
+
+.figma-final-sub {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: clamp(1.125rem, 2.5vw, 1.75rem);
+  line-height: 1.3;
+  text-transform: lowercase;
+}
+
+.figma-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: min(300px, 100%);
+  height: 75px;
+  padding: 12px 24px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+  color: #fafafa;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+}
+
+.figma-cta:hover {
+  filter: brightness(1.06);
+}
+
+.figma-input {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: #0a0a0a;
+}
+
+.figma-input:focus {
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(108, 156, 141, 0.25);
+}
+
+.shuttle-decor {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.figma-phone-mockup {
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.08));
+}
+
+@media (min-width: 1512px) {
+  .figma-hero {
+    --hero-scale: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .figma-hero {
+    min-height: max(580px, calc(var(--figma-artboard-h) * var(--hero-scale) * 1px));
+  }
+
+  .figma-hero-content {
+    padding-top: 2.5rem;
+  }
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -53,63 +290,10 @@ select:focus-visible {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #404040;
+  background: #a3a3a3;
   border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #525252;
-}
-
-.badminton-net-mesh {
-  opacity: 1;
-}
-
-/* Hero: extra space for racket art (no overflow clipping / scroll trap) */
-.hero-with-racket {
-  overflow: visible;
-  padding-bottom: 80px;
-  --shaft-gap: 1.5rem;
-}
-
-.hero-cta-row {
-  position: relative;
-  isolation: isolate;
-  overflow: visible;
-}
-
-.hero-cta-row .hero-shaft-layer {
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  z-index: 0;
-  width: 100vw;
-  transform: translate(-50%, calc(-49.5% + var(--shaft-gap)));
-  pointer-events: none;
-  line-height: 0;
-}
-
-.hero-cta-row .hero-shaft-svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  opacity: 0.92;
-}
-
-.hero-stats-bar {
-  margin-top: 20px;
-}
-
-@media (max-width: 640px) {
-  .hero-with-racket {
-    --shaft-gap: 1.75rem;
-  }
-}
-
-*,
-*::before,
-*::after {
-  animation: none !important;
-  transition: none !important;
-  scroll-behavior: auto !important;
+  background: #737373;
 }
