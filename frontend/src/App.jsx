@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Logo from './components/Logo';
+import AppShell from './components/AppShell';
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -27,6 +28,10 @@ export default function App() {
     const [queueAhead, setQueueAhead] = useState(null)          // clip queue position (SSE event:queue)
     const videoRef = useRef(null)
     const loadingTimers = useRef([])
+    const [lightboxEvent, setLightboxEvent] = useState(null)
+    const [frameTip, setFrameTip] = useState(null)
+    const [frameTipLoading, setFrameTipLoading] = useState(false)
+    const frameTipCacheRef = useRef({})
     const retryTimerRef = useRef(null)
 
     // Mobile detection
@@ -232,6 +237,52 @@ export default function App() {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }, [])
 
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') setLightboxEvent(null) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [])
+
+    useEffect(() => {
+        if (!lightboxEvent) {
+            setFrameTip(null)
+            return
+        }
+
+        const m = lightboxEvent.metrics || {}
+        const cacheKey = `${lightboxEvent.label}|${m.subtype?.label || m.subtype || ''}|${m.technique?.label || m.technique || ''}|${m.placement?.label || m.placement || ''}|${m.position?.label || m.position || ''}|${m.intent?.label || m.intent || ''}|${m.quality || ''}`
+
+        if (frameTipCacheRef.current[cacheKey]) {
+            setFrameTip(frameTipCacheRef.current[cacheKey])
+            return
+        }
+
+        setFrameTip(null)
+        setFrameTipLoading(true)
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+        fetch(`${apiUrl}/frame-tip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                label: lightboxEvent.label,
+                subtype: m.subtype?.label || m.subtype || 'None',
+                technique: m.technique?.label || m.technique || 'Unknown',
+                placement: m.placement?.label || m.placement || 'Unknown',
+                position: m.position?.label || m.position || 'Unknown',
+                intent: m.intent?.label || m.intent || 'None',
+                quality: m.quality || 'Developing',
+                confidence: lightboxEvent.confidence || 0,
+            }),
+        })
+            .then((r) => r.json())
+            .then((data) => {
+                frameTipCacheRef.current[cacheKey] = data.tip
+                setFrameTip(data.tip)
+            })
+            .catch(() => setFrameTip(null))
+            .finally(() => setFrameTipLoading(false))
+    }, [lightboxEvent])
+
     const formatSeconds = (s) => {
         const m = Math.floor(s / 60).toString().padStart(2, '0')
         const sec = (s % 60).toString().padStart(2, '0')
@@ -362,7 +413,8 @@ export default function App() {
                     } else if (parsed.event === 'done') {
                         setQueueAhead(null)
                         const summary = parsed.summary || {}
-                        setResult({ ...summary, timeline: streamedTimeline })
+                        const timeline = resolveTimeline(summary, streamedTimeline)
+                        setResult({ ...summary, timeline })
                         ReactGA.event({
                             category: 'Video',
                             action: 'Stream Complete',
@@ -460,19 +512,35 @@ export default function App() {
     const getQualityColor = (quality) => {
         // Updated for 10-point scale
         const q = String(quality).toLowerCase()
-        if (q.includes('elite') || q.includes('expert')) return 'text-emerald-400'
-        if (q.includes('advanced')) return 'text-emerald-500' // New cyan/emerald
+        if (q.includes('elite') || q.includes('expert')) return 'text-brand'
+        if (q.includes('advanced')) return 'text-brand' // New cyan/emerald
         if (q.includes('proficient')) return 'text-cyan-400'
         if (q.includes('competent')) return 'text-amber-400'
         if (q.includes('developing') || q.includes('emerging')) return 'text-orange-400'
         return 'text-rose-400'
     }
 
+    /** Prefer server-assembled timeline (includes pose_image); normalize SSE progress rows. */
+    const resolveTimeline = (summary, streamed) => {
+        const fromSummary = summary?.timeline
+        const base =
+            Array.isArray(fromSummary) && fromSummary.length > 0
+                ? fromSummary
+                : streamed
+        return base.map((ev) => {
+            const { event: _e, window: _w, ...rest } = ev
+            return rest
+        })
+    }
+
+    const timelineHasPoseFrames = (timeline) =>
+        Array.isArray(timeline) && timeline.some((ev) => ev?.pose_image)
+
     const getQualityBarColor = (quality) => {
         // Updated for 10-point scale
         const q = String(quality).toLowerCase()
-        if (q.includes('elite') || q.includes('expert')) return 'bg-emerald-500'
-        if (q.includes('advanced')) return 'bg-emerald-600'
+        if (q.includes('elite') || q.includes('expert')) return 'bg-brand'
+        if (q.includes('advanced')) return 'bg-[#5a8578]'
         if (q.includes('proficient')) return 'bg-cyan-500'
         if (q.includes('competent')) return 'bg-amber-500'
         if (q.includes('developing') || q.includes('emerging')) return 'bg-orange-500'
@@ -480,9 +548,121 @@ export default function App() {
     }
 
     return (
-        <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 p-6 md:p-10">
+        <AppShell active="analyze" mainClassName="mx-auto max-w-4xl px-5 py-8 sm:px-8">
 
-            <div className="max-w-2xl mx-auto">
+            {lightboxEvent && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8"
+                    onClick={() => setLightboxEvent(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Frame analysis"
+                >
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-hidden rounded-lg app-modal"
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setLightboxEvent(null)}
+                            className="absolute top-3 right-3 z-20 rounded-full bg-white/95 p-1.5 text-neutral-500 shadow-sm transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                            aria-label="Close"
+                        >
+                            <Icon name="close" size={18} />
+                        </button>
+
+                        {lightboxEvent.pose_image && (
+                            <div className="flex w-full items-center justify-center bg-black">
+                                <img
+                                    src={`data:image/jpeg;base64,${lightboxEvent.pose_image}`}
+                                    alt={lightboxEvent.label}
+                                    className="max-h-[50vh] w-full object-contain"
+                                />
+                            </div>
+                        )}
+
+                        <div className="space-y-4 p-5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="block font-mono text-xs text-neutral-500">{lightboxEvent.timestamp}</span>
+                                    <span className={`text-lg font-bold ${lightboxEvent.label === 'Other' ? 'text-neutral-500' : 'text-neutral-900'}`}>
+                                        {lightboxEvent.label?.replace(/_/g, ' ')}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-xs text-neutral-500">Confidence</span>
+                                    <span className="text-lg font-semibold text-brand">
+                                        {(lightboxEvent.confidence * 100).toFixed(0)}%
+                                    </span>
+                                </div>
+                            </div>
+
+                            {lightboxEvent.metrics && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="rounded border border-blue-500/20 bg-blue-500/10 px-2.5 py-2">
+                                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wider text-blue-400/60">Technique</span>
+                                        <span className="flex items-center gap-1.5 text-xs font-medium text-blue-300">
+                                            <Icon name="pan_tool_alt" size={12} />
+                                            {lightboxEvent.metrics.technique?.label || lightboxEvent.metrics.technique || 'Unknown'}
+                                        </span>
+                                    </div>
+                                    <div className="rounded border border-purple-500/20 bg-purple-500/10 px-2.5 py-2">
+                                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wider text-purple-400/60">Placement</span>
+                                        <span className="flex items-center gap-1.5 text-xs font-medium text-purple-300">
+                                            <Icon name="explore" size={12} />
+                                            {lightboxEvent.metrics.placement?.label || lightboxEvent.metrics.placement || 'Unknown'}
+                                        </span>
+                                    </div>
+                                    <div className="rounded border border-rose-500/20 bg-rose-500/10 px-2.5 py-2">
+                                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wider text-rose-400/60">Position</span>
+                                        <span className="flex items-center gap-1.5 text-xs font-medium text-rose-300">
+                                            <Icon name="location_on" size={12} />
+                                            {lightboxEvent.metrics.position?.label || lightboxEvent.metrics.position || 'Unknown'}
+                                        </span>
+                                    </div>
+                                    <div className="rounded border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
+                                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wider text-amber-400/60">Intent</span>
+                                        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                                            <Icon name="psychology" size={12} />
+                                            {lightboxEvent.metrics.intent?.label || lightboxEvent.metrics.intent || 'None'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {lightboxEvent.metrics?.quality && (
+                                <div className="flex items-center gap-2 border-t border-neutral-800 pt-2">
+                                    <Icon name="star" size={14} className="text-amber-500" />
+                                    <span className="text-xs text-neutral-500">Quality:</span>
+                                    <span className={`text-xs font-semibold ${getQualityColor(lightboxEvent.metrics.quality)}`}>
+                                        {lightboxEvent.metrics.quality}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="border-t border-neutral-800 pt-3">
+                                <span className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-brand/80">
+                                    <Icon name="tips_and_updates" size={12} />
+                                    AI Coach Tip
+                                </span>
+                                {frameTipLoading ? (
+                                    <div className="flex items-center gap-2">
+                                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand/30 border-t-emerald-400" />
+                                        <span className="text-xs italic text-neutral-500">Generating tip...</span>
+                                    </div>
+                                ) : frameTip ? (
+                                    <p className="text-sm leading-relaxed text-neutral-700">{frameTip}</p>
+                                ) : (
+                                    <p className="text-xs italic text-neutral-600">Tip unavailable</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
 
                 {/* Capacity toast banner */}
                 {capacityError !== null && (
@@ -512,43 +692,24 @@ export default function App() {
                     </div>
                 )}
 
-                <header className="flex items-center gap-2 mb-8">
-                    {true && (
-                        <button
-                            onClick={() => navigate('/')}
-                            className="mr-1 -ml-1 p-1 rounded text-neutral-600 hover:text-neutral-300 transition-colors"
-                            aria-label="Back to home"
-                        >
-                            <Icon name="arrow_back" size={18} />
-                        </button>
-                    )}
-                    <Logo size={24} className="text-emerald-500" />
-                    <h1 className="text-xl font-semibold tracking-tight">
-                        Iso<span className="text-emerald-500">Court</span>
-                    </h1>
-                </header>
+                <h1 className="app-page-title mb-1">analyze a clip</h1>
+                <p className="app-page-lead mb-6">Upload or record a rally — Birdzo reads strokes, footwork, and form.</p>
 
                 {/* Upload / Record */}
-                <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 mb-6">
+                <section className="app-card mb-6">
 
                     {/* Tab switcher */}
-                    <div className="flex items-center gap-1 mb-4 p-1 bg-neutral-800/60 rounded-lg w-fit">
+                    <div className="app-tabs">
                         <button
                             onClick={() => switchMode('upload')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${inputMode === 'upload'
-                                ? 'bg-neutral-700 text-neutral-100 shadow-sm'
-                                : 'text-neutral-500 hover:text-neutral-300'
-                                }`}
+                            className={`app-tab ${inputMode === 'upload' ? 'app-tab--active' : ''}`}
                         >
                             <Icon name="upload" size={14} />
                             Upload
                         </button>
                         <button
                             onClick={() => switchMode('record')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${inputMode === 'record'
-                                ? 'bg-neutral-700 text-neutral-100 shadow-sm'
-                                : 'text-neutral-500 hover:text-neutral-300'
-                                }`}
+                            className={`app-tab ${inputMode === 'record' ? 'app-tab--active' : ''}`}
                         >
                             <Icon name="videocam" size={14} />
                             Record
@@ -559,13 +720,7 @@ export default function App() {
                         /* ── Upload mode ─── */
                         <div
                             {...getRootProps()}
-                            className={`
-                                border border-dashed rounded-md min-h-[220px] flex flex-col items-center justify-center cursor-pointer transition-colors
-                                ${isDragActive
-                                    ? 'border-emerald-500 bg-emerald-500/5'
-                                    : 'border-neutral-700 hover:border-neutral-500'
-                                }
-                            `}
+                            className={`app-dropzone ${isDragActive ? 'app-dropzone--active' : ''}`}
                         >
                             <input {...getInputProps()} />
                             {preview ? (
@@ -578,7 +733,7 @@ export default function App() {
                                     />
                                     <div className="flex items-center justify-between px-3 py-2 bg-neutral-900 border-t border-neutral-800/50">
                                         <span className="text-xs text-neutral-400 flex items-center gap-1.5">
-                                            <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                            <Icon name="check_circle" size={13} className="text-brand" />
                                             Clip ready to analyze
                                         </span>
                                         <button
@@ -613,7 +768,7 @@ export default function App() {
                                         />
                                         <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80 border-t border-neutral-800/50">
                                             <span className="text-xs text-neutral-400 flex items-center gap-1.5">
-                                                <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                                <Icon name="check_circle" size={13} className="text-brand" />
                                                 Clip ready
                                             </span>
                                             <button
@@ -685,7 +840,7 @@ export default function App() {
                                         />
                                         <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80">
                                             <span className="text-xs text-neutral-400 flex items-center gap-1.5">
-                                                <Icon name="check_circle" size={13} className="text-emerald-500" />
+                                                <Icon name="check_circle" size={13} className="text-brand" />
                                                 Clip ready to analyze
                                             </span>
                                             <button
@@ -785,7 +940,7 @@ export default function App() {
                     <button
                         onClick={handleStreamAnalysis}
                         disabled={!file || loading}
-                        className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-md transition-colors"
+                        className="app-btn-primary app-btn-primary--block mt-4"
                     >
                         {loadingStep >= 0 ? (
                             <span className="flex items-center justify-center gap-2">
@@ -797,8 +952,8 @@ export default function App() {
                 </section>
 
                 {/* Results */}
-                <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
-                    <h2 className="text-sm font-medium text-neutral-400 mb-4 flex items-center gap-2">
+                <section className="app-card">
+                    <h2 className="app-card-title">
                         <Icon name="analytics" size={18} />
                         Analysis Results
                     </h2>
@@ -812,26 +967,26 @@ export default function App() {
                                     return (
                                         <div
                                             key={idx}
-                                            className={`flex items-center gap-3 py-2 px-3 rounded-md transition-all duration-300 ${isActive ? 'bg-neutral-800' : ''
+                                            className={`flex items-center gap-3 py-2 px-3 rounded-md transition-all duration-300 ${isActive ? 'app-loading-step--active' : ''
                                                 }`}
                                         >
-                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300 ${isDone ? 'bg-emerald-600' : isActive ? 'bg-neutral-700' : 'bg-neutral-800'
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300 ${isDone ? 'app-loading-step__ring--done' : isActive ? 'app-loading-step__ring--active' : 'app-loading-step__ring--pending'
                                                 }`}>
                                                 {isDone ? (
                                                     <Icon name="check" size={14} className="text-white" />
                                                 ) : isActive ? (
                                                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                                                 ) : (
-                                                    <span className="w-1.5 h-1.5 bg-neutral-600 rounded-full" />
+                                                    <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full" />
                                                 )}
                                             </div>
                                             <Icon
                                                 name={step.icon}
                                                 size={18}
-                                                className={`transition-colors duration-300 ${isDone ? 'text-emerald-500' : isActive ? 'text-neutral-200' : 'text-neutral-600'
+                                                className={`transition-colors duration-300 ${isDone ? 'text-brand' : isActive ? 'text-neutral-700' : 'text-neutral-500'
                                                     }`}
                                             />
-                                            <span className={`text-sm transition-colors duration-300 ${isDone ? 'text-neutral-400' : isActive ? 'text-neutral-200 font-medium' : 'text-neutral-600'
+                                            <span className={`text-sm transition-colors duration-300 ${isDone ? 'text-neutral-500' : isActive ? 'text-neutral-800 font-medium' : 'text-neutral-500'
                                                 }`}>
                                                 {step.label}{isActive ? '...' : ''}
                                             </span>
@@ -917,14 +1072,19 @@ export default function App() {
                         <div className="space-y-4">
                             {/* Cache hit badge */}
                             {result.cache_hit && (
-                                <div className="flex items-center gap-2 text-[11px] text-emerald-400/70 font-medium px-1">
-                                    <Icon name="bolt" size={13} className="text-emerald-500" />
+                                <div className="flex items-center gap-2 text-[11px] text-brand/70 font-medium px-1">
+                                    <Icon name="bolt" size={13} className="text-brand" />
                                     Instant result: same clip analyzed before
                                 </div>
                             )}
+                            {result.cache_hit && result.timeline?.length > 0 && !timelineHasPoseFrames(result.timeline) && (
+                                <p className="text-xs text-amber-700/90 px-1">
+                                    Cached result has no pose frames. Trim a second off the clip or wait ~1 hour, then analyze again for skeleton views.
+                                </p>
+                            )}
                             <div className="space-y-3">
                                 {/* Performance & Tactical Analysis */}
-                                <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
+                                <div className="app-result-panel">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <span className="text-xs text-neutral-500 block mb-1">Execution Quality</span>
@@ -933,12 +1093,12 @@ export default function App() {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-xs font-mono text-neutral-400 block mb-1">Score</span>
-                                            <div className="text-lg font-semibold text-white">{result.quality_numeric || 0} / 10</div>
+                                            <span className="text-xs font-mono text-neutral-500 block mb-1">Score</span>
+                                            <div className="app-result-score">{result.quality_numeric || 0} / 10</div>
                                         </div>
                                     </div>
 
-                                    <div className="w-full bg-neutral-800 h-1.5 rounded-full mb-6 overflow-hidden">
+                                    <div className="app-result-meter">
                                         <div
                                             className={`h-full rounded-full ${getQualityBarColor(result.quality)}`}
                                             style={{ width: `${((result.quality_numeric || 0) / 10) * 100}%` }}
@@ -946,31 +1106,31 @@ export default function App() {
                                     </div>
 
                                     {result.tactical_analysis && (
-                                        <div className="pt-4 border-t border-neutral-800/50">
+                                        <div className="pt-4 border-t border-neutral-200">
                                             <span className="text-xs text-neutral-500 block mb-3">Tactical Metrics</span>
                                             <div className="flex flex-wrap gap-2">
-                                                <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] font-medium text-blue-400 flex items-center gap-1.5">
+                                                <div className="px-2 py-1 bg-blue-50 border border-blue-200 rounded text-[10px] font-medium text-blue-700 flex items-center gap-1.5">
                                                     <Icon name="pan_tool_alt" size={12} />
                                                     {result.tactical_analysis.technique?.label || 'Unknown'}
                                                     {result.tactical_analysis.technique?.confidence > 0 && (
                                                         <span className="text-[9px] opacity-60">{(result.tactical_analysis.technique.confidence * 100).toFixed(0)}%</span>
                                                     )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-purple-400 flex items-center gap-1.5">
+                                                <div className="px-2 py-1 bg-purple-50 border border-purple-200 rounded text-[10px] font-medium text-purple-700 flex items-center gap-1.5">
                                                     <Icon name="explore" size={12} />
                                                     {result.tactical_analysis.placement?.label || 'Unknown'}
                                                     {result.tactical_analysis.placement?.confidence > 0 && (
                                                         <span className="text-[9px] opacity-60">{(result.tactical_analysis.placement.confidence * 100).toFixed(0)}%</span>
                                                     )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-rose-500/10 border border-purple-500/30 rounded text-[10px] font-medium text-rose-400 flex items-center gap-1.5">
+                                                <div className="px-2 py-1 bg-rose-50 border border-rose-200 rounded text-[10px] font-medium text-rose-700 flex items-center gap-1.5">
                                                     <Icon name="location_on" size={12} />
                                                     {result.tactical_analysis.position?.label || 'Unknown'}
                                                     {result.tactical_analysis.position?.confidence > 0 && (
                                                         <span className="text-[9px] opacity-60">{(result.tactical_analysis.position.confidence * 100).toFixed(0)}%</span>
                                                     )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[10px] font-medium text-amber-400 flex items-center gap-1.5">
+                                                <div className="px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[10px] font-medium text-amber-700 flex items-center gap-1.5">
                                                     <Icon name="psychology" size={12} />
                                                     {result.tactical_analysis.intent?.label || 'None'}
                                                     {result.tactical_analysis.intent?.confidence > 0 && (
@@ -985,15 +1145,15 @@ export default function App() {
 
                             {/* Coach's Recommendations */}
                             {result.recommendations && result.recommendations.length > 0 && (
-                                <div className="p-4 bg-emerald-950/20 rounded-md border border-emerald-900/40">
-                                    <span className="text-xs text-emerald-500/80 flex items-center gap-1.5 mb-3 font-medium">
+                                <div className="app-coach-panel">
+                                    <span className="app-coach-panel__title">
                                         <Icon name="tips_and_updates" size={14} />
                                         Coach's Recommendations
                                     </span>
                                     <ul className="space-y-2">
                                         {result.recommendations.map((tip, idx) => (
-                                            <li key={idx} className="text-sm text-neutral-300 flex items-start gap-2">
-                                                <span className="text-emerald-500 mt-1">•</span>
+                                            <li key={idx} className="app-coach-panel__item">
+                                                <span className="text-brand mt-1">•</span>
                                                 {tip}
                                             </li>
                                         ))}
@@ -1002,32 +1162,57 @@ export default function App() {
                             )}
 
                             {/* Timeline Breakdown */}
-                            {result.timeline && (
-                                <div className="p-4 bg-neutral-950 rounded-md border border-neutral-800">
+                            {result.timeline?.length > 0 && (
+                                <div className="app-timeline-panel">
                                     <span className="text-xs text-neutral-500 flex items-center gap-1.5 mb-4">
                                         <Icon name="timeline" size={14} />
                                         Play-by-Play Breakdown
                                     </span>
 
-                                    <div className="relative border-l border-neutral-800 ml-2 space-y-6 py-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                    <p className="text-[11px] text-neutral-500 mb-3 md:hidden">
+                                        Tap a timestamp to jump in the video; tap a skeleton to inspect that frame.
+                                    </p>
+                                    <p className="hidden text-[11px] text-neutral-600 mb-3 md:block">
+                                        Click a card to seek the video; click the skeleton to open frame details and a coach tip.
+                                    </p>
+
+                                    {/* Mobile: vertical timeline with pose thumbnails */}
+                                    <div className="block md:hidden relative border-l app-timeline-rail ml-2 space-y-6 py-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                         {result.timeline.map((event, idx) => (
                                             <div
                                                 key={idx}
                                                 onClick={() => handleTimelineClick(event.timestamp)}
-                                                className="relative pl-6 py-2 rounded hover:bg-neutral-900 transition-colors cursor-pointer group"
+                                                className="relative pl-6 py-2 rounded app-timeline-row transition-colors cursor-pointer group"
                                             >
-                                                <div className={`absolute -left-[5.5px] top-4 w-2.5 h-2.5 rounded-full border-2 ${event.label === 'Other'
-                                                    ? 'bg-neutral-950 border-neutral-600'
-                                                    : 'bg-neutral-950 border-emerald-500'
+                                                <div className={`absolute -left-[5.5px] top-4 w-2.5 h-2.5 rounded-full border-2 app-timeline-dot ${event.label === 'Other'
+                                                    ? 'app-timeline-dot--muted'
+                                                    : 'app-timeline-dot--brand'
                                                     }`} />
                                                 <div className="flex flex-col gap-3">
-                                                    <div>
-                                                        <span className="text-xs font-mono text-neutral-500 block">{event.timestamp}</span>
-                                                            <span className={`text-base font-semibold ${event.label === 'Other' ? 'text-neutral-500' : 'text-neutral-100'}`}>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <span className="text-xs font-mono text-neutral-500 block">{event.timestamp}</span>
+                                                            <span className={`text-base font-semibold ${event.label === 'Other' ? 'app-timeline-event-title--muted' : 'app-timeline-event-title'}`}>
                                                                 {event.label.replace(/_/g, ' ')}
                                                             </span>
-                                                            <span className="text-[10px] text-neutral-600 ml-2">{(event.confidence * 100).toFixed(0)}%</span>
+                                                            <span className="text-[10px] text-neutral-500 ml-2">{(event.confidence * 100).toFixed(0)}%</span>
                                                         </div>
+                                                        {event.pose_image && (
+                                                            <div
+                                                                onClick={(e) => { e.stopPropagation(); setLightboxEvent(event) }}
+                                                                className="relative h-16 w-24 flex-shrink-0 cursor-zoom-in overflow-hidden rounded border border-neutral-700 bg-black/50 transition-colors hover:border-brand group/pose"
+                                                            >
+                                                                <img
+                                                                    src={`data:image/jpeg;base64,${event.pose_image}`}
+                                                                    alt={event.label}
+                                                                    className="h-full w-full object-contain"
+                                                                />
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover/pose:bg-black/30">
+                                                                    <Icon name="zoom_in" size={16} className="text-white opacity-0 transition-opacity group-hover/pose:opacity-80" />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
                                                     {event.metrics && (
                                                         <div className="flex flex-wrap gap-1.5">
@@ -1043,6 +1228,70 @@ export default function App() {
                                                             <span className="px-1.5 py-0.5 bg-amber-500/5 text-amber-400/70 border border-amber-500/20 rounded text-[9px] uppercase tracking-wider font-semibold">
                                                                 {event.metrics.intent?.label || event.metrics.intent || 'None'}
                                                             </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Desktop: horizontal skeleton strip */}
+                                    <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-2 custom-scrollbar">
+                                        {result.timeline.map((event, idx) => (
+                                            <div
+                                                key={idx}
+                                                onClick={() => handleTimelineClick(event.timestamp)}
+                                                className="flex-shrink-0 w-44 cursor-pointer group"
+                                            >
+                                                <div
+                                                    onClick={(e) => { if (event.pose_image) { e.stopPropagation(); setLightboxEvent(event) } }}
+                                                    className={`relative h-32 w-44 overflow-hidden rounded border bg-black transition-all duration-300 ${event.pose_image
+                                                        ? 'cursor-zoom-in border-neutral-700 group-hover:scale-[1.02] group-hover:border-brand'
+                                                        : 'flex items-center justify-center border-neutral-800'
+                                                        }`}
+                                                >
+                                                    {event.pose_image ? (
+                                                        <>
+                                                            <img
+                                                                src={`data:image/jpeg;base64,${event.pose_image}`}
+                                                                alt={event.label}
+                                                                className="h-full w-full object-contain"
+                                                            />
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
+                                                                <Icon name="zoom_in" size={20} className="text-white opacity-0 transition-opacity group-hover:opacity-80" />
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <Icon name="hide_image" size={24} className="text-neutral-700" />
+                                                    )}
+                                                </div>
+                                                <div className="mt-3 space-y-2 px-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-mono text-[10px] text-neutral-500">{event.timestamp}</span>
+                                                        <span className="text-[10px] text-neutral-600">{(event.confidence * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                    <span className={`block truncate text-sm transition-colors group-hover:text-brand ${event.label === 'Other' ? 'app-timeline-event-title--muted' : 'font-semibold app-timeline-event-title'}`}>
+                                                        {event.label.replace(/_/g, ' ')}
+                                                    </span>
+
+                                                    {event.metrics && (
+                                                        <div className="mt-2 grid grid-cols-2 gap-1 border-t border-neutral-200 pt-2">
+                                                            <div className="flex items-center gap-1 truncate text-[8px] font-bold uppercase tracking-tighter text-neutral-500">
+                                                                <Icon name="pan_tool_alt" size={10} className="text-blue-500/50" />
+                                                                {event.metrics.technique?.label || event.metrics.technique || '???'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 truncate text-[8px] font-bold uppercase tracking-tighter text-neutral-500">
+                                                                <Icon name="explore" size={10} className="text-purple-500/50" />
+                                                                {event.metrics.placement?.label || event.metrics.placement || '???'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 truncate text-[8px] font-bold uppercase tracking-tighter text-neutral-500">
+                                                                <Icon name="location_on" size={10} className="text-rose-500/50" />
+                                                                {event.metrics.position?.label || event.metrics.position || '???'}
+                                                            </div>
+                                                            <div className="flex items-center gap-1 truncate text-[8px] font-bold uppercase tracking-tighter text-neutral-500">
+                                                                <Icon name="psychology" size={10} className="text-amber-500/50" />
+                                                                {event.metrics.intent?.label || event.metrics.intent || '???'}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1068,14 +1317,13 @@ export default function App() {
                         <a
                             href="/#feedback"
                             onClick={() => ReactGA.event({ category: 'Feedback', action: 'feedback_link_clicked', label: 'analyze_page' })}
-                            className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-emerald-400 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-brand transition-colors"
                         >
                             <Icon name="chat" size={14} />
                             Have feedback? Let us know
                         </a>
                     </div>
                 )}
-            </div>
-        </div>
+        </AppShell>
     )
 }

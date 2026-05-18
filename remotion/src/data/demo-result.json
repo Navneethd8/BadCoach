@@ -1,0 +1,322 @@
+{
+  "action": "Serve",
+  "confidence": 0.4710620045661926,
+  "subtype": "Blocked_Drop",
+  "quality": "Proficient",
+  "quality_numeric": 5,
+  "recommendations": [
+    "As your coach, here are three technical tips to improve your forehand cross-court blocked drop:",
+    "**Maintain a consistent high-ready racket position to disguise the drop until the final millisecond of contact.**",
+    "**Utilize a soft, controlled grip tension at the moment of impact to absorb pace and ensure the shuttle dies close to the net.**"
+  ],
+  "tactical_analysis": {
+    "technique": {
+      "label": "Forehand",
+      "confidence": 0.4872073829174042
+    },
+    "placement": {
+      "label": "Cross-court",
+      "confidence": 0.6678774952888489
+    },
+    "position": {
+      "label": "Mid_Court",
+      "confidence": 0.24118921160697937
+    },
+    "intent": {
+      "label": "None",
+      "confidence": 0.3662276268005371
+    }
+  },
+  "timeline": [
+    {
+      "window": 0,
+      "timestamp": "00:00",
+      "label": "Serve",
+      "confidence": 0.4710620045661926,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05300666764378548
+        },
+        "technique": {
+          "label": "Forehand",
+          "confidence": 0.4872073829174042
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.6678774952888489
+        },
+        "position": {
+          "label": "Mid_Court",
+          "confidence": 0.24118921160697937
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.3662276268005371
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 1,
+      "timestamp": "00:01",
+      "label": "Serve",
+      "confidence": 0.4286106526851654,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.052514996379613876
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.5805070996284485
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.6065414547920227
+        },
+        "position": {
+          "label": "Left_Mid",
+          "confidence": 0.17982658743858337
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.35251447558403015
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 2,
+      "timestamp": "00:02",
+      "label": "Serve",
+      "confidence": 0.2170795351266861,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05250219255685806
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.4806406497955322
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.41485175490379333
+        },
+        "position": {
+          "label": "Left_Mid",
+          "confidence": 0.17218726873397827
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.2584766149520874
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 3,
+      "timestamp": "00:03",
+      "label": "Net_Shot",
+      "confidence": 0.15976402163505554,
+      "metrics": {
+        "subtype": {
+          "label": "Jump_Smash",
+          "confidence": 0.05225897952914238
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.46159127354621887
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.39581623673439026
+        },
+        "position": {
+          "label": "Left_Front",
+          "confidence": 0.16583997011184692
+        },
+        "intent": {
+          "label": "Passive",
+          "confidence": 0.2073441743850708
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 4,
+      "timestamp": "00:04",
+      "label": "Serve",
+      "confidence": 0.28001096844673157,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05246974900364876
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.542745053768158
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.6409033536911011
+        },
+        "position": {
+          "label": "Right_Front",
+          "confidence": 0.13912910223007202
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.2148204892873764
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 5,
+      "timestamp": "00:05",
+      "label": "Lob",
+      "confidence": 0.1439935266971588,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05230563506484032
+        },
+        "technique": {
+          "label": "Forehand",
+          "confidence": 0.6175851821899414
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.510826826095581
+        },
+        "position": {
+          "label": "Left_Mid",
+          "confidence": 0.2268223762512207
+        },
+        "intent": {
+          "label": "Passive",
+          "confidence": 0.260347843170166
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 6,
+      "timestamp": "00:06",
+      "label": "Serve",
+      "confidence": 0.30409279465675354,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05294819921255112
+        },
+        "technique": {
+          "label": "Forehand",
+          "confidence": 0.6572847366333008
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.3186855614185333
+        },
+        "position": {
+          "label": "Right_Mid",
+          "confidence": 0.1926853060722351
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.3634021580219269
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 7,
+      "timestamp": "00:07",
+      "label": "Serve",
+      "confidence": 0.41170257329940796,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.052138812839984894
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.49308520555496216
+        },
+        "placement": {
+          "label": "Cross-court",
+          "confidence": 0.5534293055534363
+        },
+        "position": {
+          "label": "Right_Mid",
+          "confidence": 0.3037680983543396
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.33171337842941284
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 8,
+      "timestamp": "00:08",
+      "label": "Serve",
+      "confidence": 0.47082921862602234,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05155336111783981
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.6826713681221008
+        },
+        "placement": {
+          "label": "Straight",
+          "confidence": 0.32516902685165405
+        },
+        "position": {
+          "label": "Mid_Court",
+          "confidence": 0.1511671394109726
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.39721059799194336
+        },
+        "quality": "Proficient"
+      }
+    },
+    {
+      "window": 9,
+      "timestamp": "00:09",
+      "label": "Serve",
+      "confidence": 0.4365765452384949,
+      "metrics": {
+        "subtype": {
+          "label": "Blocked_Drop",
+          "confidence": 0.05150561407208443
+        },
+        "technique": {
+          "label": "Backhand",
+          "confidence": 0.6934370994567871
+        },
+        "placement": {
+          "label": "Straight",
+          "confidence": 0.2927800714969635
+        },
+        "position": {
+          "label": "Mid_Court",
+          "confidence": 0.15390411019325256
+        },
+        "intent": {
+          "label": "None",
+          "confidence": 0.38414913415908813
+        },
+        "quality": "Proficient"
+      }
+    }
+  ]
+}

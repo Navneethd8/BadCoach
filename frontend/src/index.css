@@ -15,6 +15,10 @@
   -moz-osx-font-smoothing: grayscale;
 
   --brand: #6c9c8d;
+  --brand-dark: #5a8578;
+  --brand-darker: #4a6f64;
+  --brand-light: #dce9e4;
+  --brand-muted: #e8f0ed;
   --page: #fafafa;
 }
 
@@ -22,6 +26,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 button:focus-visible,
@@ -41,16 +51,27 @@ select:focus-visible {
 }
 
 .material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-family: "Material Symbols Outlined Variable";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
   vertical-align: middle;
 }
 
 .font-display {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
 }
 
 .text-brand {
@@ -63,110 +84,294 @@ select:focus-visible {
   --figma-brand: #6c9c8d;
 }
 
-/* Hero: scale 1512×870 Figma artboard to viewport width */
+/*
+ * Hero — 1512×870 Figma artboard, centered, scaled per breakpoint.
+ * Mobile-first; --hero-scale + --hero-min-h are overridden at each tier:
+ *   default (< 640px)         — phones
+ *   sm     (>= 640px)         — large phones / small tablets
+ *   md     (>= 1024px)        — tablets / small laptops
+ *   lg     (>= 1280px)        — laptops / desktops
+ *   xl     (>= 1512px)        — Figma 1× and wider monitors
+ */
 .figma-hero {
-  --figma-artboard-w: 1512;
-  --figma-artboard-h: 870;
-  --hero-scale: calc(100vw / var(--figma-artboard-w));
+  --hero-scale: 0.55;
+  --hero-min-h: 30rem;
   position: relative;
-  width: 100%;
-  min-height: max(640px, calc(var(--figma-artboard-h) * var(--hero-scale) * 1px));
-  background-color: var(--page);
-  isolation: isolate;
-}
-
-.figma-hero-scale-wrap {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
   z-index: 0;
+  isolation: isolate;
+  width: 100%;
+  height: max(calc(870px * var(--hero-scale)), var(--hero-min-h));
+  overflow: hidden;
+  background-color: var(--page);
 }
 
 .figma-hero-artboard {
   position: absolute;
   left: 50%;
-  top: -4rem;
+  top: 50%;
   width: 1512px;
   height: 870px;
   margin-left: -756px;
+  margin-top: -435px;
   transform: scale(var(--hero-scale));
-  transform-origin: top center;
+  transform-origin: center center;
+  pointer-events: none;
 }
 
-/* Net shenanigans — node 216:335 */
+@media (min-width: 640px) {
+  .figma-hero {
+    --hero-scale: 0.7;
+    --hero-min-h: 34rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .figma-hero {
+    --hero-scale: 0.82;
+    --hero-min-h: 38rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .figma-hero {
+    --hero-scale: 0.92;
+  }
+}
+
+/* xl — Figma 1× native size. Capped so hero stays 870px tall on wide monitors.
+   The net + racket SVGs are much larger than the artboard, so they naturally
+   extend across wider viewports without further scaling. */
+@media (min-width: 1512px) {
+  .figma-hero {
+    --hero-scale: 1;
+  }
+}
+
+/* Net shenanigans — node 216:335 (exact Figma coords, no extra transforms) */
 .figma-layer-net {
   position: absolute;
   left: -751px;
   top: -1206px;
   width: 3647.55px;
   height: 4188.04px;
+  z-index: 0;
+  pointer-events: none;
 }
 
-.figma-layer-net-img {
+.figma-layer-net img {
   display: block;
   width: 100%;
   height: 100%;
-  max-width: none;
-  object-fit: fill;
 }
 
-/* Racket — node 216:366 wrapper */
-.figma-layer-racket-wrap {
+/*
+ * Racket — node 216:366
+ * Anchored so the racket head's center sits at the hero's center (756, 435).
+ * Rotation pivots around the head center, so size changes don't shift the anchor.
+ *
+ * Head center in racket-svg viewBox (3861.12 × 1165.17): (725.57, 582.58)
+ *   x fraction = 725.57 / 3861.12 ≈ 0.1879
+ *   y fraction = 582.58 / 1165.17 ≈ 0.5000
+ *   svg aspect = 1165.17 / 3861.12 ≈ 0.3018
+ *   y-in-px / W = aspect × y-frac = 0.3018 × 0.5 = 0.1509
+ */
+.figma-layer-racket {
   position: absolute;
-  left: -1872px;
-  top: -476px;
-  width: 3554.12px;
-  height: 3554.12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
+  /* Mobile: nudged slightly right (head anchor at 816 design px) so the head's
+     left curve doesn't clip the heading. Returns to dead-center (756) at sm+. */
+  left: 816px;
+  top: 435px;
+  width: 0;
+  height: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .figma-layer-racket {
+    left: 756px;
+  }
 }
 
 .figma-layer-racket-rot {
-  flex: none;
-  width: 100%;
-  height: 100%;
-  transform: rotate(135deg);
-}
-
-.figma-layer-racket-v2 {
-  position: relative;
-  width: 3861.12px;
-  height: 1165.17px;
-}
-
-.figma-racket-shaft-slot {
+  /* Tiny ~10px shrink on the smallest phones — just enough to ease the head
+     off the heading edge without rescaling the racket. Restores at sm+. */
+  --racket-w: 2780px;
+  --head-cx-frac: 0.1879;
+  --head-cy-frac: 0.1509;
   position: absolute;
-  inset: 0 62.42% 0 0;
+  width: var(--racket-w);
+  height: calc(var(--racket-w) * 0.3018);
+  left: calc(-1 * var(--racket-w) * var(--head-cx-frac));
+  top: calc(-1 * var(--racket-w) * var(--head-cy-frac));
+  /* framer-motion drives `transform` (rotate + y) from useScroll.
+     transform-origin keeps the rotation pivot on the head center. */
+  transform-origin: calc(var(--racket-w) * var(--head-cx-frac))
+    calc(var(--racket-w) * var(--head-cy-frac));
+  will-change: transform, opacity;
 }
 
-.figma-racket-head-slot {
-  position: absolute;
-  inset: 35.37% 0 39.95% 36.75%;
+@media (min-width: 640px) {
+  .figma-layer-racket-rot {
+    --racket-w: 2800px;
+  }
 }
 
-.figma-racket-part {
+/* Static fallback when JS / reduced-motion disables the animation */
+@media (prefers-reduced-motion: reduce) {
+  .figma-layer-racket-rot {
+    transform: none;
+  }
+}
+
+.figma-racket-svg {
   display: block;
   width: 100%;
   height: 100%;
-  max-width: none;
-  object-fit: fill;
 }
 
+/* Racket string mesh — color + transparency match the original net-shenanigans
+   pattern (#1B4D3E @ 0.8). A whisper of blur to match the soft net vibe. */
+.figma-racket-strings {
+  opacity: 0.8;
+  filter: blur(1px);
+}
+
+/* Copy — overlay centered on the hero (sits inside the racket head circle) */
 .figma-hero-content {
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.figma-hero-content > * {
+  pointer-events: auto;
+}
+
+/*
+ * Racket-face glass — subtle blur on the net only inside the shaft ellipse.
+ * Same strength as the old net SVG feGaussianBlur (stdDeviation 2).
+ * Sits between net (z0) and racket (z2); no fill so lines stay visible.
+ */
+.figma-layer-racket-glass {
+  position: absolute;
+  left: 756px;
+  top: 435px;
+  width: 980px;
+  height: 760px;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 50%;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  -webkit-mask-image: radial-gradient(
+    ellipse 100% 100% at 50% 50%,
+    #000 42%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    ellipse 100% 100% at 50% 50%,
+    #000 42%,
+    transparent 78%
+  );
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .figma-layer-racket-glass {
+    display: none;
+  }
 }
 
 .figma-display-title {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
   font-weight: 700;
-  font-size: clamp(2rem, 6vw, 4.25rem);
+  font-size: 1.875rem;        /* 30px @ base */
   line-height: 1.05;
   letter-spacing: -0.02em;
-  text-transform: none;
+  max-width: 22rem;
+  color: #000;
+}
+
+.figma-hero-sub {
+  margin-top: 1rem;
+  max-width: 20rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;        /* 14px @ base */
+  line-height: 1.5;
+  color: #525252;
+}
+
+.figma-hero-ctas {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .figma-display-title {
+    font-size: 2.5rem;        /* 40px */
+    max-width: 32rem;
+  }
+  .figma-hero-sub {
+    font-size: 1rem;
+    max-width: 28rem;
+  }
+  .figma-hero-ctas {
+    margin-top: 1.75rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .figma-display-title {
+    font-size: 3.25rem;       /* 52px */
+    max-width: 42rem;
+  }
+  .figma-hero-sub {
+    margin-top: 1.25rem;
+    font-size: 1.125rem;
+    max-width: 32rem;
+  }
+  .figma-hero-ctas {
+    margin-top: 2rem;
+    gap: 1.25rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .figma-display-title {
+    font-size: 3.75rem;       /* 60px */
+    max-width: 48rem;
+  }
+  .figma-hero-sub {
+    margin-top: 1.5rem;
+    font-size: 1.25rem;
+    max-width: 36rem;
+  }
+  .figma-hero-ctas {
+    margin-top: 2.25rem;
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1512px) {
+  .figma-display-title {
+    font-size: 4.25rem;       /* 68px — Figma 1× */
+    max-width: 52rem;
+  }
 }
 
 .figma-section {
@@ -175,17 +380,57 @@ select:focus-visible {
 }
 
 .figma-section-title {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
   font-weight: 700;
   font-size: clamp(2rem, 5.5vw, 3.75rem);
   line-height: 1;
   letter-spacing: -0.02em;
-  text-transform: uppercase;
+  text-transform: lowercase;
+}
+
+.figma-section-lead {
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #525252;
+}
+
+.figma-top-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Scrollable page body sits below fixed chrome (keep outside overflow-x on root). */
+.figma-page-body {
+  position: relative;
+  z-index: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Offset page content below fixed header (h-14 / sm:h-16). */
+.figma-top-bar-spacer {
+  height: 3.5rem;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .figma-top-bar-spacer {
+    height: 4rem;
+  }
 }
 
 .figma-video-frame {
   border-radius: 0;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  outline: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .figma-feature-card {
@@ -197,46 +442,256 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.figma-feature-card:hover {
+  border-color: var(--brand);
+  box-shadow: 0 4px 20px rgba(108, 156, 141, 0.12);
+}
+
+.figma-feature-title {
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 1.125rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+  margin-bottom: 0.5rem;
+  color: #0a0a0a;
+}
+
+.figma-feature-desc {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #404040;
 }
 
 .figma-phone-frame {
   flex-shrink: 0;
+  position: relative;
+}
+
+/* Screen area inside court-line phone mockup (viewBox 378×627). */
+.figma-phone-screen {
+  position: absolute;
+  left: 8.75%;
+  right: 10.25%;
+  top: 6.85%;
+  bottom: 6.95%;
+  overflow: hidden;
+  background-color: #fafafa;
+}
+
+.figma-phone-screen video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.figma-phone-court-frame {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* What to do — court mockup + copy share a column axis on md+ */
+@media (min-width: 768px) {
+  .figma-flow-step {
+    justify-items: center;
+  }
+
+  .figma-flow-step__visual,
+  .figma-flow-step__copy {
+    width: 100%;
+    max-width: 28rem;
+    justify-self: center;
+  }
 }
 
 .figma-flow-label {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
   font-weight: 700;
   font-size: clamp(1.5rem, 4vw, 2.75rem);
   line-height: 1.1;
   text-transform: lowercase;
 }
 
+.figma-final-cta {
+  background: linear-gradient(180deg, var(--page) 0%, var(--brand-muted) 100%);
+}
+
 .figma-final-sub {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
   font-size: clamp(1.125rem, 2.5vw, 1.75rem);
   line-height: 1.3;
   text-transform: lowercase;
 }
 
+.figma-feedback {
+  border-top: 1px solid #e5e5e5;
+  background-color: #fff;
+}
+
+.figma-feedback-form {
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  background-color: var(--page);
+  padding: 1.5rem;
+}
+
+.figma-footer {
+  border-top: 1px solid #e5e5e5;
+  background-color: #fff;
+}
+
+.figma-footer-nav {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: #737373;
+}
+
+.figma-footer-link {
+  color: var(--brand);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.figma-footer-link:hover {
+  opacity: 0.75;
+}
+
+.figma-legal-back {
+  display: inline-flex;
+  align-items: center;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--brand);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.figma-legal-back:hover {
+  color: var(--brand-dark);
+}
+
+/* —— Landing CTAs — capsule tube shape, flat brand fill —— */
 .figma-cta {
+  --cta-h: 3.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: min(300px, 100%);
-  height: 75px;
-  padding: 12px 24px;
-  font-family: 'Inter', system-ui, sans-serif;
+  min-height: var(--cta-h);
+  padding: 0 1.75rem;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 0.875rem;
   line-height: 1;
-  color: #fafafa;
-  white-space: nowrap;
-  border: none;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  text-decoration: none;
+  border: 2px solid transparent;
   cursor: pointer;
+  border-radius: calc(var(--cta-h) / 2);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.figma-cta:hover {
-  filter: brightness(1.06);
+.figma-cta--primary {
+  background-color: var(--brand);
+  color: #fafafa;
+}
+
+.figma-cta--primary:hover:not(:disabled):not(.figma-cta--loading) {
+  background-color: var(--brand-dark);
+}
+
+.figma-cta--secondary {
+  background-color: #fff;
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+.figma-cta--secondary:hover:not(:disabled):not(.figma-cta--loading) {
+  background-color: rgba(108, 156, 141, 0.06);
+}
+
+.figma-cta:disabled,
+.figma-cta--loading {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.figma-cta--block {
+  width: 100%;
+  --cta-h: 3rem;
+}
+
+.figma-cta-spinner {
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: figma-cta-spin 0.6s linear infinite;
+}
+
+@keyframes figma-cta-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hero CTAs — tube height scales; radius follows via --cta-h */
+.figma-hero-content .figma-cta {
+  --cta-h: 2.875rem;
+  padding-inline: 1.25rem;
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 640px) {
+  .figma-hero-content .figma-cta {
+    --cta-h: 3.125rem;
+    padding-inline: 1.5rem;
+    font-size: 0.875rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .figma-hero-content .figma-cta {
+    --cta-h: 3.5rem;
+    padding-inline: 1.75rem;
+    font-size: 0.9375rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .figma-hero-content .figma-cta {
+    min-height: 4rem;
+    padding-inline: 2rem;
+    font-size: 1rem;
+  }
+}
+
+@media (min-width: 1512px) {
+  .figma-hero-content .figma-cta {
+    min-height: 4.6875rem;       /* 75px Figma 1× */
+    padding-inline: 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figma-cta {
+    transition: none;
+  }
 }
 
 .figma-input {
@@ -264,20 +719,241 @@ select:focus-visible {
   filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.08));
 }
 
-@media (min-width: 1512px) {
-  .figma-hero {
-    --hero-scale: 1;
+/* Mobile-first: stacked CTAs at base; flex-direction is overridden at >=640px above */
+.figma-hero-ctas .figma-cta {
+  width: 100%;
+  max-width: 18rem;
+}
+
+@media (min-width: 640px) {
+  .figma-hero-ctas .figma-cta {
+    width: auto;
+    max-width: none;
   }
 }
 
-@media (max-width: 768px) {
-  .figma-hero {
-    min-height: max(580px, calc(var(--figma-artboard-h) * var(--hero-scale) * 1px));
-  }
+/* —— App pages (Analyze / Live) — same brand shell as landing —— */
+.app-nav-link {
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: rgba(250, 250, 250, 0.88);
+  transition: color 0.15s ease;
+}
 
-  .figma-hero-content {
-    padding-top: 2.5rem;
-  }
+.app-nav-link:hover {
+  color: #fff;
+}
+
+.app-nav-link--active {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.app-page-title {
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.app-page-lead {
+  margin-top: 0.35rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #525252;
+}
+
+.app-card {
+  background-color: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.app-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: #404040;
+}
+
+.app-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.25rem;
+  width: fit-content;
+  border-radius: 8px;
+  background-color: #ececec;
+}
+
+.app-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  color: #737373;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.app-tab:hover {
+  color: #262626;
+}
+
+.app-tab--active {
+  background-color: #fff;
+  color: #0a0a0a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.app-dropzone {
+  border: 1px dashed #c4c4c4;
+  border-radius: 8px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.app-dropzone:hover {
+  border-color: var(--brand);
+}
+
+.app-dropzone--active {
+  border-color: var(--brand);
+  background-color: rgba(108, 156, 141, 0.06);
+}
+
+.app-video-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: #fff;
+  border-top: 1px solid #e5e5e5;
+}
+
+.app-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: auto;
+  min-height: 2.75rem;
+  padding: 0 1.75rem;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: #fafafa;
+  background-color: var(--brand);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+
+.app-btn-primary--block {
+  width: 100%;
+}
+
+.app-live-idle {
+  background: linear-gradient(180deg, rgba(23, 23, 23, 0.92) 0%, rgba(10, 10, 10, 0.96) 100%);
+}
+
+.app-live-idle__icon {
+  color: rgba(108, 156, 141, 0.45);
+}
+
+.app-live-idle__hint {
+  margin-top: -0.5rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  max-width: 14rem;
+}
+
+.app-btn-primary:hover:not(:disabled) {
+  background-color: var(--brand-dark);
+}
+
+.app-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.app-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  color: #404040;
+  background-color: #fff;
+  border: 1px solid #d4d4d4;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-btn-secondary:hover {
+  border-color: var(--brand);
+  background-color: rgba(108, 156, 141, 0.06);
+}
+
+.app-panel-dark {
+  background-color: #171717;
+  border: 1px solid #262626;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.app-chat-coach {
+  background-color: rgba(108, 156, 141, 0.1);
+  border: 1px solid rgba(108, 156, 141, 0.25);
+  border-radius: 8px;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #3d5c52;
+}
+
+.app-modal {
+  border: 1px solid #e5e5e5;
+  background-color: #fff;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -296,4 +972,104 @@ select:focus-visible {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #737373;
+}
+
+/* —— Analysis results (light panels on app-card shell) —— */
+.app-result-panel {
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: #fff;
+  border: 1px solid #e5e5e5;
+}
+
+.app-result-meter {
+  width: 100%;
+  height: 0.375rem;
+  border-radius: 999px;
+  background-color: #e5e5e5;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.app-result-score {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+.app-coach-panel {
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: rgba(108, 156, 141, 0.08);
+  border: 1px solid rgba(108, 156, 141, 0.25);
+}
+
+.app-coach-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.app-coach-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #404040;
+}
+
+.app-timeline-panel {
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: #fff;
+  border: 1px solid #e5e5e5;
+}
+
+.app-loading-step--active {
+  background-color: #f5f5f5;
+}
+
+.app-loading-step__ring--done {
+  background-color: var(--brand);
+}
+
+.app-loading-step__ring--active {
+  background-color: #e5e5e5;
+}
+
+.app-loading-step__ring--pending {
+  background-color: #f0f0f0;
+}
+
+.app-timeline-rail {
+  border-left-color: #e5e5e5;
+}
+
+.app-timeline-dot {
+  background-color: #fff;
+}
+
+.app-timeline-dot--brand {
+  border-color: var(--brand);
+}
+
+.app-timeline-dot--muted {
+  border-color: #a3a3a3;
+}
+
+.app-timeline-row:hover {
+  background-color: #f5f5f5;
+}
+
+.app-timeline-event-title {
+  color: #262626;
+}
+
+.app-timeline-event-title--muted {
+  color: #737373;
 }

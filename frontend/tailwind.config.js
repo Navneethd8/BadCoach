@@ -7,12 +7,15 @@ export default {
     theme: {
         extend: {
             colors: {
-                brand: '#6c9c8d',
+                brand: {
+                    DEFAULT: '#6c9c8d',
+                    dark: '#5a8578',
+                },
                 page: '#fafafa',
             },
             fontFamily: {
-                display: ['"JetBrains Mono"', '"IBM Plex Mono"', 'ui-monospace', 'monospace'],
-                mono: ['"JetBrains Mono"', '"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+                display: ['"Iosevka Charon Mono"', 'ui-monospace', 'monospace'],
+                mono: ['"Iosevka Charon Mono"', 'ui-monospace', 'monospace'],
             },
         },
     },

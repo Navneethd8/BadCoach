@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import ReactGA from 'react-ga4'
-import Logo from './Logo'
+import AppShell from './AppShell'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -14,7 +13,6 @@ function Icon({ name, size = 20, className = '' }) {
 const FRAME_INTERVAL_MS = 200
 
 export default function LiveSession() {
-    const navigate = useNavigate()
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
     const wsBase = apiUrl.replace(/^http/, 'ws')
 
@@ -233,8 +231,8 @@ export default function LiveSession() {
 
     const getQualityColor = (q) => {
         const s = String(q).toLowerCase()
-        if (s.includes('elite') || s.includes('expert')) return 'text-emerald-400'
-        if (s.includes('advanced')) return 'text-emerald-500'
+        if (s.includes('elite') || s.includes('expert')) return 'text-brand'
+        if (s.includes('advanced')) return 'text-brand'
         if (s.includes('proficient')) return 'text-cyan-400'
         if (s.includes('competent')) return 'text-amber-400'
         if (s.includes('developing')) return 'text-orange-400'
@@ -244,22 +242,11 @@ export default function LiveSession() {
     const fmtTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
 
     return (
-        <div className="min-h-screen bg-neutral-950 text-neutral-100">
-            <nav className="sticky top-0 z-50 border-b border-neutral-800/60 bg-neutral-950/80 backdrop-blur-md">
-                <div className="mx-auto flex h-14 max-w-[min(1920px,calc(100vw-1.25rem))] items-center justify-between px-3 sm:px-5">
-                    <button onClick={() => navigate('/')} className="flex items-center gap-2 focus:outline-none">
-                        <Logo size={22} className="text-emerald-500" />
-                        <span className="text-base font-semibold tracking-tight">Iso<span className="text-emerald-500">Court</span></span>
-                    </button>
-                    <button onClick={() => navigate('/analyze')} className="text-sm text-neutral-400 hover:text-white transition-colors">
-                        Clip Analysis
-                    </button>
-                </div>
-            </nav>
-
-            <div className="mx-auto max-w-[min(1920px,calc(100vw-1.25rem))] px-3 py-6 sm:px-5">
-                <h1 className="text-2xl font-bold mb-1 tracking-tight">Live <span className="text-emerald-500">Session</span></h1>
-                <p className="text-sm text-neutral-500 mb-5">Point your camera at the court and get real-time feedback.</p>
+        <AppShell active="live" mainClassName="mx-auto max-w-[min(1920px,calc(100vw-1.25rem))] px-3 py-6 sm:px-5 sm:py-8">
+                <h1 className="app-page-title">
+                    live <span className="text-brand">session</span>
+                </h1>
+                <p className="app-page-lead mb-5">Point your camera at the court and get real-time feedback.</p>
 
                 {/* Capacity / error banners */}
                 {status === 'capacity' && (
@@ -286,24 +273,24 @@ export default function LiveSession() {
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-4 xl:gap-5 min-[1700px]:gap-6">
 
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                        <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-lg shadow-black/20">
+                        <div className="app-panel-dark relative aspect-video w-full overflow-hidden">
                             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                             <canvas ref={canvasRef} className="hidden" />
 
                             {status === 'idle' && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-neutral-900/90">
-                                    <Icon name="videocam" size={48} className="text-neutral-700" />
-                                    <button onClick={startSession}
-                                        className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg shadow-emerald-900/30">
-                                        Start Game
+                                <div className="app-live-idle absolute inset-0 flex flex-col items-center justify-center gap-5 px-6">
+                                    <Icon name="videocam" size={48} className="app-live-idle__icon" />
+                                    <button type="button" onClick={startSession} className="figma-cta figma-cta--primary">
+                                        start game
                                     </button>
+                                    <p className="app-live-idle__hint">Camera on, court in frame — Birdzo handles the rest.</p>
                                 </div>
                             )}
 
                             {status === 'connecting' && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
                                     <div className="flex items-center gap-3 text-neutral-400">
-                                        <span className="w-5 h-5 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full" />
+                                        <span className="w-5 h-5 border-2 border-[#6c9c8d]/30 border-t-brand rounded-full animate-spin" />
                                         <span className="text-sm">Starting session...</span>
                                     </div>
                                 </div>
@@ -335,9 +322,9 @@ export default function LiveSession() {
                             {/* Paused overlay */}
                             {status === 'paused' && (
                                 <div className="absolute inset-0 bg-neutral-950/50 flex items-center justify-center">
-                                    <button onClick={resumeSession}
-                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-sm transition-colors shadow-lg">
-                                        <Icon name="play_arrow" size={16} className="align-middle mr-1" />Resume
+                                    <button type="button" onClick={resumeSession} className="figma-cta figma-cta--primary">
+                                        <Icon name="play_arrow" size={18} className="align-middle -ml-0.5 mr-1" />
+                                        resume
                                     </button>
                                 </div>
                             )}
@@ -405,18 +392,18 @@ export default function LiveSession() {
                     </div>
 
                     <aside
-                        className="flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 sm:h-[min(20rem,44vh)] lg:min-h-0 lg:max-h-[min(40rem,calc(100dvh-9rem))] lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
+                        className="app-card flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden !p-0 sm:h-[min(20rem,44vh)] lg:min-h-0 lg:max-h-[min(40rem,calc(100dvh-9rem))] lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
                         aria-label="AI Coach chat"
                     >
-                        <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800 flex-shrink-0">
-                            <Icon name="smart_toy" size={16} className="text-emerald-500" />
-                            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">AI Coach</span>
+                        <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-200 flex-shrink-0">
+                            <Icon name="smart_toy" size={16} className="text-brand" />
+                            <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider font-mono">AI coach</span>
                             <div className="ml-auto flex items-center gap-2">
                                 {chatLog.length > 0 && (
                                     <span className="text-[10px] text-neutral-600">{chatLog.length} messages</span>
                                 )}
                                 <button onClick={toggleVoice} title={voiceEnabled ? 'Mute voice' : 'Unmute voice'}
-                                    className={`p-1 rounded transition-colors ${voiceEnabled ? 'text-emerald-500 hover:text-emerald-400' : 'text-neutral-600 hover:text-neutral-400'}`}>
+                                    className={`p-1 rounded transition-colors ${voiceEnabled ? 'text-brand hover:opacity-80' : 'text-neutral-400 hover:text-neutral-600'}`}>
                                     <Icon name={voiceEnabled ? 'volume_up' : 'volume_off'} size={16} />
                                 </button>
                             </div>
@@ -430,8 +417,8 @@ export default function LiveSession() {
                         >
                             {chatLog.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
-                                    <Icon name="sports" size={28} className="text-neutral-800" />
-                                    <p className="text-xs text-neutral-600">Start a game to see live coaching commentary here.</p>
+                                    <Icon name="sports" size={28} className="text-neutral-300" />
+                                    <p className="text-xs text-neutral-500">Start a game to see live coaching commentary here.</p>
                                 </div>
                             )}
                                 {chatLog.map(msg => (
@@ -439,11 +426,11 @@ export default function LiveSession() {
                                         className="flex gap-2.5 items-start">
                                         <span className="text-[10px] text-neutral-700 font-mono mt-1 flex-shrink-0 w-12">{fmtTime(msg.ts)}</span>
                                         {msg.type === 'coach' ? (
-                                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2.5 text-xs text-emerald-300 leading-relaxed flex-1 min-w-0">
+                                            <div className="app-chat-coach flex-1 min-w-0">
                                                 {msg.text}
                                             </div>
                                         ) : msg.type === 'analysis' ? (
-                                            <div className="bg-neutral-800/60 rounded-lg px-3 py-1.5 text-[11px] text-neutral-400 flex-1 min-w-0">
+                                            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[11px] text-neutral-600 flex-1 min-w-0">
                                                 <Icon name="sports_tennis" size={11} className="text-neutral-600 align-middle mr-1" />{msg.text}
                                             </div>
                                         ) : (
@@ -455,7 +442,6 @@ export default function LiveSession() {
                     </aside>
 
                 </div>
-            </div>
-        </div>
+        </AppShell>
     )
 }

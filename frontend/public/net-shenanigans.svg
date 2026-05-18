@@ -1,5 +1,5 @@
 <svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 3655.73 4196.04" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Net shenanigans" opacity="0.8" filter="url(#filter0_f_0_60)">
+<g id="Net shenanigans" opacity="0.8">
 <line id="Line 68" y1="-0.5" x2="3857.17" y2="-0.5" transform="matrix(0.941663 -0.336557 0.122655 0.992449 4.18398 2746.89)" stroke="var(--stroke-0, #1B4D3E)"/>
 <line id="Line 67" y1="-0.5" x2="3857.17" y2="-0.5" transform="matrix(0.941663 -0.336557 0.122655 0.992449 16.4958 2411.88)" stroke="var(--stroke-0, #1B4D3E)"/>
 <line id="Line 66" y1="-0.5" x2="3857.17" y2="-0.5" transform="matrix(0.941663 -0.336557 0.122655 0.992449 4.18398 2024.53)" stroke="var(--stroke-0, #1B4D3E)"/>
@@ -25,11 +25,4 @@
 <line id="Line 45" x1="3649.73" y1="4191.62" x2="3649.73" y2="4" stroke="var(--stroke-0, #FF1A0C)" stroke-width="4"/>
 <line id="Line 46" x1="12.9567" y1="4192.04" x2="12.9567" y2="1301.77" stroke="var(--stroke-0, #FF1A0C)" stroke-width="4"/>
 </g>
-<defs>
-<filter id="filter0_f_0_60" x="-2.38419e-07" y="0" width="3655.73" height="4196.04" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-<feFlood flood-opacity="0" result="BackgroundImageFix"/>
-<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
-<feGaussianBlur stdDeviation="2" result="effect1_foregroundBlur_0_60"/>
-</filter>
-</defs>
 </svg>

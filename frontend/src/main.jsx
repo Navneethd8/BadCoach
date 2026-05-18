@@ -7,6 +7,7 @@ import LandingPage from './components/LandingPage.jsx'
 import LiveSession from './components/LiveSession.jsx'
 import PrivacyPage from './components/PrivacyPage.jsx'
 import TermsPage from './components/TermsPage.jsx'
+import './fonts.css'
 import './index.css'
 
 ReactGA.initialize("G-TET6JN36Q4")

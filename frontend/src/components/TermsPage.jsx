@@ -4,7 +4,7 @@ export default function TermsPage() {
     return (
         <LegalLayout title="Terms of use">
             <p>
-                IsoCourt is provided <strong className="text-neutral-200">as-is</strong>. Analysis and tips are automated and for training insight only. They are
+                IsoCourt is provided <strong className="text-neutral-900">as-is</strong>. Analysis and tips are automated and for training insight only. They are
                 not a substitute for a qualified coach or medical advice.
             </p>
             <p>

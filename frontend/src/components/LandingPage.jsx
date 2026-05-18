@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import ReactGA from 'react-ga4'
@@ -32,20 +32,34 @@ const features = [
 const flowSteps = [
     {
         label: 'upload a clip',
-        image: '/phone-mockup.svg',
+        video: '/demo-videos/01-upload.mp4',
+        frame: '/phone-mockup.svg',
         imageSide: 'left',
     },
     {
         label: 'let birdzo do its thing',
-        image: '/phone-mockup-alt.svg',
+        video: '/demo-videos/02-analyzing.mp4',
+        frame: '/phone-mockup-alt.svg',
         imageSide: 'right',
     },
     {
         label: 'review the rally',
-        image: '/phone-mockup.svg',
+        video: '/demo-videos/03-results.mp4',
+        frame: '/phone-mockup.svg',
         imageSide: 'left',
     },
 ]
+
+function PhoneCourtDemo({ video, frame, label }) {
+    return (
+        <div className="figma-phone-frame aspect-[9/16] w-[min(100%,180px)] sm:w-[220px]">
+            <div className="figma-phone-screen">
+                <video src={video} autoPlay loop muted playsInline aria-label={label} />
+            </div>
+            <img src={frame} alt="" className="figma-phone-court-frame figma-phone-mockup" aria-hidden />
+        </div>
+    )
+}
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -55,19 +69,38 @@ function Icon({ name, size = 20, className = '' }) {
     )
 }
 
-function FigmaButton({ children, variant = 'pill', onClick, className = '' }) {
-    const radius =
-        variant === 'pill'
-            ? 'rounded-bl-[25px] rounded-tr-[25px]'
-            : 'rounded-bl-[8px] rounded-tr-[8px] shadow-[0_4px_4px_rgba(0,0,0,0.25)]'
+function FigmaButton({
+    children,
+    variant = 'primary',
+    href,
+    onClick,
+    className = '',
+    disabled = false,
+    loading = false,
+    type = 'button',
+}) {
+    const classes = [
+        'figma-cta',
+        variant === 'primary' ? 'figma-cta--primary' : 'figma-cta--secondary',
+        loading ? 'figma-cta--loading' : '',
+        className,
+    ]
+        .filter(Boolean)
+        .join(' ')
+
+    const content = loading ? <span className="figma-cta-spinner" aria-hidden /> : children
+
+    if (href && !disabled && !loading) {
+        return (
+            <Link to={href} className={classes} onClick={onClick}>
+                {content}
+            </Link>
+        )
+    }
+
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`figma-cta ${radius} ${className}`}
-            style={{ backgroundColor: BRAND }}
-        >
-            {children}
+        <button type={type} onClick={onClick} disabled={disabled || loading} className={classes}>
+            {content}
         </button>
     )
 }
@@ -86,6 +119,7 @@ function ShuttleDecor({ className = '', rotate = 0 }) {
 
 export default function LandingPage() {
     const navigate = useNavigate()
+    const heroRef = useRef(null)
     const [fbName, setFbName] = useState('')
     const [fbEmail, setFbEmail] = useState('')
     const [fbMessage, setFbMessage] = useState('')
@@ -127,9 +161,8 @@ export default function LandingPage() {
     }
 
     return (
-        <div className="figma-landing min-h-screen w-full overflow-x-hidden" style={{ backgroundColor: PAGE_BG, color: '#000' }}>
-            {/* Top accent bar + nav */}
-            <header className="figma-top-bar sticky top-0 z-50" style={{ backgroundColor: BRAND }}>
+        <>
+            <header className="figma-top-bar" style={{ backgroundColor: BRAND }}>
                 <div className="mx-auto flex h-14 sm:h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
                     <button
                         type="button"
@@ -161,12 +194,20 @@ export default function LandingPage() {
                 </div>
             </header>
 
-            {/* Hero */}
-            <section className="figma-hero relative overflow-hidden">
-                <HeroFigmaBackdrop />
+            <div
+                className="figma-landing figma-page-body min-h-screen w-full"
+                style={{ backgroundColor: PAGE_BG, color: '#000' }}
+            >
+                <div className="figma-top-bar-spacer" aria-hidden />
 
-                <div className="figma-hero-content mx-auto flex max-w-5xl flex-col items-center px-6 pt-12 pb-10 text-center sm:pt-16 sm:pb-14">
-                    <h1 className="figma-display-title max-w-4xl">
+            {/* Hero — single scaled Figma artboard (1512×870) */}
+            <section ref={heroRef} className="figma-hero">
+                <div className="figma-hero-artboard" aria-hidden>
+                    <HeroFigmaBackdrop scrollTarget={heroRef} />
+                </div>
+
+                <div className="figma-hero-content">
+                    <h1 className="figma-display-title">
                         <span>Meet </span>
                         <span style={{ color: BRAND }}>Birdzo</span>
                         <span>, your </span>
@@ -174,25 +215,37 @@ export default function LandingPage() {
                         <br />
                         on court.
                     </h1>
-                    <p className="mt-6 max-w-xl text-base sm:text-lg text-neutral-600 leading-relaxed font-sans">
+                    <p className="figma-hero-sub">
                         Upload a rally or single stroke. IsoCourt reads footwork, contact, and shot type — fast, specific, zero fluff.
                     </p>
 
-                    <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <FigmaButton variant="pill" onClick={() => goAnalyze('landing_hero')}>
-                            Drop a Clip!
+                    <div className="figma-hero-ctas">
+                        <FigmaButton
+                            variant="primary"
+                            href="/analyze"
+                            onClick={() => ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_hero' })}
+                        >
+                            Drop a clip
                         </FigmaButton>
-                        <FigmaButton variant="square" onClick={() => goLive('landing_hero')}>
-                            Start a Live session!
+                        <FigmaButton
+                            variant="secondary"
+                            href="/live"
+                            onClick={() => ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_hero' })}
+                        >
+                            Go live
                         </FigmaButton>
                     </div>
                 </div>
             </section>
 
             {/* Video demo */}
-            <section className="figma-section px-5 sm:px-8">
+            <section className="figma-section figma-video-section px-5 sm:px-8 scroll-mt-20">
                 <div className="mx-auto max-w-5xl">
-                    <div className="figma-video-frame aspect-video w-full overflow-hidden bg-black">
+                    <h2 className="figma-section-title text-center">see it in action</h2>
+                    <p className="figma-section-lead mt-4 text-center">
+                        A real rally breakdown — footwork, contact, and stroke reads in under a minute.
+                    </p>
+                    <div className="figma-video-frame mt-10 aspect-video w-full overflow-hidden bg-black">
                         <iframe
                             src="https://www.youtube-nocookie.com/embed/UA3KPoj0j70?rel=0&modestbranding=1"
                             title="IsoCourt demo"
@@ -205,9 +258,9 @@ export default function LandingPage() {
             </section>
 
             {/* Core features */}
-            <section id="features" className="figma-section px-5 sm:px-8">
+            <section id="features" className="figma-section px-5 sm:px-8 scroll-mt-20">
                 <div className="mx-auto max-w-5xl">
-                    <h2 className="figma-section-title text-center">CORE FEATURES</h2>
+                    <h2 className="figma-section-title text-center">core features</h2>
                     <div className="mt-12 grid gap-6 sm:grid-cols-3">
                         {features.map(({ icon, title, description }) => (
                             <article key={title} className="figma-feature-card">
@@ -217,8 +270,8 @@ export default function LandingPage() {
                                 >
                                     <Icon name={icon} size={24} />
                                 </div>
-                                <h3 className="font-display text-lg font-bold uppercase tracking-wide mb-2">{title}</h3>
-                                <p className="text-sm text-neutral-600 leading-relaxed font-sans">{description}</p>
+                                <h3 className="figma-feature-title">{title}</h3>
+                                <p className="figma-feature-desc">{description}</p>
                             </article>
                         ))}
                     </div>
@@ -226,9 +279,9 @@ export default function LandingPage() {
             </section>
 
             {/* What to do */}
-            <section id="how-it-works" className="figma-section px-5 sm:px-8">
+            <section id="how-it-works" className="figma-section px-5 sm:px-8 scroll-mt-20">
                 <div className="mx-auto max-w-5xl">
-                    <h2 className="figma-section-title text-center">WHAT TO DO</h2>
+                    <h2 className="figma-section-title text-center">what to do</h2>
 
                     <div className="mt-16 space-y-20 sm:space-y-28">
                         {flowSteps.map((step, i) => {
@@ -240,29 +293,23 @@ export default function LandingPage() {
                                         isImageLeft ? '' : 'md:[&>*:first-child]:order-2'
                                     }`}
                                 >
-                                    <div className={`flex justify-center ${isImageLeft ? 'md:justify-start' : 'md:justify-end'}`}>
-                                        <div className="figma-phone-frame aspect-[9/16] w-[min(100%,180px)] sm:w-[220px]">
-                                            <img
-                                                src={step.image}
-                                                alt=""
-                                                className="figma-phone-mockup h-full w-full object-contain"
-                                            />
-                                        </div>
+                                    <div className="figma-flow-step__visual flex justify-center items-center">
+                                        <PhoneCourtDemo video={step.video} frame={step.frame} label={step.label} />
                                     </div>
-                                    <div className={`text-center ${isImageLeft ? 'md:text-left' : 'md:text-right'}`}>
+                                    <div className="figma-flow-step__copy flex flex-col justify-center items-center text-center">
                                         <p className="figma-flow-label">{step.label}</p>
                                         {i === 0 && (
-                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm mx-auto md:mx-0">
+                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm">
                                                 One smash, a messy rally, or a drill — steady camera, shuttle in frame.
                                             </p>
                                         )}
                                         {i === 1 && (
-                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm mx-auto md:ml-auto md:mr-0">
+                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm">
                                                 Poses, strokes, and scores stitch together while you grab water.
                                             </p>
                                         )}
                                         {i === 2 && (
-                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm mx-auto md:mx-0">
+                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm">
                                                 A clear read on what broke down, plus cues for your next session.
                                             </p>
                                         )}
@@ -283,29 +330,35 @@ export default function LandingPage() {
             {/* Final CTA */}
             <section className="figma-section figma-final-cta px-5 sm:px-8 pb-24">
                 <div className="mx-auto max-w-3xl text-center">
-                    <h2 className="figma-section-title">WHAT DO I DO NOW?</h2>
+                    <h2 className="figma-section-title">what do i do now?</h2>
                     <p className="figma-final-sub mt-8 max-w-xl mx-auto">
                         give <span style={{ color: BRAND }}>IsoCourt</span> a go and see what{' '}
                         <span style={{ color: BRAND }}>birdzo</span> has in mind for you
                     </p>
-                    <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <FigmaButton variant="pill" onClick={() => goAnalyze('landing_footer')}>
-                            Drop a Clip!
+                    <div className="figma-hero-ctas mt-10">
+                        <FigmaButton
+                            variant="primary"
+                            href="/analyze"
+                            onClick={() => ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_footer' })}
+                        >
+                            Drop a clip
                         </FigmaButton>
-                        <FigmaButton variant="square" onClick={() => goLive('landing_footer')}>
-                            Start a Live session!
+                        <FigmaButton
+                            variant="secondary"
+                            href="/live"
+                            onClick={() => ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_footer' })}
+                        >
+                            Go live
                         </FigmaButton>
                     </div>
                 </div>
             </section>
 
             {/* Feedback — not in Figma frame, kept for product needs */}
-            <section id="feedback" className="border-t border-neutral-200 px-5 sm:px-8 py-16 bg-white/60">
+            <section id="feedback" className="figma-section figma-feedback px-5 sm:px-8 scroll-mt-20">
                 <div className="mx-auto max-w-xl">
-                    <h2 className="font-display text-2xl sm:text-3xl font-bold text-center uppercase tracking-tight">
-                        Court notes welcome
-                    </h2>
-                    <p className="mt-3 text-center text-sm text-neutral-600 font-sans">
+                    <h2 className="figma-section-title text-center">court notes welcome</h2>
+                    <p className="figma-section-lead mt-4 text-center">
                         Wrong call, wild idea, or “this saved my smash.” We read every message between training blocks.
                     </p>
 
@@ -325,7 +378,7 @@ export default function LandingPage() {
                             </button>
                         </div>
                     ) : (
-                        <form onSubmit={handleFeedbackSubmit} className="mt-8 space-y-4 rounded-xl border border-neutral-200 bg-[#fafafa] p-6">
+                        <form onSubmit={handleFeedbackSubmit} className="figma-feedback-form mt-8 space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
                                     <label htmlFor="fb-name" className="text-xs font-medium text-neutral-500 block mb-1.5">
@@ -370,20 +423,21 @@ export default function LandingPage() {
                             {fbStatus === 'error' && (
                                 <p className="text-xs text-red-600">{fbError}</p>
                             )}
-                            <button
+                            <FigmaButton
                                 type="submit"
+                                variant="primary"
+                                className="figma-cta--block"
                                 disabled={fbStatus === 'sending'}
-                                className="figma-cta w-full rounded-bl-[8px] rounded-tr-[8px] disabled:opacity-50"
-                                style={{ backgroundColor: BRAND }}
+                                loading={fbStatus === 'sending'}
                             >
-                                {fbStatus === 'sending' ? 'Sending…' : 'Send feedback'}
-                            </button>
+                                Send feedback
+                            </FigmaButton>
                         </form>
                     )}
                 </div>
             </section>
 
-            <footer className="border-t border-neutral-200 px-5 py-8 text-center sm:text-left">
+            <footer className="figma-footer px-5 py-8 text-center sm:text-left">
                 <div className="mx-auto flex max-w-5xl flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                         <Logo size={20} className="text-brand" />
@@ -391,19 +445,17 @@ export default function LandingPage() {
                             Iso<span style={{ color: BRAND }}>Court</span>
                         </span>
                     </div>
-                    <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-neutral-500 font-sans" aria-label="Legal">
-                        <Link to="/privacy" className="hover:opacity-80" style={{ color: BRAND }}>
+                    <nav className="figma-footer-nav flex flex-wrap justify-center gap-x-6 gap-y-2" aria-label="Legal">
+                        <Link to="/privacy" className="figma-footer-link">
                             Privacy
                         </Link>
-                        <Link to="/terms" className="hover:opacity-80" style={{ color: BRAND }}>
+                        <Link to="/terms" className="figma-footer-link">
                             Terms
                         </Link>
-                        <a href="#feedback" className="hover:opacity-80" style={{ color: BRAND }}>
-                            Contact
-                        </a>
                     </nav>
                 </div>
             </footer>
-        </div>
+            </div>
+        </>
     )
 }

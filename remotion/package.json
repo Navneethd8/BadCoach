@@ -1,0 +1,41 @@
+{
+  "name": "isocourt-remotion",
+  "version": "1.0.0",
+  "description": "My Remotion video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@fontsource-variable/material-symbols-outlined": "^5.2.45",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/iosevka-charon-mono": "^5.2.1",
+    "@remotion/cli": "4.0.462",
+    "@remotion/tailwind-v4": "4.0.462",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.462",
+    "tailwindcss": "4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.462",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc",
+    "render:all": "npm run render:upload && npm run render:analyzing && npm run render:results",
+    "render:upload": "remotion render 01-upload out/01-upload.mp4 --timeout=120000",
+    "render:analyzing": "remotion render 02-analyzing out/02-analyzing.mp4 --timeout=120000",
+    "render:results": "remotion render 03-results out/03-results.mp4 --timeout=120000",
+    "fetch-result": "node scripts/fetch-demo-result.mjs"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}
