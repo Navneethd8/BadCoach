@@ -12,6 +12,7 @@ the training registry during normal training.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 from copy import deepcopy
@@ -28,6 +29,8 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
     "st_tr",
+    "gcn_st_tr",
+    "st_tr_vit",
     "timesformer",
     "vit_gcn",
 )
@@ -37,6 +40,8 @@ CATEGORY_GROUPS: Dict[str, str] = {
     "cnn_lstm": "cnn",
     "conv3d_pose": "video_cnn",
     "st_tr": "graph",
+    "gcn_st_tr": "graph",
+    "st_tr_vit": "graph",
     "vit_gcn": "graph",
     "timesformer": "video_transformer",
 }
@@ -45,6 +50,8 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_full.py": "cnn_lstm",
     "train_conv3d.py": "conv3d_pose",
     "train_st_tr.py": "st_tr",
+    "train_gcn_st_tr.py": "gcn_st_tr",
+    "train_st_tr_vit.py": "st_tr_vit",
     "train_timesformer.py": "timesformer",
     "train_vit_gcn.py": "vit_gcn",
 }
@@ -317,6 +324,20 @@ def resolve_inference_model_path(models_dir: str, registry: Dict[str, Any]) -> O
         return None
     path = resolve_primary_checkpoint_path(models_dir, reg, cat)
     return path
+
+
+def make_experiment_checkpoint_path(default_path: str) -> str:
+    """
+    Non-primary checkpoint path: same directory as ``default_path``, UTC timestamp
+    inserted before the file extension (e.g. ``badminton_model_gcn_st_tr_20260518T120000Z.pth``).
+    """
+    path = os.path.abspath(default_path)
+    parent = os.path.dirname(path)
+    stem, ext = os.path.splitext(os.path.basename(path))
+    if not ext:
+        ext = ".pth"
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return os.path.join(parent, f"{stem}_{stamp}{ext}")
 
 
 def register_training_checkpoint(
