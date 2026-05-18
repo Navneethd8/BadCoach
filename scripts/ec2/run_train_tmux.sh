@@ -7,8 +7,8 @@
 #   export ISOCOURT_SHUTDOWN_ON_ERROR=1                 # optional: halt if training fails
 #   ./scripts/ec2/run_train_tmux.sh MODEL [train script args...]
 #
-# MODEL: cnn_lstm | conv3d | timesformer | st_tr | bst_prep | bst_baseline
-#   (aliases: resnet50, full, conv3d_pose, sttr)
+# MODEL: cnn_lstm | conv3d | timesformer | st_tr | gcn_st_tr | st_tr_vit | bst_prep | bst_baseline
+#   (aliases: resnet50, full, conv3d_pose, sttr, official_st_tr, st_tr_official)
 #
 # Env (export before running if you need them inside tmux):
 #   ISOCOURT_TMUX_SESSION   tmux session name (default: isocourt-train)
@@ -38,6 +38,12 @@ case "${MODEL}" in
   conv3d|conv3d_pose) TRAIN_SCRIPT="backend/pipelines/training/train_conv3d.py" ;;
   timesformer) TRAIN_SCRIPT="backend/pipelines/training/train_timesformer.py" ;;
   st_tr|sttr) TRAIN_SCRIPT="backend/pipelines/training/train_st_tr.py" ;;
+  gcn_st_tr|official_st_tr|st_tr_official)
+    TRAIN_SCRIPT="backend/pipelines/training/train_gcn_st_tr.py"
+    ;;
+  st_tr_vit|st_tr_vit_fusion)
+    TRAIN_SCRIPT="backend/pipelines/training/train_st_tr_vit.py"
+    ;;
   bst_prep) TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated.py" ;;
   bst_baseline|bst) TRAIN_SCRIPT="backend/pipelines/training/train_bst_baseline.py" ;;
   *) echo "Unknown MODEL=${MODEL_RAW}" >&2; exit 2 ;;

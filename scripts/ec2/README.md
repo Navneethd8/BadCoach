@@ -115,7 +115,9 @@ Same as the **Pull** row in [Rsync quick reference](#rsync-quick-reference) abov
 | `cnn_lstm`    | `train_full.py`          |
 | `conv3d`      | `train_conv3d.py`        |
 | `timesformer` | `train_timesformer.py`   |
-| `st_tr`       | `train_st_tr.py`         |
+| `st_tr`       | `train_st_tr.py` (legacy dual-transformer) |
+| `gcn_st_tr`   | `train_gcn_st_tr.py` — upstream ST-TR (`build_official_st_tr`); uses `backend/models/pose_cache_mediapipe.pt` |
+| `st_tr_vit`   | `train_st_tr_vit.py` — ST-TR + ViT fusion; same pose cache |
 | `bst_prep`    | `prepare_bst_finebadminton_collated.py` |
 | `bst_baseline`| `train_bst_baseline.py`  |
 
