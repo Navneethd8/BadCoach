@@ -30,7 +30,20 @@ from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.st_tr_official import build_official_st_tr
 from core.model_registry import make_experiment_checkpoint_path, register_training_checkpoint
-from core.training_progress import tqdm_train_batches
+from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
+from core.training_standards import (
+    DEFAULT_EPOCHS,
+    DEFAULT_LR,
+    DEFAULT_SEED,
+    GRAD_ACCUMULATION_STEPS,
+    GRAD_CLIP_NORM,
+    build_task_classes,
+    common_mlflow_clip_params,
+    configure_mlflow,
+    default_list_file,
+    load_training_dataset,
+    validate_pose_cache,
+)
 
 
 class PoseOnlyDataset(Dataset):
@@ -47,6 +60,28 @@ class PoseOnlyDataset(Dataset):
         _, labels = self.frame_dataset[idx]
         pose = self.pose_cache[idx].clone()
         return pose, labels
+
+
+def _batch_loss(
+    logits_dict,
+    labels,
+    *,
+    loss_weights,
+    criterion_st,
+    criterion_default,
+    device,
+    stroke_only=False,
+):
+    batch_loss = torch.tensor(0.0, device=device)
+    for task, logits in logits_dict.items():
+        if stroke_only and task != "stroke_type":
+            continue
+        w = loss_weights.get(task, 0.0)
+        if w <= 0:
+            continue
+        crit = criterion_st if task == "stroke_type" else criterion_default
+        batch_loss = batch_loss + w * crit(logits, labels[task])
+    return batch_loss
 
 
 def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
@@ -70,10 +105,7 @@ def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
 
     pose_cache = media_pipe_fill_pose_cache(dataset_raw, pose_estimator)
 
-    task_classes = {k: len(v) for k, v in dataset.classes.items()}
-    task_classes["quality"] = 7
-    if "stroke_subtype" in task_classes:
-        del task_classes["stroke_subtype"]
+    task_classes = build_task_classes(dataset)
 
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     torch.save({"pose_cache": pose_cache, "task_classes": task_classes}, cache_path)
@@ -85,7 +117,7 @@ def train_gcn_st_tr(
     data_root,
     list_file,
     epochs=80,
-    batch_size=8,
+    batch_size=DEFAULT_TRAIN_BATCH_SIZE,
     lr=5e-4,
     device="cpu",
     save_path=None,
@@ -95,6 +127,9 @@ def train_gcn_st_tr(
     seed=42,
     stream="both",
     registry_experiment=False,
+    stroke_loss_weight=5.0,
+    aux_loss_weight=0.1,
+    stroke_only_epochs=12,
 ):
     set_seed(seed)
 
@@ -103,25 +138,37 @@ def train_gcn_st_tr(
     if save_path is None:
         save_path = os.path.join(backend_root, "models", "badminton_model_gcn_st_tr.pth")
     if pose_cache_path is None:
-        pose_cache_path = default_pose_cache_path(backend_root)
+        st_tr_collated = os.path.join(backend_root, "models", "pose_cache_st_tr_collated.pt")
+        if os.path.isfile(st_tr_collated):
+            pose_cache_path = st_tr_collated
+        else:
+            pose_cache_path = default_pose_cache_path(backend_root)
     if registry_experiment:
         save_path = make_experiment_checkpoint_path(save_path)
 
+    configure_mlflow(backend_root)
     mlflow.set_experiment("IsoCourt_Training_GCN_ST_TR")
     with mlflow.start_run():
-        mlflow.log_params({
-            "epochs": epochs, "batch_size": batch_size, "lr": lr,
-            "seed": seed, "stream": stream,
-            "upstream": "Chiaraplizz/ST-TR",
-            "script": "train_gcn_st_tr.py",
-        })
+        mlflow.log_params(common_mlflow_clip_params(
+            epochs=epochs,
+            batch_size=batch_size,
+            lr=lr,
+            seed=seed,
+            stream=stream,
+            stroke_loss_weight=stroke_loss_weight,
+            aux_loss_weight=aux_loss_weight,
+            stroke_only_epochs=stroke_only_epochs,
+            upstream="Chiaraplizz/ST-TR",
+            script="train_gcn_st_tr.py",
+        ))
 
         print("Loading dataset...")
-        dataset = FineBadmintonDataset(data_root, list_file, transform=None)
+        dataset = load_training_dataset(data_root, list_file, transform=None)
 
         pose_cache, task_classes = _build_pose_cache(
             dataset, list_file, device, pose_cache_path, seed=seed
         )
+        validate_pose_cache(pose_cache)
         if task_classes is None:
             task_classes = {k: len(v) for k, v in dataset.classes.items()}
             task_classes["quality"] = 7
@@ -161,12 +208,17 @@ def train_gcn_st_tr(
             pose_tasks, window_size=T, stream=stream, dropout=0.1,
         ).to(device)
 
+        best_acc = 0.0
         if resume_checkpoint and os.path.exists(resume_checkpoint):
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
             key = "gcn_st_tr" if "gcn_st_tr" in ckpt else "st_tr"
             if key in ckpt:
                 model.load_state_dict(ckpt[key], strict=False)
-                print(f"Loaded weights from checkpoint key '{key}'")
+                best_acc = float(ckpt.get("best_acc", 0.0))
+                print(
+                    f"Loaded weights from checkpoint key '{key}' "
+                    f"(best val stroke {best_acc:.1f}%)"
+                )
 
         total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"ST-TR (upstream) params: {total_params:,}  stream={stream}")
@@ -180,14 +232,21 @@ def train_gcn_st_tr(
         )
         criterion_st = nn.CrossEntropyLoss(weight=weights_st, label_smoothing=0.1)
         criterion_default = nn.CrossEntropyLoss(label_smoothing=0.1)
-        loss_weights = {"stroke_type": 1.0, "position": 0.2, "hand": 0.1}
-        accumulation_steps = 4
-        best_acc = 0.0
+        loss_weights = {"stroke_type": stroke_loss_weight}
+        if "position" in pose_tasks:
+            loss_weights["position"] = aux_loss_weight
+        if "hand" in pose_tasks:
+            loss_weights["hand"] = aux_loss_weight
+        accumulation_steps = GRAD_ACCUMULATION_STEPS
 
         print(f"\nStarting ST-TR (upstream) training | stream={stream} | T={T}")
-        print(f"LR: {lr} | Batch: {batch_size}")
+        print(
+            f"LR: {lr} | Batch: {batch_size} | stroke/aux={stroke_loss_weight}/"
+            f"{aux_loss_weight} | stroke_only_epochs={stroke_only_epochs}"
+        )
 
         for epoch in range(start_epoch, epochs):
+            stroke_only = epoch < stroke_only_epochs
             model.train()
             running_loss = 0.0
             train_correct = {k: 0 for k in pose_tasks}
@@ -201,11 +260,16 @@ def train_gcn_st_tr(
                           if k in pose_tasks}
 
                 logits_dict = model(poses)
-
-                batch_loss = torch.tensor(0.0, device=device)
+                batch_loss = _batch_loss(
+                    logits_dict,
+                    labels,
+                    loss_weights=loss_weights,
+                    criterion_st=criterion_st,
+                    criterion_default=criterion_default,
+                    device=device,
+                    stroke_only=stroke_only,
+                )
                 for task, logits in logits_dict.items():
-                    crit = criterion_st if task == "stroke_type" else criterion_default
-                    batch_loss += loss_weights.get(task, 0.0) * crit(logits, labels[task])
                     _, pred = logits.max(1)
                     train_correct[task] += (pred == labels[task]).sum().item()
                     if task == "stroke_type":
@@ -213,14 +277,14 @@ def train_gcn_st_tr(
 
                 (batch_loss / accumulation_steps).backward()
                 if (batch_idx + 1) % accumulation_steps == 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=GRAD_CLIP_NORM)
                     optimizer.step()
                     optimizer.zero_grad()
                 running_loss += batch_loss.item()
                 pbar.set_postfix(loss=running_loss / (batch_idx + 1))
 
             if (batch_idx + 1) % accumulation_steps != 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=GRAD_CLIP_NORM)
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -240,23 +304,37 @@ def train_gcn_st_tr(
                               if k in pose_tasks}
                     logits_dict = model(poses)
                     val_total += poses.size(0)
+                    val_loss_sum += _batch_loss(
+                        logits_dict,
+                        labels,
+                        loss_weights=loss_weights,
+                        criterion_st=criterion_st,
+                        criterion_default=criterion_default,
+                        device=device,
+                        stroke_only=False,
+                    ).item()
                     for task, logits in logits_dict.items():
-                        crit = criterion_st if task == "stroke_type" else criterion_default
-                        val_loss_sum += loss_weights.get(task, 0.0) * crit(logits, labels[task]).item()
                         _, pred = logits.max(1)
                         val_correct[task] += (pred == labels[task]).sum().item()
 
             val_acc = 100.0 * val_correct["stroke_type"] / val_total
-            val_pos = 100.0 * val_correct["position"] / val_total
+            val_pos = (
+                100.0 * val_correct["position"] / val_total
+                if "position" in pose_tasks
+                else 0.0
+            )
             val_loss = val_loss_sum / len(val_loader)
             mlflow.log_metrics({
                 "train_loss": epoch_loss, "train_acc": train_acc,
                 "val_loss": val_loss, "val_acc": val_acc, "val_pos_acc": val_pos,
                 "learning_rate": optimizer.param_groups[0]["lr"],
+                "stroke_only_phase": float(stroke_only),
             }, step=epoch + 1)
+            phase = " [stroke-only]" if stroke_only else ""
+            pos_suffix = f" val_pos={val_pos:.4f}" if "position" in pose_tasks else ""
             print(
-                f"epoch {epoch+1:03d} train loss={epoch_loss:.4f} acc={train_acc:.4f} "
-                f"val loss={val_loss:.4f} acc={val_acc:.4f}"
+                f"epoch {epoch+1:03d}{phase} train loss={epoch_loss:.4f} acc={train_acc:.4f} "
+                f"val loss={val_loss:.4f} acc={val_acc:.4f}{pos_suffix}"
             )
 
             if val_acc > best_acc:
@@ -267,6 +345,8 @@ def train_gcn_st_tr(
                     "task_classes": pose_tasks,
                     "stream": stream,
                     "upstream_st_tr": True,
+                    "best_acc": best_acc,
+                    "epoch": epoch + 1,
                 }, save_path)
                 print(
                     f"  saved {save_path} (best val acc={best_acc:.4f})"
@@ -300,9 +380,12 @@ def train_gcn_st_tr(
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=80)
-    parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_TRAIN_BATCH_SIZE)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--stroke-loss-weight", type=float, default=5.0)
+    parser.add_argument("--aux-loss-weight", type=float, default=0.1)
+    parser.add_argument("--stroke-only-epochs", type=int, default=12)
     parser.add_argument(
         "--stream",
         choices=["spatial", "temporal", "both"],
@@ -313,6 +396,19 @@ if __name__ == "__main__":
         "--registry-experiment", action="store_true",
         help="Append best checkpoint to registry experiments instead of overwriting primary; "
         "weights use a timestamped filename next to the default checkpoint.",
+    )
+    parser.add_argument(
+        "--resume-checkpoint",
+        type=str,
+        default=None,
+        help="Optional .pth with gcn_st_tr weights to resume.",
+    )
+    parser.add_argument(
+        "--pose-cache",
+        type=str,
+        default=None,
+        help="Pose .pt cache (default: models/pose_cache_mediapipe.pt). "
+        "Use models/pose_cache_st_tr_collated.pt after prepare_st_tr_collated.py.",
     )
     args = parser.parse_args()
 
@@ -331,4 +427,9 @@ if __name__ == "__main__":
         device=device,
         stream=args.stream,
         registry_experiment=args.registry_experiment,
+        resume_checkpoint=args.resume_checkpoint,
+        pose_cache_path=args.pose_cache,
+        stroke_loss_weight=args.stroke_loss_weight,
+        aux_loss_weight=args.aux_loss_weight,
+        stroke_only_epochs=args.stroke_only_epochs,
     )

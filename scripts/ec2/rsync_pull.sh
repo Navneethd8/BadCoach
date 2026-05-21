@@ -41,12 +41,14 @@ if [[ -z "${SRC}" ]]; then
   SRC="${EC2_HOST}:~/IsoCourt"
 fi
 
-mkdir -p "${REPO_ROOT}/backend/models" "${REPO_ROOT}/mlruns"
+mkdir -p "${REPO_ROOT}/backend/models" "${REPO_ROOT}/backend/mlruns"
 
 # shellcheck disable=SC2086
 rsync -avz --partial "${RSYNC_SSH[@]}" ${RSYNC_EXTRA:-} \
   "${SRC%/}/backend/models/" "${REPO_ROOT}/backend/models/"
 
 # shellcheck disable=SC2086
+rsync -avz --partial "${RSYNC_SSH[@]}" ${RSYNC_EXTRA:-} \
+  "${SRC%/}/backend/mlruns/" "${REPO_ROOT}/backend/mlruns/" || true
 rsync -avz --partial "${RSYNC_SSH[@]}" ${RSYNC_EXTRA:-} \
   "${SRC%/}/mlruns/" "${REPO_ROOT}/mlruns/" || true

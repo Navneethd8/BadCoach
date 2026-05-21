@@ -1,10 +1,10 @@
 """
-ST-TR (Spatial Transformer – Temporal Transformer) training script.
+SkateFormer training for IsoCourt (MediaPipe skeleton, 16 frames, batch 4).
 
-Pose-only model: two parallel transformer streams on MediaPipe skeleton.
-Same data pipeline as other trainers that use the shared MediaPipe pose cache.
+Pose-only model using the ECCV 2024 SkateFormer backbone adapted for MediaPipe
+(33 joints, single player). Same data pipeline as ``train_st_tr.py``.
 
-Reference: Plizzari et al., arXiv 2008.07404 (ICPR 2021).
+Reference: https://github.com/KAIST-VICLab/SkateFormer
 """
 import os
 import sys
@@ -18,7 +18,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
-from torchvision.transforms import v2
 import mlflow
 from core.dataset import FineBadmintonDataset
 from core.pose_cache_build import (
@@ -29,7 +28,7 @@ from core.pose_cache_build import (
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
-from core.st_tr import STTRModel
+from core.skateformer_model import SkateFormerMultitaskModel, default_skateformer_kwargs
 from core.model_registry import register_training_checkpoint
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
 from core.training_standards import (
@@ -39,6 +38,7 @@ from core.training_standards import (
     DEFAULT_SEED,
     GRAD_ACCUMULATION_STEPS,
     GRAD_CLIP_NORM,
+    SEQUENCE_LENGTH,
     build_task_classes,
     common_mlflow_clip_params,
     configure_mlflow,
@@ -68,7 +68,6 @@ class PoseOnlyDataset(Dataset):
 def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
     """Build or load pose cache (same format as other pose-fusion trainers)."""
     n_expected = len(dataset)
-    T = dataset.sequence_length
     out = load_pose_cache_bundle(cache_path)
     if out is not None:
         pose_cache = out["pose_cache"]
@@ -95,7 +94,7 @@ def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
     return pose_cache, task_classes
 
 
-def train_st_tr(
+def train_skateformer(
     data_root,
     list_file,
     epochs=DEFAULT_EPOCHS,
@@ -107,10 +106,8 @@ def train_st_tr(
     resume_checkpoint=None,
     start_epoch=0,
     seed=DEFAULT_SEED,
-    embed_dim=128,
-    num_heads=4,
-    num_layers=3,
-    fusion="concat",
+    embed_dim=64,
+    num_heads=16,
     registry_experiment=False,
 ):
     set_seed(seed)
@@ -118,17 +115,27 @@ def train_st_tr(
     _dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
-        save_path = os.path.join(backend_root, "models", "badminton_model_st_tr.pth")
+        save_path = os.path.join(backend_root, "models", "badminton_model_skateformer.pth")
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
 
-    configure_mlflow(backend_root)
-    mlflow.set_experiment("IsoCourt_Training_ST_TR")
+    skate_kw = default_skateformer_kwargs(embed_dim=embed_dim, num_heads=num_heads)
+    tracking_uri = configure_mlflow(backend_root)
+
+    mlflow.set_experiment("IsoCourt_Training_SkateFormer")
     with mlflow.start_run():
         mlflow.log_params(common_mlflow_clip_params(
-            epochs=epochs, batch_size=batch_size, lr=lr, seed=seed,
-            embed_dim=embed_dim, num_heads=num_heads, num_layers=num_layers,
-            fusion=fusion, script="train_st_tr.py",
+            batch_size=batch_size,
+            epochs=epochs,
+            lr=lr,
+            seed=seed,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            num_frames=skate_kw["num_frames"],
+            partition_type_1=list(skate_kw["type_1_size"]),
+            partition_type_2=list(skate_kw["type_2_size"]),
+            mlflow_tracking_uri=tracking_uri,
+            script="train_skateformer.py",
         ))
 
         print("Loading dataset...")
@@ -143,7 +150,6 @@ def train_st_tr(
 
         wrapper = PoseOnlyDataset(dataset, pose_cache)
 
-        # Video-level split
         st_labels = [dataset._map_labels(s)["stroke_type"] for s in dataset.samples]
         train_indices, val_indices = video_level_split(dataset.samples)
         train_subset = Subset(wrapper, train_indices)
@@ -166,19 +172,19 @@ def train_st_tr(
             num_workers=0, pin_memory=(device == "cuda"),
         )
 
-        model = STTRModel(
-            task_classes=task_classes, embed_dim=embed_dim,
-            num_heads=num_heads, num_layers=num_layers, fusion=fusion,
+        model = SkateFormerMultitaskModel(
+            task_classes=task_classes,
+            skateformer_kwargs=skate_kw,
         ).to(device)
 
         if resume_checkpoint and os.path.exists(resume_checkpoint):
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
-            if "st_tr" in ckpt:
-                model.load_state_dict(ckpt["st_tr"], strict=False)
-                print("Loaded ST-TR from checkpoint")
+            if "skateformer" in ckpt:
+                model.load_state_dict(ckpt["skateformer"], strict=False)
+                print("Loaded SkateFormer from checkpoint")
 
         total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print(f"ST-TR params: {total_params:,}")
+        print(f"SkateFormer params: {total_params:,}")
 
         optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
         scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
@@ -188,8 +194,11 @@ def train_st_tr(
         accumulation_steps = GRAD_ACCUMULATION_STEPS
         best_acc = 0.0
 
-        print(f"\nStarting ST-TR training ({fusion} fusion, {num_layers} layers)...")
-        print(f"LR: {lr} | Batch: {batch_size} | Embed: {embed_dim}")
+        print(
+            f"\nStarting SkateFormer training (T={skate_kw['num_frames']}, "
+            f"J={skate_kw['num_points']})..."
+        )
+        print(f"LR: {lr} | Batch: {batch_size} | Embed: {embed_dim} | Heads: {num_heads}")
 
         for epoch in range(start_epoch, epochs):
             model.train()
@@ -231,7 +240,6 @@ def train_st_tr(
             train_acc = 100.0 * train_correct["stroke_type"] / train_total
             scheduler.step(epoch)
 
-            # Validation
             model.eval()
             val_correct = {k: 0 for k in task_classes}
             val_total = 0
@@ -262,30 +270,31 @@ def train_st_tr(
                 best_acc = val_acc
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 torch.save({
-                    "st_tr": model.state_dict(),
+                    "skateformer": model.state_dict(),
                     "task_classes": task_classes,
-                    "fusion": fusion,
+                    "skateformer_kwargs": skate_kw,
                 }, save_path)
                 print(f"  -> Saved best ({best_acc:.1f}%)")
                 register_training_checkpoint(
                     os.path.dirname(save_path),
-                    category="st_tr",
+                    category="skateformer",
                     file_basename=os.path.basename(save_path),
                     meta={
                         "accuracy": round(best_acc, 2),
                         "epoch": epoch + 1,
                         "timestamp": datetime.datetime.now().isoformat(),
-                        "script": "train_st_tr.py",
-                        "architecture": "st_tr",
-                        "fusion": fusion,
+                        "script": "train_skateformer.py",
+                        "architecture": "skateformer",
+                        "embed_dim": embed_dim,
+                        "num_heads": num_heads,
                     },
                     experiment=registry_experiment,
                 )
             if (epoch + 1) % 10 == 0:
                 torch.save({
-                    "st_tr": model.state_dict(),
+                    "skateformer": model.state_dict(),
                     "task_classes": task_classes,
-                    "fusion": fusion,
+                    "skateformer_kwargs": skate_kw,
                 }, f"{save_path}_epoch_{epoch+1}.pth")
 
         print(f"\nTraining finished! Best stroke_type accuracy: {best_acc:.1f}%")
@@ -293,17 +302,15 @@ def train_st_tr(
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Train SkateFormer on FineBadminton (MediaPipe pose)")
     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_TRAIN_BATCH_SIZE)
     parser.add_argument("--lr", type=float, default=DEFAULT_LR)
-    parser.add_argument("--embed-dim", type=int, default=128)
-    parser.add_argument("--num-heads", type=int, default=4)
-    parser.add_argument("--num-layers", type=int, default=3)
-    parser.add_argument("--fusion", choices=["concat", "sum"], default="concat")
+    parser.add_argument("--embed-dim", type=int, default=64)
+    parser.add_argument("--num-heads", type=int, default=16)
     parser.add_argument(
         "--registry-experiment", action="store_true",
-        help="Append best checkpoint to registry experiments instead of overwriting st_tr primary.",
+        help="Append best checkpoint to registry experiments instead of overwriting skateformer primary.",
     )
     args = parser.parse_args()
 
@@ -311,9 +318,11 @@ if __name__ == "__main__":
     backend_root = os.path.dirname(os.path.dirname(current_dir))
     data_root = os.path.join(backend_root, "data")
     list_file = default_list_file(backend_root)
-    device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+    device = "cuda" if torch.cuda.is_available() else (
+        "mps" if torch.backends.mps.is_available() else "cpu"
+    )
     print(f"Using device: {device}")
-    train_st_tr(
+    train_skateformer(
         data_root=data_root,
         list_file=list_file,
         epochs=args.epochs,
@@ -322,7 +331,5 @@ if __name__ == "__main__":
         device=device,
         embed_dim=args.embed_dim,
         num_heads=args.num_heads,
-        num_layers=args.num_layers,
-        fusion=args.fusion,
         registry_experiment=args.registry_experiment,
     )

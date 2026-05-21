@@ -47,7 +47,17 @@ backend/temp_clipjob_*
 backend/temp_stream_*
 backend/temp_*.mp4
 
-frontend/node_modules
+# Node / JS (all packages: frontend, remotion, etc.)
+node_modules/
+.npm/
+.pnpm-store/
+
+# Remotion renders & tooling cache
+remotion/out/
+**/.remotion/
+
+# macOS resource forks on exFAT/USB volumes
+**/._*
 
 *.mov
 .env.global
@@ -63,6 +73,10 @@ training_output.txt
 backend/models/*_epoch_*.pth
 backend/models/feature_cache_mtl.pt
 backend/models/badminton_model_fast.pth
+
+# Third-party vendored weights & readme assets (download locally)
+backend/third_party/ST-TR/checkpoint_ST-TR/
+backend/third_party/ST-TR/additional_files/
 
 # Temp / build artifacts
 .tmp_mpl/
