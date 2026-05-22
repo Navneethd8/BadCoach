@@ -32,6 +32,7 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "gcn_st_tr",
     "st_tr_vit",
     "skateformer",
+    "skateformer_b",
     "timesformer",
     "vit_gcn",
 )
@@ -44,6 +45,7 @@ CATEGORY_GROUPS: Dict[str, str] = {
     "gcn_st_tr": "graph",
     "st_tr_vit": "graph",
     "skateformer": "graph",
+    "skateformer_b": "graph",
     "vit_gcn": "graph",
     "timesformer": "video_transformer",
 }
@@ -55,6 +57,7 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_gcn_st_tr.py": "gcn_st_tr",
     "train_st_tr_vit.py": "st_tr_vit",
     "train_skateformer.py": "skateformer",
+    "train_skateformer_b.py": "skateformer_b",
     "train_timesformer.py": "timesformer",
     "train_vit_gcn.py": "vit_gcn",
 }

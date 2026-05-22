@@ -7,7 +7,7 @@
 #   export ISOCOURT_SHUTDOWN_ON_ERROR=1                 # optional: halt if training fails
 #   ./scripts/ec2/run_train_tmux.sh MODEL [train script args...]
 #
-# MODEL: cnn_lstm | conv3d | timesformer | st_tr | gcn_st_tr | st_tr_vit | skateformer | st_tr_prep | bst_prep | bst_baseline
+# MODEL: cnn_lstm | conv3d | timesformer | st_tr | gcn_st_tr | st_tr_vit | skateformer | skateformer_b | st_tr_prep | bst_prep | bst_baseline
 #   (aliases: resnet50, full, conv3d_pose, sttr, official_st_tr, st_tr_official, st_tr_collate, skate)
 #
 # Env (export before running if you need them inside tmux):
@@ -46,6 +46,9 @@ case "${MODEL}" in
     ;;
   skateformer|skate|skate_former)
     TRAIN_SCRIPT="backend/pipelines/training/train_skateformer.py"
+    ;;
+  skateformer_b|skateformer-b|skate_b|skateformer_b_fusion)
+    TRAIN_SCRIPT="backend/pipelines/training/train_skateformer_b.py"
     ;;
   st_tr_prep|st_tr_collate|st_tr_collated)
     TRAIN_SCRIPT="backend/pipelines/training/prepare_st_tr_collated.py"
