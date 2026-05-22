@@ -2,15 +2,17 @@
 """
 Fine-tune Qwen3-VL-8B-Instruct with Unsloth (LoRA + 4-bit base).
 
-Requires a CUDA GPU and the dependencies in common/requirements-unsloth-vlm.txt.
+Default dataset: FineBadminton-master with ``finebadminton_vlm_train_40v.jsonl``
+(40 videos); point --jsonl at that file next to dataset/image/ on Colab/Drive.
 
-Mixed precision: on Ampere+ (A100, etc.) bf16 is chosen automatically unless you
-pass --bf16 / --no-bf16 / --fp16 / --no-fp16 explicitly.
+Requires a CUDA GPU and the dependencies in requirements-unsloth-vlm.txt.
 
 Example:
-  cd backend/pipelines/vlm/qwen-8b
-  pip install -r ../common/requirements-unsloth-vlm.txt
-  python train_qwen3_vl_8b.py --jsonl ../common/example_data/sample.jsonl --output_dir ./outputs/qwen3_vl_8b_lora
+  cd backend/pipelines/vlm
+  pip install -r requirements-unsloth-vlm.txt
+  python train_qwen3_vl_8b.py \\
+    --jsonl ../../data/FineBadminton-master/dataset/finebadminton_vlm_train_40v.jsonl \\
+    --output_dir ./outputs/qwen3vl8b_lora
 """
 
 from __future__ import annotations
@@ -20,28 +22,16 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_VLM_ROOT = _SCRIPT_DIR.parent
-_COMMON = _VLM_ROOT / "common"
-_BACKEND_ROOT = _VLM_ROOT.parent.parent
-for p in (_BACKEND_ROOT, _COMMON, _SCRIPT_DIR):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
 
-from torch.utils.data import Subset
-
-from core.split import SPLIT_RATIO, SPLIT_SEED
 from load_dataset_jsonl import (
     load_jsonl_conversations,
     load_jsonl_conversations_train_val,
     trainer_vision_kwargs,
 )
-from qwen3_vl_config import (
-    DEFAULT_MODEL_ID,
-    DEFAULT_TRAIN_MAX_PIXELS,
-    DEFAULT_TRAIN_MAX_SEQ_LENGTH,
-)
-from vlm_gpu_defaults import resolve_train_amp
-from vlm_processor_utils import apply_vision_processor_limits
+from core.split import SPLIT_RATIO, SPLIT_SEED
+from qwen3_vl_config import DEFAULT_MAX_SEQ_LENGTH, DEFAULT_MODEL_ID_8B
 from vlm_train_metrics import build_sft_eval_compute_metrics
 
 
@@ -56,7 +46,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--model_name",
         type=str,
-        default=DEFAULT_MODEL_ID,
+        default=DEFAULT_MODEL_ID_8B,
         help="Hugging Face model id (default: Unsloth 4-bit Qwen3-VL-8B-Instruct).",
     )
     p.add_argument(
@@ -65,12 +55,7 @@ def _parse_args() -> argparse.Namespace:
         default="outputs/qwen3_vl_8b_lora",
         help="Directory for checkpoints and final adapter.",
     )
-    p.add_argument(
-        "--max_seq_length",
-        type=int,
-        default=DEFAULT_TRAIN_MAX_SEQ_LENGTH,
-        help="Training max sequence length (default 1536; use 2048 for longer captions).",
-    )
+    p.add_argument("--max_seq_length", type=int, default=DEFAULT_MAX_SEQ_LENGTH)
     p.add_argument("--load_in_4bit", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument(
         "--gradient_checkpointing",
@@ -84,25 +69,15 @@ def _parse_args() -> argparse.Namespace:
         "--per_device_train_batch_size",
         type=int,
         default=1,
-        help="Default 1 for T4/16GB VRAM + vision; A100 40GB often allows 2+.",
+        help="Default 1 for 8B VRAM; increase if you have headroom.",
     )
-    p.add_argument(
-        "--gradient_accumulation_steps",
-        type=int,
-        default=8,
-        help="Effective batch ≈ batch_size × this (default 8 matches old 2×4).",
-    )
+    p.add_argument("--gradient_accumulation_steps", type=int, default=8)
     p.add_argument("--learning_rate", type=float, default=2e-4)
     p.add_argument("--warmup_steps", type=int, default=5)
     p.add_argument("--max_steps", type=int, default=None)
-    p.add_argument(
-        "--num_train_epochs",
-        type=float,
-        default=25.0,
-        help="Number of training epochs.",
-    )
+    p.add_argument("--num_train_epochs", type=float, default=60.0)
     p.add_argument("--logging_steps", type=int, default=1)
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=3407)
     p.add_argument(
         "--report_to",
         type=str,
@@ -140,24 +115,6 @@ def _parse_args() -> argparse.Namespace:
         help="Upscale frame before MediaPipe if min(h,w) is below this (helps wide shots). 0 disables.",
     )
     p.add_argument(
-        "--max_image_long_edge",
-        type=int,
-        default=None,
-        help="If set, resize each frame so max(w,h) is at most this (saves RAM on CPU decode).",
-    )
-    p.add_argument(
-        "--max_pixels",
-        type=int,
-        default=DEFAULT_TRAIN_MAX_PIXELS,
-        help="Vision preprocessor max_pixels (aligns with PIL resize; 0 = leave processor defaults).",
-    )
-    p.add_argument(
-        "--min_pixels",
-        type=int,
-        default=None,
-        help="Optional vision preprocessor min_pixels (Qwen smart_resize).",
-    )
-    p.add_argument(
         "--no_val_split",
         action="store_true",
         help="Train on full JSONL with no validation (no eval_loss / eval_accuracy).",
@@ -175,60 +132,26 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Cap validation size (first N after split). Strongly recommended on low-RAM "
-        "hosts: eval with stroke metrics materializes logits on CPU.",
-    )
-    p.add_argument(
-        "--eval_stroke_metrics",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="If disabled, validation only reports eval_loss (no logits on CPU). "
-        "Much lower host RAM at end of each epoch; use --no-eval_stroke_metrics on low-RAM machines.",
-    )
-    p.add_argument(
-        "--bf16",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="BF16 mixed precision. Default: on for CUDA sm>=8 (A100), off for older GPUs.",
-    )
-    p.add_argument(
-        "--fp16",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="FP16 when not using BF16. Default: auto from GPU unless flags are set.",
+        "hosts: eval with compute_metrics materializes logits for the whole val set.",
     )
     p.add_argument(
         "--dataloader_num_workers",
         type=int,
         default=0,
-        help="Use 0 on low-RAM hosts to avoid extra RAM from worker processes.",
+        help="Use 0 on Colab to avoid extra RAM from worker processes.",
     )
     p.add_argument(
         "--save_total_limit",
         type=int,
-        default=5,
-        help="Max checkpoints to keep on disk.",
-    )
-    p.add_argument(
-        "--save_steps",
-        type=int,
-        default=None,
-        help="If set, also save every N steps (save_strategy=steps) in addition to epoch eval.",
+        default=3,
+        help="Max checkpoints to keep when using val split (epoch saves).",
     )
     return p.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    import random
-
-    import numpy as np
     import torch
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
 
     if not torch.cuda.is_available():
         print(
@@ -236,13 +159,6 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-
-    bf16, fp16 = resolve_train_amp(args.bf16, args.fp16)
-    print(
-        f"Mixed precision: bf16={bf16} fp16={fp16} "
-        f"(GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'n/a'})",
-        file=sys.stderr,
-    )
 
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastVisionModel
@@ -271,15 +187,6 @@ def main() -> None:
         loftq_config=None,
     )
 
-    max_pixels = None if args.max_pixels == 0 else args.max_pixels
-    apply_vision_processor_limits(
-        tokenizer,
-        max_pixels=max_pixels,
-        min_pixels=args.min_pixels,
-    )
-    if max_pixels is not None:
-        print(f"Vision preprocessor: max_pixels={max_pixels}", file=sys.stderr)
-
     print(f"Loading dataset: {args.jsonl}")
     pose_min = None if args.pose_min_short_edge == 0 else args.pose_min_short_edge
     if args.no_val_split:
@@ -288,7 +195,6 @@ def main() -> None:
             pose_mode=args.pose_mode,
             pose_model_path=args.pose_model_path,
             pose_min_short_edge=pose_min,
-            max_image_long_edge=args.max_image_long_edge,
         )
         eval_dataset = None
     else:
@@ -299,7 +205,6 @@ def main() -> None:
             pose_min_short_edge=pose_min,
             split_seed=args.split_seed,
             split_ratio=args.split_ratio,
-            max_image_long_edge=args.max_image_long_edge,
         )
         if args.max_eval_samples is not None and len(eval_dataset) > args.max_eval_samples:
             print(
@@ -307,9 +212,7 @@ def main() -> None:
                 f"(RAM-friendly eval; metrics are on this subset only).",
                 file=sys.stderr,
             )
-            eval_dataset = Subset(
-                eval_dataset, range(min(args.max_eval_samples, len(eval_dataset)))
-            )
+            eval_dataset = eval_dataset[: args.max_eval_samples]
 
     FastVisionModel.for_training(model)
 
@@ -319,7 +222,6 @@ def main() -> None:
         "per_device_eval_batch_size": args.per_device_eval_batch_size,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "dataloader_num_workers": args.dataloader_num_workers,
-        "dataloader_pin_memory": False,
         "warmup_steps": args.warmup_steps,
         "learning_rate": args.learning_rate,
         "logging_steps": args.logging_steps,
@@ -329,8 +231,6 @@ def main() -> None:
         "seed": args.seed,
         "output_dir": args.output_dir,
         "report_to": args.report_to,
-        "bf16": bf16,
-        "fp16": fp16,
         **tkwargs,
     }
     if args.max_steps is not None:
@@ -339,35 +239,16 @@ def main() -> None:
         train_kwargs["num_train_epochs"] = args.num_train_epochs
 
     if eval_dataset is not None:
-        if args.eval_stroke_metrics:
-            train_kwargs.update(
-                eval_strategy="epoch",
-                save_total_limit=args.save_total_limit,
-                load_best_model_at_end=True,
-                metric_for_best_model="eval_stroke_accuracy",
-                greater_is_better=True,
-            )
-        else:
-            train_kwargs.update(
-                eval_strategy="epoch",
-                save_total_limit=args.save_total_limit,
-                load_best_model_at_end=True,
-                metric_for_best_model="eval_loss",
-                greater_is_better=False,
-                prediction_loss_only=True,
-            )
-        if args.save_steps is not None:
-            train_kwargs["save_strategy"] = "steps"
-            train_kwargs["save_steps"] = args.save_steps
-        else:
-            train_kwargs["save_strategy"] = "epoch"
-    else:
-        train_kwargs["save_strategy"] = (
-            "steps" if args.save_steps is not None else "epoch"
+        train_kwargs.update(
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            save_total_limit=args.save_total_limit,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_stroke_accuracy",
+            greater_is_better=True,
         )
-        if args.save_steps is not None:
-            train_kwargs["save_steps"] = args.save_steps
-        train_kwargs["save_total_limit"] = args.save_total_limit
+    else:
+        train_kwargs["save_strategy"] = "epoch"
 
     trainer = SFTTrainer(
         model=model,
@@ -376,9 +257,7 @@ def main() -> None:
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         compute_metrics=(
-            build_sft_eval_compute_metrics(tokenizer)
-            if eval_dataset is not None and args.eval_stroke_metrics
-            else None
+            build_sft_eval_compute_metrics(tokenizer) if eval_dataset is not None else None
         ),
         args=SFTConfig(**train_kwargs),
     )

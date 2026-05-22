@@ -15,9 +15,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
-_COMMON_DIR = Path(__file__).resolve().parent
-_VLM_ROOT = _COMMON_DIR.parent
-_BACKEND_ROOT = _VLM_ROOT.parent.parent
+_VLM_DIR = Path(__file__).resolve().parent
+_BACKEND_ROOT = _VLM_DIR.parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
@@ -25,7 +24,8 @@ from core.pose_utils import PoseEstimator  # noqa: E402
 
 PoseMode = Literal["none", "overlay", "text", "both"]
 
-# Upscale before pose when min(h, w) is below this (broadcast badminton frames).
+# Upscale before pose when min(h, w) is below this (broadcast frames: players are tiny).
+# 1280×720 → short edge 720 → upscale so short edge reaches this value (then overlay is resized back).
 DEFAULT_POSE_MIN_SHORT_EDGE = 960
 
 # Subset of landmarks for a short text cue (MediaPipe pose, 33 landmarks).

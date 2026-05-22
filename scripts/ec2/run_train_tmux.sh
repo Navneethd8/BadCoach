@@ -7,8 +7,8 @@
 #   export ISOCOURT_SHUTDOWN_ON_ERROR=1                 # optional: halt if training fails
 #   ./scripts/ec2/run_train_tmux.sh MODEL [train script args...]
 #
-# MODEL: cnn_lstm | conv3d | timesformer | st_tr | bst_prep | bst_baseline
-#   (aliases: resnet50, full, conv3d_pose, sttr)
+# MODEL: cnn_lstm | conv3d | timesformer | st_tr | gcn_st_tr | st_tr_vit | skateformer | skateformer_b | st_tr_prep | bst_prep | bst_baseline
+#   (aliases: resnet50, full, conv3d_pose, sttr, official_st_tr, st_tr_official, st_tr_collate, skate)
 #
 # Env (export before running if you need them inside tmux):
 #   ISOCOURT_TMUX_SESSION   tmux session name (default: isocourt-train)
@@ -38,6 +38,21 @@ case "${MODEL}" in
   conv3d|conv3d_pose) TRAIN_SCRIPT="backend/pipelines/training/train_conv3d.py" ;;
   timesformer) TRAIN_SCRIPT="backend/pipelines/training/train_timesformer.py" ;;
   st_tr|sttr) TRAIN_SCRIPT="backend/pipelines/training/train_st_tr.py" ;;
+  gcn_st_tr|official_st_tr|st_tr_official)
+    TRAIN_SCRIPT="backend/pipelines/training/train_gcn_st_tr.py"
+    ;;
+  st_tr_vit|st_tr_vit_fusion)
+    TRAIN_SCRIPT="backend/pipelines/training/train_st_tr_vit.py"
+    ;;
+  skateformer|skate|skate_former)
+    TRAIN_SCRIPT="backend/pipelines/training/train_skateformer.py"
+    ;;
+  skateformer_b|skateformer-b|skate_b|skateformer_b_fusion)
+    TRAIN_SCRIPT="backend/pipelines/training/train_skateformer_b.py"
+    ;;
+  st_tr_prep|st_tr_collate|st_tr_collated)
+    TRAIN_SCRIPT="backend/pipelines/training/prepare_st_tr_collated.py"
+    ;;
   bst_prep) TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated.py" ;;
   bst_baseline|bst) TRAIN_SCRIPT="backend/pipelines/training/train_bst_baseline.py" ;;
   *) echo "Unknown MODEL=${MODEL_RAW}" >&2; exit 2 ;;
@@ -72,6 +87,7 @@ mkdir -p "${REPO_ROOT}/logs"
   echo "cd $(printf '%q' "${REPO_ROOT}")"
   echo "source $(printf '%q' "${VENV}/bin/activate")"
   echo "export PYTHONUNBUFFERED=1"
+  echo "export MLFLOW_TRACKING_URI=\"\${MLFLOW_TRACKING_URI:-file:$(printf '%q' "${REPO_ROOT}")/backend/mlruns}\""
   echo "echo \"=== \$(date -u -Iseconds) start ===\" | tee -a $(printf '%q' "${LOG}")"
   echo -n "python $(printf '%q' "${REPO_ROOT}/${TRAIN_SCRIPT}")"
   for a in "$@"; do echo -n " $(printf '%q' "$a")"; done
@@ -81,7 +97,9 @@ mkdir -p "${REPO_ROOT}/logs"
   echo "if [[ \"\${code}\" -eq 0 ]]; then"
   echo "  if [[ -n \"\${ISOCOURT_RSYNC_DEST:-}\" ]]; then"
   echo "    rsync -avz --partial \${ISOCOURT_RSYNC_EXTRA:-} $(printf '%q' "${REPO_ROOT}/backend/models/") \"\${ISOCOURT_RSYNC_DEST%/}/backend/models/\" || true"
-  echo "    if [[ -d $(printf '%q' "${REPO_ROOT}/mlruns") ]]; then"
+  echo "    if [[ -d $(printf '%q' "${REPO_ROOT}/backend/mlruns") ]]; then"
+  echo "      rsync -avz --partial \${ISOCOURT_RSYNC_EXTRA:-} $(printf '%q' "${REPO_ROOT}/backend/mlruns/") \"\${ISOCOURT_RSYNC_DEST%/}/backend/mlruns/\" || true"
+  echo "    elif [[ -d $(printf '%q' "${REPO_ROOT}/mlruns") ]]; then"
   echo "      rsync -avz --partial \${ISOCOURT_RSYNC_EXTRA:-} $(printf '%q' "${REPO_ROOT}/mlruns/") \"\${ISOCOURT_RSYNC_DEST%/}/mlruns/\" || true"
   echo "    fi"
   echo "  fi"

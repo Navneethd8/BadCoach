@@ -66,6 +66,7 @@ rsync -avz --partial \
   --exclude 'backend/data/FineBadminton-master/' \
   --exclude '.github/' \
   --exclude 'frontend/' \
+  --exclude 'remotion/' \
   --exclude 'backend/api/' \
   --exclude 'backend/deploy/' \
   --exclude 'backend/docker-compose.yml' \

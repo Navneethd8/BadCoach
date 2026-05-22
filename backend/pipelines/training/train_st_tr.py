@@ -31,7 +31,22 @@ from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.st_tr import STTRModel
 from core.model_registry import register_training_checkpoint
-from core.training_progress import tqdm_train_batches
+from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
+from core.training_standards import (
+    DEFAULT_EPOCHS,
+    DEFAULT_LR,
+    DEFAULT_MULTITASK_LOSS_WEIGHTS,
+    DEFAULT_SEED,
+    GRAD_ACCUMULATION_STEPS,
+    GRAD_CLIP_NORM,
+    build_task_classes,
+    common_mlflow_clip_params,
+    configure_mlflow,
+    default_list_file,
+    default_multitask_criteria,
+    load_training_dataset,
+    validate_pose_cache,
+)
 
 
 class PoseOnlyDataset(Dataset):
@@ -72,10 +87,7 @@ def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
 
     pose_cache = media_pipe_fill_pose_cache(dataset_raw, pose_estimator)
 
-    task_classes = {k: len(v) for k, v in dataset.classes.items()}
-    task_classes["quality"] = 7
-    if "stroke_subtype" in task_classes:
-        del task_classes["stroke_subtype"]
+    task_classes = build_task_classes(dataset)
 
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     torch.save({"pose_cache": pose_cache, "task_classes": task_classes}, cache_path)
@@ -86,15 +98,15 @@ def _build_pose_cache(dataset, list_file, device, cache_path, seed=42):
 def train_st_tr(
     data_root,
     list_file,
-    epochs=60,
-    batch_size=8,
-    lr=5e-4,
+    epochs=DEFAULT_EPOCHS,
+    batch_size=DEFAULT_TRAIN_BATCH_SIZE,
+    lr=DEFAULT_LR,
     device="cpu",
     save_path=None,
     pose_cache_path=None,
     resume_checkpoint=None,
     start_epoch=0,
-    seed=42,
+    seed=DEFAULT_SEED,
     embed_dim=128,
     num_heads=4,
     num_layers=3,
@@ -110,26 +122,24 @@ def train_st_tr(
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
 
+    configure_mlflow(backend_root)
     mlflow.set_experiment("IsoCourt_Training_ST_TR")
     with mlflow.start_run():
-        mlflow.log_params({
-            "epochs": epochs, "batch_size": batch_size, "lr": lr,
-            "seed": seed, "embed_dim": embed_dim, "num_heads": num_heads,
-            "num_layers": num_layers, "fusion": fusion,
-            "script": "train_st_tr.py",
-        })
+        mlflow.log_params(common_mlflow_clip_params(
+            epochs=epochs, batch_size=batch_size, lr=lr, seed=seed,
+            embed_dim=embed_dim, num_heads=num_heads, num_layers=num_layers,
+            fusion=fusion, script="train_st_tr.py",
+        ))
 
         print("Loading dataset...")
-        dataset = FineBadmintonDataset(data_root, list_file, transform=None)
+        dataset = load_training_dataset(data_root, list_file, transform=None)
 
         pose_cache, task_classes = _build_pose_cache(
             dataset, list_file, device, pose_cache_path, seed=seed
         )
+        validate_pose_cache(pose_cache)
         if task_classes is None:
-            task_classes = {k: len(v) for k, v in dataset.classes.items()}
-            task_classes["quality"] = 7
-            if "stroke_subtype" in task_classes:
-                del task_classes["stroke_subtype"]
+            task_classes = build_task_classes(dataset)
 
         wrapper = PoseOnlyDataset(dataset, pose_cache)
 
@@ -173,17 +183,9 @@ def train_st_tr(
         optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
         scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
 
-        weights_st = torch.tensor(
-            [1.0, 1.5, 1.3, 2.0, 1.5, 1.5, 1.5, 2.0, 5.0],
-            dtype=torch.float32, device=device,
-        )
-        criterion_st = nn.CrossEntropyLoss(weight=weights_st, label_smoothing=0.1)
-        criterion_default = nn.CrossEntropyLoss(label_smoothing=0.1)
-        loss_weights = {
-            "stroke_type": 2.0, "position": 1.0, "technique": 0.5,
-            "placement": 0.5, "intent": 0.5, "quality": 0.5,
-        }
-        accumulation_steps = 4
+        criterion_st, criterion_default = default_multitask_criteria(device)
+        loss_weights = dict(DEFAULT_MULTITASK_LOSS_WEIGHTS)
+        accumulation_steps = GRAD_ACCUMULATION_STEPS
         best_acc = 0.0
 
         print(f"\nStarting ST-TR training ({fusion} fusion, {num_layers} layers)...")
@@ -214,7 +216,7 @@ def train_st_tr(
 
                 (batch_loss / accumulation_steps).backward()
                 if (batch_idx + 1) % accumulation_steps == 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=GRAD_CLIP_NORM)
                     optimizer.step()
                     optimizer.zero_grad()
                 running_loss += batch_loss.item()
@@ -292,9 +294,9 @@ def train_st_tr(
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=60)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_TRAIN_BATCH_SIZE)
+    parser.add_argument("--lr", type=float, default=DEFAULT_LR)
     parser.add_argument("--embed-dim", type=int, default=128)
     parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument("--num-layers", type=int, default=3)
@@ -308,7 +310,7 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_root = os.path.dirname(os.path.dirname(current_dir))
     data_root = os.path.join(backend_root, "data")
-    list_file = os.path.join(backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json")
+    list_file = default_list_file(backend_root)
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
     train_st_tr(

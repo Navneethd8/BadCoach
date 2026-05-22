@@ -7,6 +7,7 @@ import pytest
 from core.model_registry import (
     ARCHITECTURE_CATEGORIES,
     ENV_INFERENCE_CATEGORY,
+    make_experiment_checkpoint_path,
     migrate_v1_to_v2,
     normalize_registry,
     register_training_checkpoint,
@@ -14,6 +15,13 @@ from core.model_registry import (
     resolve_inference_model_path,
     save_inference_selection,
 )
+
+
+def test_make_experiment_checkpoint_path_adds_timestamp_suffix():
+    out = make_experiment_checkpoint_path("/tmp/models/badminton_model_gcn_st_tr.pth")
+    assert out.startswith("/tmp/models/badminton_model_gcn_st_tr_")
+    assert out.endswith(".pth")
+    assert out != "/tmp/models/badminton_model_gcn_st_tr.pth"
 
 
 def test_migrate_v1_active_becomes_primary_for_category():

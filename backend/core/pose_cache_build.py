@@ -14,13 +14,20 @@ import torch
 
 from core.training_progress import tqdm_pose_cache_build
 
-# Default on-disk name (shared across trainers). Legacy: ``pose_cache_staeformer.pt``.
+# Default on-disk name (shared across trainers).
 DEFAULT_POSE_CACHE_FILENAME = "pose_cache_mediapipe.pt"
+ST_TR_POSE_CACHE_FILENAME = "pose_cache_st_tr_collated.pt"
+# Older repos used this filename; still loaded if mediapipe cache is missing.
 LEGACY_POSE_CACHE_FILENAME = "pose_cache_staeformer.pt"
 
 
 def default_pose_cache_path(backend_root: str) -> str:
     return os.path.join(os.path.abspath(backend_root), "models", DEFAULT_POSE_CACHE_FILENAME)
+
+
+def default_st_tr_pose_cache_path(backend_root: str) -> str:
+    """Pose cache built for upstream ST-TR (native-res MediaPipe, primary-player pick)."""
+    return os.path.join(os.path.abspath(backend_root), "models", ST_TR_POSE_CACHE_FILENAME)
 
 
 def _pose_cache_load_candidates(cache_path: str) -> List[str]:
@@ -35,9 +42,8 @@ def _pose_cache_load_candidates(cache_path: str) -> List[str]:
 
 def load_pose_cache_bundle(cache_path: str) -> Optional[Dict[str, Any]]:
     """
-    Load ``{"pose_cache": Tensor, ...}`` from ``cache_path``, or from the legacy
-    ``pose_cache_staeformer.pt`` in the same directory when the requested basename is
-    the default mediapipe name.
+    Load ``{"pose_cache": Tensor, ...}`` from ``cache_path``, or from
+    ``LEGACY_POSE_CACHE_FILENAME`` in the same directory when the default file is absent.
     """
     for p in _pose_cache_load_candidates(cache_path):
         if not os.path.isfile(p):
@@ -93,7 +99,71 @@ def _load_native_res_frames(dataset_raw, i: int, T: int) -> torch.Tensor:
     return torch.stack(frames)
 
 
-def _pose_row_for_index(dataset_raw, pose_estimator, i: int, T: int, *, native_res: bool = False) -> torch.Tensor:
+def _pick_primary_pose_index(pose_landmarks_list) -> int:
+    """Choose the main player when MediaPipe returns multiple poses."""
+    best_i = 0
+    best_score = -1.0
+    for i, pose in enumerate(pose_landmarks_list):
+        vis_sum = 0.0
+        xs: list[float] = []
+        ys: list[float] = []
+        for lm in pose:
+            vis_sum += float(lm.visibility)
+            if lm.visibility > 0.3:
+                xs.append(float(lm.x))
+                ys.append(float(lm.y))
+        if len(xs) >= 4:
+            area = (max(xs) - min(xs)) * (max(ys) - min(ys))
+            score = vis_sum + area
+        else:
+            score = vis_sum
+        if score > best_score:
+            best_score = score
+            best_i = i
+    return best_i
+
+
+def _poses_from_frames_tensor(
+    frames: torch.Tensor,
+    pose_estimator,
+    *,
+    pick_primary: bool = False,
+) -> torch.Tensor:
+    """Per-frame MediaPipe on ``(T, C, H, W)`` RGB [0,1] -> ``(T, 33, 3)``."""
+    import mediapipe as mp
+
+    T = int(frames.shape[0])
+    out = torch.zeros((T, 33, 3), dtype=torch.float32)
+    frames_np = frames.permute(0, 2, 3, 1).cpu().numpy()
+    frames_np = (frames_np * 255.0).clip(0, 255).astype(np.uint8)
+
+    for t in range(T):
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frames_np[t])
+        result = pose_estimator.detector.detect(mp_image)
+        if not result.pose_landmarks:
+            continue
+        idx = (
+            _pick_primary_pose_index(result.pose_landmarks)
+            if pick_primary and len(result.pose_landmarks) > 1
+            else 0
+        )
+        person = result.pose_landmarks[idx]
+        for j, lm in enumerate(person):
+            out[t, j, 0] = float(lm.x)
+            out[t, j, 1] = float(lm.y)
+            out[t, j, 2] = float(lm.z)
+    return out
+
+
+def _pose_row_for_index(
+    dataset_raw,
+    pose_estimator,
+    i: int,
+    T: int,
+    *,
+    native_res: bool = False,
+    pick_primary: bool = False,
+) -> torch.Tensor:
     """Decode sample ``i`` and return pose tensor (T, 33, 3) float32.
 
     When *native_res* is True, frames are loaded at the original video
@@ -106,12 +176,15 @@ def _pose_row_for_index(dataset_raw, pose_estimator, i: int, T: int, *, native_r
             return torch.zeros((T, 33, 3), dtype=torch.float32)
     else:
         frames, _ = dataset_raw[i]
-    with torch.no_grad():
-        p = pose_estimator.extract_tensor_poses(frames)
-    if p.dim() == 2:
-        row = p.detach().cpu().view(T, 33, 3).to(torch.float32)
+    if pick_primary:
+        row = _poses_from_frames_tensor(frames, pose_estimator, pick_primary=True)
     else:
-        row = p.detach().cpu().reshape(T, 33, 3).to(torch.float32)
+        with torch.no_grad():
+            p = pose_estimator.extract_tensor_poses(frames)
+        if p.dim() == 2:
+            row = p.detach().cpu().view(T, 33, 3).to(torch.float32)
+        else:
+            row = p.detach().cpu().reshape(T, 33, 3).to(torch.float32)
     if row.shape != (T, 33, 3):
         raise RuntimeError(
             f"pose row shape {tuple(row.shape)} != expected ({T}, 33, 3) at index {i}"
@@ -119,7 +192,13 @@ def _pose_row_for_index(dataset_raw, pose_estimator, i: int, T: int, *, native_r
     return row
 
 
-def media_pipe_fill_pose_cache(dataset_raw, pose_estimator, *, native_res: bool = False) -> torch.Tensor:
+def media_pipe_fill_pose_cache(
+    dataset_raw,
+    pose_estimator,
+    *,
+    native_res: bool = False,
+    pick_primary: bool = False,
+) -> torch.Tensor:
     """
     Fill a single float32 tensor of shape (len(dataset_raw), T, 33, 3) in index order.
 
@@ -129,7 +208,16 @@ def media_pipe_fill_pose_cache(dataset_raw, pose_estimator, *, native_res: bool 
     T = int(dataset_raw.sequence_length)
     out = torch.empty((n, T, 33, 3), dtype=torch.float32)
     for i in tqdm_pose_cache_build(n):
-        out[i].copy_(_pose_row_for_index(dataset_raw, pose_estimator, i, T, native_res=native_res))
+        out[i].copy_(
+            _pose_row_for_index(
+                dataset_raw,
+                pose_estimator,
+                i,
+                T,
+                native_res=native_res,
+                pick_primary=pick_primary,
+            )
+        )
     return out.contiguous()
 
 
@@ -158,6 +246,7 @@ def media_pipe_fill_pose_cache_resumable(
     frame_interval: int,
     force: bool = False,
     native_res: bool = False,
+    pick_primary: bool = False,
     start_index: Optional[int] = None,
 ) -> torch.Tensor:
     """
@@ -198,6 +287,12 @@ def media_pipe_fill_pose_cache_resumable(
             raise ValueError(
                 "Checkpoint sequence_length / frame_interval mismatch. Use --force to discard."
             )
+        if bool(ck.get("native_res", False)) != bool(native_res) or bool(
+            ck.get("pick_primary", False)
+        ) != bool(pick_primary):
+            raise ValueError(
+                "Checkpoint native_res / pick_primary mismatch. Use --force to discard."
+            )
         old_fp = ck.get("list_fingerprint")
         if old_fp is not None and tuple(old_fp) != fp:
             raise ValueError(
@@ -229,7 +324,16 @@ def media_pipe_fill_pose_cache_resumable(
         print(f"Resuming pose cache from sample {start}/{n} (checkpoint: {ckpt_path})")
 
     for i in tqdm_pose_cache_build(n, start=start):
-        out[i].copy_(_pose_row_for_index(dataset_raw, pose_estimator, i, T, native_res=native_res))
+        out[i].copy_(
+            _pose_row_for_index(
+                dataset_raw,
+                pose_estimator,
+                i,
+                T,
+                native_res=native_res,
+                pick_primary=pick_primary,
+            )
+        )
         done = i + 1
         if done % checkpoint_every == 0 or done == n:
             _atomic_torch_save(
@@ -241,6 +345,8 @@ def media_pipe_fill_pose_cache_resumable(
                     "sequence_length": sequence_length,
                     "frame_interval": frame_interval,
                     "list_fingerprint": list(fp),
+                    "native_res": bool(native_res),
+                    "pick_primary": bool(pick_primary),
                 },
                 ckpt_path,
             )

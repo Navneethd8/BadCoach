@@ -16,14 +16,10 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_VLM_ROOT = _SCRIPT_DIR.parent
-_COMMON = _VLM_ROOT / "common"
-_BACKEND_ROOT = _VLM_ROOT.parent.parent
-for p in (_BACKEND_ROOT, _COMMON, _SCRIPT_DIR):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
 
-from qwen3_vl_config import DEFAULT_MODEL_ID
+from qwen3_vl_config import DEFAULT_MODEL_ID_8B
 from vlm_pose import apply_pose_to_pil, create_pose_estimator
 
 
@@ -34,7 +30,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--model_name",
         type=str,
-        default=DEFAULT_MODEL_ID,
+        default=DEFAULT_MODEL_ID_8B,
         help="Base model id when not loading from --lora_path.",
     )
     p.add_argument(
