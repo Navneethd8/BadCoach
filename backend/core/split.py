@@ -27,41 +27,19 @@ def video_level_split(samples: List[Dict], seed: int = SPLIT_SEED, ratio: float 
     g = torch.Generator().manual_seed(seed)
     perm = torch.randperm(len(unique_videos), generator=g).tolist()
 
-    # One video: int(ratio * 1) == 0 would put everything in val and leave train empty.
-    # Use a clip-level split within that video (single-video datasets, ablations).
-    if len(unique_videos) == 1:
-        only = unique_videos[0]
-        indices = sorted(video_to_indices[only])
-        n = len(indices)
-        if n <= 1:
-            train_indices = list(indices)
-            val_indices = list(indices)
-        else:
-            cut = max(1, min(n - 1, int(ratio * n)))
-            train_indices = indices[:cut]
-            val_indices = indices[cut:]
-    else:
-        split_idx = int(ratio * len(unique_videos))
-        train_vids = [unique_videos[i] for i in perm[:split_idx]]
-        val_vids = [unique_videos[i] for i in perm[split_idx:]]
+    split_idx = int(ratio * len(unique_videos))
+    train_vids = [unique_videos[i] for i in perm[:split_idx]]
+    val_vids = [unique_videos[i] for i in perm[split_idx:]]
 
-        train_indices = []
-        for v in train_vids:
-            train_indices.extend(video_to_indices[v])
-        val_indices = []
-        for v in val_vids:
-            val_indices.extend(video_to_indices[v])
+    train_indices = []
+    for v in train_vids:
+        train_indices.extend(video_to_indices[v])
+    val_indices = []
+    for v in val_vids:
+        val_indices.extend(video_to_indices[v])
 
-    if len(unique_videos) == 1:
-        print(
-            f"Split: 1 video, clip-level {ratio:.0%}/{1 - ratio:.0%} "
-            f"({len(train_indices)} train / {len(val_indices)} val samples)"
-        )
-    else:
-        print(
-            f"Split: {len(train_vids)} train vids ({len(train_indices)} samples) / "
-            f"{len(val_vids)} val vids ({len(val_indices)} samples)"
-        )
+    print(f"Split: {len(train_vids)} train vids ({len(train_indices)} samples) / "
+          f"{len(val_vids)} val vids ({len(val_indices)} samples)")
 
     return train_indices, val_indices
 

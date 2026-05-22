@@ -1,106 +1,48 @@
 #!/usr/bin/env python3
 """
-Build VLM JSONL from FineBadminton labels + dataset/image/*.jpg.
+Build VLM JSONL from FineBadminton dataset labels + dataset/image/*.jpg.
 
-Annotations default to the merged file produced from Hugging Face
-Moujuruo/Finebadminton-20K (run common/prepare_finebadminton_20k.py first).
-
-Targets match FineBadmintonDataset / non-VLM multitask heads: same normalization
-(raw hit_type → stroke_type, first subtype / action / characteristic / strategy,
-ball_area → position, quality → ordinal band). See core/dataset.py _map_labels.
-
-Default labels: backend/data/transformed_combined_rounds_output_en_evals_translated.json
-Default image/labels root: backend/data/FineBadminton-20K/dataset
-Output: .../dataset/finebadminton_vlm_train.jsonl
+Default labels: backend/data/FineBadminton-master/dataset/transformed_combined_rounds_output_en_evals_translated.json
+Output next to images so paths stay short: .../dataset/finebadminton_vlm_train.jsonl
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 
-def _backend_root() -> Path:
-    # .../backend/pipelines/vlm/common/this_file.py → backend
-    return Path(__file__).resolve().parent.parent.parent.parent
-
-
-_br = _backend_root()
-if str(_br) not in sys.path:
-    sys.path.insert(0, str(_br))
-from core.dataset import FineBadmintonDataset  # noqa: E402
+DEFAULT_INSTRUCTION = (
+    "You are a badminton analyst. This frame is captured at shuttle contact. "
+    "Describe the stroke type, technique, which player (name or top/bottom), "
+    "court area, quality score out of 5, and any tactical intent. Answer in concise English."
+)
 
 
 def _stem(video: str) -> str:
     return Path(video).stem
 
 
-def _coerce_quality(value) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 1
-
-
-def _hit_to_label_sample(hit: dict) -> dict:
-    """Same fields FineBadmintonDataset._map_labels expects (raw annotation strings)."""
-    return {
-        "hit_type": hit.get("hit_type", "Other"),
-        "subtype": hit.get("subtype") or [],
-        "player_actions": hit.get("player_actions") or [],
-        "shot_characteristics": hit.get("shot_characteristics") or [],
-        "ball_area": hit.get("ball_area", "Unknown"),
-        "strategies": hit.get("strategies") or [],
-        "quality": _coerce_quality(hit.get("quality", 1)),
-    }
-
-
-def multitask_vlm_instruction(ds: FineBadmintonDataset) -> str:
-    """
-    Prompt that asks for IsoCourt's discrete labels (aligned with CNN / TimeSformer heads).
-    Vocabularies come from ``ds.classes`` (same source as non-VLM training).
-    """
-
-    def line(name: str, task: str) -> str:
-        opts = ", ".join(ds.classes[task])
-        return f"{name}: one of [{opts}]"
-
-    blocks = [
-        "You are the IsoCourt badminton analyst. The image is a single frame at shuttle contact.",
-        "Reply in one line using exactly these fields in this order. Use each label exactly as written (including underscores).",
-        line("Stroke", "stroke_type"),
-        line("Subtype", "stroke_subtype"),
-        line("Technique", "technique"),
-        line("Placement", "placement"),
-        line("Position", "position"),
-        line("Intent", "intent"),
-        line("Quality", "quality"),
-        "After those fields you may add: Player: <name>; Hitter side: top or bottom; Comment: <short note> — all optional.",
-    ]
-    return " ".join(blocks)
-
-
-def _format_multitask_response(ds: FineBadmintonDataset, hit: dict) -> str:
-    """Ground-truth line: canonical multitask labels + optional raw identity/comment."""
-    sample = _hit_to_label_sample(hit)
-    idx = ds._map_labels(sample)
-    parts: list[str] = [
-        f"Stroke: {ds.classes['stroke_type'][idx['stroke_type']]}",
-        f"Subtype: {ds.classes['stroke_subtype'][idx['stroke_subtype']]}",
-        f"Technique: {ds.classes['technique'][idx['technique']]}",
-        f"Placement: {ds.classes['placement'][idx['placement']]}",
-        f"Position: {ds.classes['position'][idx['position']]}",
-        f"Intent: {ds.classes['intent'][idx['intent']]}",
-        f"Quality: {ds.classes['quality'][idx['quality']]}",
-    ]
-    player = (hit.get("player") or "").strip()
-    hitter = (hit.get("hitter") or "").strip()
-    if player:
-        parts.append(f"Player: {player}")
-    if hitter:
-        parts.append(f"Hitter side: {hitter}")
+def _format_response(hit: dict) -> str:
+    parts: list[str] = []
+    parts.append(f"Stroke: {hit.get('hit_type', '')}")
+    sub = hit.get("subtype") or []
+    if sub:
+        parts.append(f"Subtype: {', '.join(str(s) for s in sub)}")
+    parts.append(f"Player: {hit.get('player', '')}")
+    parts.append(f"Hitter side: {hit.get('hitter', '')}")
+    acts = hit.get("player_actions") or []
+    if acts:
+        parts.append(f"Player actions: {', '.join(str(a) for a in acts)}")
+    parts.append(f"Ball area: {hit.get('ball_area', '')}")
+    parts.append(f"Quality: {hit.get('quality', '')}/5")
+    ch = hit.get("shot_characteristics") or []
+    if ch:
+        parts.append(f"Shot characteristics: {', '.join(str(c) for c in ch)}")
+    st = hit.get("strategies") or []
+    if st:
+        parts.append(f"Strategy: {', '.join(str(s) for s in st)}")
     cmt = (hit.get("comment") or "").strip()
     if cmt:
         parts.append(f"Comment: {cmt}")
@@ -119,7 +61,7 @@ def main() -> None:
         "--dataset_dir",
         type=Path,
         default=None,
-        help="Folder with image/ and JSONL output (default: FineBadminton-20K/dataset; use FineBadminton-master/dataset for legacy).",
+        help="Folder containing image/ and where output JSONL is written.",
     )
     p.add_argument(
         "--output",
@@ -130,8 +72,7 @@ def main() -> None:
     p.add_argument(
         "--instruction",
         type=str,
-        default=None,
-        help="Custom instruction. Default: auto prompt aligned with FineBadmintonDataset / non-VLM heads.",
+        default=DEFAULT_INSTRUCTION,
     )
     p.add_argument(
         "--skip_missing",
@@ -139,16 +80,29 @@ def main() -> None:
         default=True,
         help="Skip rows when image file is missing.",
     )
+    p.add_argument(
+        "--max_videos",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "If set, only include clips whose video stem is among the first N "
+            "when video stems are sorted (stable FineBadminton-master subset)."
+        ),
+    )
     args = p.parse_args()
 
     here = Path(__file__).resolve().parent
-    backend = here.parent.parent.parent
-    default_dataset = backend / "data" / "FineBadminton-20K" / "dataset"
-    dataset_dir = (args.dataset_dir or default_dataset).resolve()
-    default_labels = (
-        backend / "data" / "transformed_combined_rounds_output_en_evals_translated.json"
+    backend = here.parent.parent
+    default_dataset = (
+        backend / "data" / "FineBadminton-master" / "dataset"
     )
-    labels_path = (args.labels or default_labels).resolve()
+    dataset_dir = (args.dataset_dir or default_dataset).resolve()
+    labels_path = (
+        args.labels
+        or dataset_dir
+        / "transformed_combined_rounds_output_en_evals_translated.json"
+    ).resolve()
     out_path = (args.output or dataset_dir / "finebadminton_vlm_train.jsonl").resolve()
     image_root = dataset_dir / "image"
 
@@ -157,14 +111,24 @@ def main() -> None:
     if not image_root.is_dir():
         raise SystemExit(f"Image folder not found: {image_root}")
 
-    bogus_list = str(dataset_dir / ".__vlm_jsonl_no_list__.json")
-    label_ds = FineBadmintonDataset(str(dataset_dir), bogus_list, transform=None)
-    instruction = (
-        args.instruction if args.instruction is not None else multitask_vlm_instruction(label_ds)
-    )
-
     with labels_path.open(encoding="utf-8") as f:
         rounds = json.load(f)
+
+    if args.max_videos is not None:
+        stems_sorted = sorted(
+            {_stem(c.get("video") or "") for c in rounds if (c.get("video") or "").strip()}
+        )
+        allowed = set(stems_sorted[: args.max_videos])
+        before = len(rounds)
+        rounds = [
+            c
+            for c in rounds
+            if _stem(c.get("video") or "") in allowed
+        ]
+        print(
+            f"max_videos={args.max_videos}: kept {len(rounds)}/{before} clips "
+            f"({len(allowed)} unique stems)"
+        )
 
     written = 0
     skipped_no_frame = 0
@@ -189,8 +153,8 @@ def main() -> None:
                     raise FileNotFoundError(f"Missing image: {img_path}")
                 row = {
                     "image": rel,
-                    "instruction": instruction,
-                    "response": _format_multitask_response(label_ds, hit),
+                    "instruction": args.instruction,
+                    "response": _format_response(hit),
                 }
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 written += 1

@@ -54,6 +54,12 @@ If this repository is public or shared, treat the host and key path as sensitive
 
 ---
 
+## Research & model experiments
+
+Full write-up of training standards, architecture comparison tables (pose vs no-pose ablations), external baselines (BST, TemPose, ST-GCN, SkateFormer), and novelty framing: **[`docs/RESEARCH.md`](docs/RESEARCH.md)**.
+
+---
+
 ## 🧠 Deep Learning Engine (Architecture V2)
 
 The core movement analysis is powered by a **CNN-LSTM Hierarchical Model** optimized for temporal badminton actions.
