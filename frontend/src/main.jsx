@@ -9,11 +9,13 @@ import PrivacyPage from './components/PrivacyPage.jsx'
 import TermsPage from './components/TermsPage.jsx'
 import './fonts.css'
 import './index.css'
+import { ThemeProvider } from './context/ThemeContext.jsx'
 
 ReactGA.initialize("G-TET6JN36Q4")
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
+        <ThemeProvider>
         <BrowserRouter>
             <Routes>
                 <Route path="/" element={<LandingPage />} />
@@ -24,5 +26,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </BrowserRouter>
+        </ThemeProvider>
     </React.StrictMode>,
 )

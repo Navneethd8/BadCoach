@@ -31,6 +31,7 @@ export default function App() {
     const [lightboxEvent, setLightboxEvent] = useState(null)
     const [frameTip, setFrameTip] = useState(null)
     const [frameTipLoading, setFrameTipLoading] = useState(false)
+    const [streamingTimeline, setStreamingTimeline] = useState([])
     const frameTipCacheRef = useRef({})
     const retryTimerRef = useRef(null)
 
@@ -383,6 +384,11 @@ export default function App() {
             let buffer = ''
             const streamedTimeline = []
 
+            const pushStreamedEvent = (parsed) => {
+                streamedTimeline.push(parsed)
+                setStreamingTimeline((prev) => [...prev, parsed])
+            }
+
             while (true) {
                 const { done, value } = await reader.read()
                 if (done) break
@@ -401,7 +407,7 @@ export default function App() {
                         setQueueAhead(ahead)
                     } else if (parsed.event === 'progress') {
                         windowCount++
-                        streamedTimeline.push(parsed)
+                        pushStreamedEvent(parsed)
                         if (windowCount % 5 === 1) {
                             ReactGA.event({
                                 category: 'Video',
@@ -415,6 +421,7 @@ export default function App() {
                         const summary = parsed.summary || {}
                         const timeline = resolveTimeline(summary, streamedTimeline)
                         setResult({ ...summary, timeline })
+                        setStreamingTimeline([])
                         ReactGA.event({
                             category: 'Video',
                             action: 'Stream Complete',
@@ -493,20 +500,30 @@ export default function App() {
         }
     }
 
+    const timestampToSeconds = (timestamp) => {
+        const parts = String(timestamp || '').split(':')
+        if (parts.length === 2) {
+            return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+        }
+        if (parts.length === 1) {
+            return parseInt(parts[0], 10)
+        }
+        return 0
+    }
+
     const handleTimelineClick = (timestamp) => {
         if (!videoRef.current) return
-
-        const parts = timestamp.split(':')
-        let seconds = 0
-        if (parts.length === 2) {
-            seconds = parseInt(parts[0]) * 60 + parseInt(parts[1])
-        } else if (parts.length === 1) {
-            seconds = parseInt(parts[0])
-        }
-
+        const seconds = timestampToSeconds(timestamp)
         videoRef.current.currentTime = seconds
         videoRef.current.play()
         videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    /** Seek clip + open pose lightbox with per-frame coach tip. */
+    const openFrameAnalysis = (event) => {
+        if (!event?.pose_image) return
+        handleTimelineClick(event.timestamp)
+        setLightboxEvent(event)
     }
 
     const getQualityColor = (quality) => {
@@ -520,18 +537,41 @@ export default function App() {
         return 'text-rose-400'
     }
 
-    /** Prefer server-assembled timeline (includes pose_image); normalize SSE progress rows. */
+    /** Prefer server timeline; merge pose_image from SSE progress when cache rows omit it. */
     const resolveTimeline = (summary, streamed) => {
         const fromSummary = summary?.timeline
+        const streamedRows = Array.isArray(streamed) ? streamed : []
         const base =
             Array.isArray(fromSummary) && fromSummary.length > 0
                 ? fromSummary
-                : streamed
-        return base.map((ev) => {
-            const { event: _e, window: _w, ...rest } = ev
+                : streamedRows
+
+        const poseByWindow = new Map()
+        const poseByTimestamp = new Map()
+        for (const row of streamedRows) {
+            if (!row?.pose_image) continue
+            if (typeof row.window === 'number') poseByWindow.set(row.window, row.pose_image)
+            if (row.timestamp) poseByTimestamp.set(row.timestamp, row.pose_image)
+        }
+
+        return base.map((ev, idx) => {
+            const { event: _e, window: win, ...rest } = ev
+            if (!rest.pose_image) {
+                const fromStream =
+                    (typeof win === 'number' && poseByWindow.get(win)) ||
+                    (rest.timestamp && poseByTimestamp.get(rest.timestamp)) ||
+                    streamedRows[idx]?.pose_image
+                if (fromStream) rest.pose_image = fromStream
+            }
             return rest
         })
     }
+
+    const displayTimeline = result?.timeline?.length
+        ? result.timeline
+        : streamingTimeline.length > 0
+            ? resolveTimeline(null, streamingTimeline)
+            : []
 
     const timelineHasPoseFrames = (timeline) =>
         Array.isArray(timeline) && timeline.some((ev) => ev?.pose_image)
@@ -540,7 +580,7 @@ export default function App() {
         // Updated for 10-point scale
         const q = String(quality).toLowerCase()
         if (q.includes('elite') || q.includes('expert')) return 'bg-brand'
-        if (q.includes('advanced')) return 'bg-[#5a8578]'
+        if (q.includes('advanced')) return 'bg-brand-dark'
         if (q.includes('proficient')) return 'bg-cyan-500'
         if (q.includes('competent')) return 'bg-amber-500'
         if (q.includes('developing') || q.includes('emerging')) return 'bg-orange-500'
@@ -566,7 +606,7 @@ export default function App() {
                         <button
                             type="button"
                             onClick={() => setLightboxEvent(null)}
-                            className="absolute top-3 right-3 z-20 rounded-full bg-white/95 p-1.5 text-neutral-500 shadow-sm transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                            className="absolute top-3 right-3 z-20 app-lightbox-close"
                             aria-label="Close"
                         >
                             <Icon name="close" size={18} />
@@ -585,13 +625,13 @@ export default function App() {
                         <div className="space-y-4 p-5">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <span className="block font-mono text-xs text-neutral-500">{lightboxEvent.timestamp}</span>
-                                    <span className={`text-lg font-bold ${lightboxEvent.label === 'Other' ? 'text-neutral-500' : 'text-neutral-900'}`}>
+                                    <span className="block font-mono text-xs app-lightbox-label">{lightboxEvent.timestamp}</span>
+                                    <span className={`text-lg font-bold ${lightboxEvent.label === 'Other' ? 'app-lightbox-label' : 'app-lightbox-title'}`}>
                                         {lightboxEvent.label?.replace(/_/g, ' ')}
                                     </span>
                                 </div>
                                 <div className="text-right">
-                                    <span className="block text-xs text-neutral-500">Confidence</span>
+                                    <span className="block text-xs app-lightbox-label">Confidence</span>
                                     <span className="text-lg font-semibold text-brand">
                                         {(lightboxEvent.confidence * 100).toFixed(0)}%
                                     </span>
@@ -632,16 +672,16 @@ export default function App() {
                             )}
 
                             {lightboxEvent.metrics?.quality && (
-                                <div className="flex items-center gap-2 border-t border-neutral-800 pt-2">
+                                <div className="flex items-center gap-2 border-t app-lightbox-divider pt-2">
                                     <Icon name="star" size={14} className="text-amber-500" />
-                                    <span className="text-xs text-neutral-500">Quality:</span>
+                                    <span className="text-xs app-lightbox-label">Quality:</span>
                                     <span className={`text-xs font-semibold ${getQualityColor(lightboxEvent.metrics.quality)}`}>
                                         {lightboxEvent.metrics.quality}
                                     </span>
                                 </div>
                             )}
 
-                            <div className="border-t border-neutral-800 pt-3">
+                            <div className="border-t app-lightbox-divider pt-3">
                                 <span className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-brand/80">
                                     <Icon name="tips_and_updates" size={12} />
                                     AI Coach Tip
@@ -649,12 +689,12 @@ export default function App() {
                                 {frameTipLoading ? (
                                     <div className="flex items-center gap-2">
                                         <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand/30 border-t-emerald-400" />
-                                        <span className="text-xs italic text-neutral-500">Generating tip...</span>
+                                        <span className="text-xs italic app-lightbox-label">Generating tip...</span>
                                     </div>
                                 ) : frameTip ? (
-                                    <p className="text-sm leading-relaxed text-neutral-700">{frameTip}</p>
+                                    <p className="text-sm leading-relaxed app-lightbox-body">{frameTip}</p>
                                 ) : (
-                                    <p className="text-xs italic text-neutral-600">Tip unavailable</p>
+                                    <p className="text-xs italic app-lightbox-label">Tip unavailable</p>
                                 )}
                             </div>
                         </div>
@@ -726,7 +766,7 @@ export default function App() {
                             {preview ? (
                                 <div className="w-full rounded-md overflow-hidden bg-black">
                                     <video
-                                        ref={videoRef}
+                                        ref={result ? undefined : videoRef}
                                         src={preview}
                                         className="w-full max-h-[300px] object-contain bg-black"
                                         controls
@@ -745,10 +785,10 @@ export default function App() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center text-neutral-500 p-6">
-                                    <Icon name="video_file" size={36} className="block mx-auto mb-3 text-neutral-600" />
-                                    <p className="text-sm font-medium text-neutral-300">Drag &amp; drop video here</p>
-                                    <p className="text-xs mt-1 text-neutral-500">or click to select file</p>
+                                <div className="text-center text-[var(--text-muted)] p-6">
+                                    <Icon name="video_file" size={36} className="block mx-auto mb-3 text-[var(--text-subtle)]" />
+                                    <p className="text-sm font-medium text-[var(--text-secondary)]">Drag &amp; drop video here</p>
+                                    <p className="text-xs mt-1 text-[var(--text-muted)]">or click to select file</p>
                                 </div>
                             )}
                         </div>
@@ -761,7 +801,7 @@ export default function App() {
                                     /* Recorded clip preview */
                                     <div className="w-full bg-black">
                                         <video
-                                            ref={videoRef}
+                                            ref={result ? undefined : videoRef}
                                             src={preview}
                                             className="w-full max-h-[300px] object-contain bg-black"
                                             controls
@@ -833,7 +873,7 @@ export default function App() {
                                     /* Recorded clip preview */
                                     <div className="w-full">
                                         <video
-                                            ref={videoRef}
+                                            ref={result ? undefined : videoRef}
                                             src={preview}
                                             className="w-full max-h-[300px] object-contain bg-black"
                                             controls
@@ -958,7 +998,7 @@ export default function App() {
                         Analysis Results
                     </h2>
 
-                    {loadingStep >= 0 ? (
+                    {loadingStep >= 0 && displayTimeline.length === 0 ? (
                         <div className="py-12 px-4">
                             <div className="space-y-4">
                                 {loadingSteps.map((step, idx) => {
@@ -983,10 +1023,10 @@ export default function App() {
                                             <Icon
                                                 name={step.icon}
                                                 size={18}
-                                                className={`transition-colors duration-300 ${isDone ? 'text-brand' : isActive ? 'text-neutral-700' : 'text-neutral-500'
+                                                className={`transition-colors duration-300 ${isDone ? 'text-brand' : isActive ? 'app-loading-step__icon--active' : 'app-loading-step__icon--pending'
                                                     }`}
                                             />
-                                            <span className={`text-sm transition-colors duration-300 ${isDone ? 'text-neutral-500' : isActive ? 'text-neutral-800 font-medium' : 'text-neutral-500'
+                                            <span className={`text-sm transition-colors duration-300 ${isDone ? 'app-loading-step__label--done' : isActive ? 'app-loading-step__label--active' : 'app-loading-step__label--pending'
                                                 }`}>
                                                 {step.label}{isActive ? '...' : ''}
                                             </span>
@@ -1068,32 +1108,67 @@ export default function App() {
                                 </div>
                             </div>
                         </div>
-                    ) : result ? (
+                    ) : result || displayTimeline.length > 0 ? (
                         <div className="space-y-4">
+                            {loadingStep >= 0 && (
+                                <div className="flex flex-wrap gap-2 px-1">
+                                    {loadingSteps.map((step, idx) => {
+                                        const isActive = idx === loadingStep
+                                        const isDone = idx < loadingStep
+                                        return (
+                                            <span
+                                                key={step.label}
+                                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${isDone ? 'bg-brand/15 text-brand' : isActive ? 'bg-[var(--surface-inset)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}
+                                            >
+                                                <Icon name={step.icon} size={12} />
+                                                {step.label}{isActive ? '…' : ''}
+                                            </span>
+                                        )
+                                    })}
+                                </div>
+                            )}
+
                             {/* Cache hit badge */}
-                            {result.cache_hit && (
+                            {result?.cache_hit && (
                                 <div className="flex items-center gap-2 text-[11px] text-brand/70 font-medium px-1">
                                     <Icon name="bolt" size={13} className="text-brand" />
                                     Instant result: same clip analyzed before
                                 </div>
                             )}
-                            {result.cache_hit && result.timeline?.length > 0 && !timelineHasPoseFrames(result.timeline) && (
-                                <p className="text-xs text-amber-700/90 px-1">
+                            {result?.cache_hit && result.timeline?.length > 0 && !timelineHasPoseFrames(result.timeline) && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400/90 px-1">
                                     Cached result has no pose frames. Trim a second off the clip or wait ~1 hour, then analyze again for skeleton views.
                                 </p>
                             )}
+
+                            {preview && (
+                                <div className="overflow-hidden rounded-md border border-[var(--border)] bg-black">
+                                    <video
+                                        ref={videoRef}
+                                        src={preview}
+                                        className="max-h-[280px] w-full object-contain"
+                                        controls
+                                        playsInline
+                                    />
+                                    <p className="border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--text-muted)]">
+                                        Tap a skeleton below to inspect that frame; timestamps seek this clip.
+                                    </p>
+                                </div>
+                            )}
+
+                            {result && (
                             <div className="space-y-3">
                                 {/* Performance & Tactical Analysis */}
                                 <div className="app-result-panel">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <span className="text-xs text-neutral-500 block mb-1">Execution Quality</span>
+                                            <span className="text-xs text-[var(--text-subtle)] block mb-1">Execution Quality</span>
                                             <div className={`text-xl font-bold ${getQualityColor(result.quality)}`}>
                                                 {result.quality}
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-xs font-mono text-neutral-500 block mb-1">Score</span>
+                                            <span className="text-xs font-mono text-[var(--text-subtle)] block mb-1">Score</span>
                                             <div className="app-result-score">{result.quality_numeric || 0} / 10</div>
                                         </div>
                                     </div>
@@ -1106,31 +1181,31 @@ export default function App() {
                                     </div>
 
                                     {result.tactical_analysis && (
-                                        <div className="pt-4 border-t border-neutral-200">
-                                            <span className="text-xs text-neutral-500 block mb-3">Tactical Metrics</span>
+                                        <div className="pt-4 app-tactical-divider">
+                                            <span className="text-xs text-[var(--text-subtle)] block mb-3">Tactical Metrics</span>
                                             <div className="flex flex-wrap gap-2">
-                                                <div className="px-2 py-1 bg-blue-50 border border-blue-200 rounded text-[10px] font-medium text-blue-700 flex items-center gap-1.5">
+                                                <div className="app-tactical-chip app-tactical-chip--blue">
                                                     <Icon name="pan_tool_alt" size={12} />
                                                     {result.tactical_analysis.technique?.label || 'Unknown'}
                                                     {result.tactical_analysis.technique?.confidence > 0 && (
                                                         <span className="text-[9px] opacity-60">{(result.tactical_analysis.technique.confidence * 100).toFixed(0)}%</span>
                                                     )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-purple-50 border border-purple-200 rounded text-[10px] font-medium text-purple-700 flex items-center gap-1.5">
+                                                <div className="app-tactical-chip app-tactical-chip--purple">
                                                     <Icon name="explore" size={12} />
                                                     {result.tactical_analysis.placement?.label || 'Unknown'}
                                                     {result.tactical_analysis.placement?.confidence > 0 && (
                                                         <span className="text-[9px] opacity-60">{(result.tactical_analysis.placement.confidence * 100).toFixed(0)}%</span>
                                                     )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-rose-50 border border-rose-200 rounded text-[10px] font-medium text-rose-700 flex items-center gap-1.5">
+                                                <div className="app-tactical-chip app-tactical-chip--rose">
                                                     <Icon name="location_on" size={12} />
                                                     {result.tactical_analysis.position?.label || 'Unknown'}
                                                     {result.tactical_analysis.position?.confidence > 0 && (
                                                         <span className="text-[9px] opacity-60">{(result.tactical_analysis.position.confidence * 100).toFixed(0)}%</span>
                                                     )}
                                                 </div>
-                                                <div className="px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[10px] font-medium text-amber-700 flex items-center gap-1.5">
+                                                <div className="app-tactical-chip app-tactical-chip--amber">
                                                     <Icon name="psychology" size={12} />
                                                     {result.tactical_analysis.intent?.label || 'None'}
                                                     {result.tactical_analysis.intent?.confidence > 0 && (
@@ -1142,9 +1217,10 @@ export default function App() {
                                     )}
                                 </div>
                             </div>
+                            )}
 
                             {/* Coach's Recommendations */}
-                            {result.recommendations && result.recommendations.length > 0 && (
+                            {result?.recommendations && result.recommendations.length > 0 && (
                                 <div className="app-coach-panel">
                                     <span className="app-coach-panel__title">
                                         <Icon name="tips_and_updates" size={14} />
@@ -1162,23 +1238,26 @@ export default function App() {
                             )}
 
                             {/* Timeline Breakdown */}
-                            {result.timeline?.length > 0 && (
+                            {displayTimeline.length > 0 && (
                                 <div className="app-timeline-panel">
-                                    <span className="text-xs text-neutral-500 flex items-center gap-1.5 mb-4">
+                                    <span className="mb-4 flex items-center gap-1.5 text-xs text-[var(--text-subtle)]">
                                         <Icon name="timeline" size={14} />
                                         Play-by-Play Breakdown
+                                        {loadingStep >= 0 && !result?.timeline?.length && (
+                                            <span className="text-[10px] font-normal text-[var(--text-muted)]">(updating…)</span>
+                                        )}
                                     </span>
 
-                                    <p className="text-[11px] text-neutral-500 mb-3 md:hidden">
-                                        Tap a timestamp to jump in the video; tap a skeleton to inspect that frame.
+                                    <p className="mb-3 text-[11px] text-[var(--text-muted)] md:hidden">
+                                        Tap a timestamp to jump in the video; tap a skeleton for frame analysis.
                                     </p>
-                                    <p className="hidden text-[11px] text-neutral-600 mb-3 md:block">
-                                        Click a card to seek the video; click the skeleton to open frame details and a coach tip.
+                                    <p className="mb-3 hidden text-[11px] text-[var(--text-muted)] md:block">
+                                        Click a card to seek the video; click the skeleton for frame details and a coach tip.
                                     </p>
 
                                     {/* Mobile: vertical timeline with pose thumbnails */}
                                     <div className="block md:hidden relative border-l app-timeline-rail ml-2 space-y-6 py-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                                        {result.timeline.map((event, idx) => (
+                                        {displayTimeline.map((event, idx) => (
                                             <div
                                                 key={idx}
                                                 onClick={() => handleTimelineClick(event.timestamp)}
@@ -1199,8 +1278,8 @@ export default function App() {
                                                         </div>
                                                         {event.pose_image && (
                                                             <div
-                                                                onClick={(e) => { e.stopPropagation(); setLightboxEvent(event) }}
-                                                                className="relative h-16 w-24 flex-shrink-0 cursor-zoom-in overflow-hidden rounded border border-neutral-700 bg-black/50 transition-colors hover:border-brand group/pose"
+                                                                onClick={(e) => { e.stopPropagation(); openFrameAnalysis(event) }}
+                                                                className="app-timeline-pose relative h-16 w-24 flex-shrink-0 cursor-zoom-in overflow-hidden rounded border bg-black/50 transition-colors hover:border-brand group/pose"
                                                             >
                                                                 <img
                                                                     src={`data:image/jpeg;base64,${event.pose_image}`}
@@ -1237,17 +1316,17 @@ export default function App() {
 
                                     {/* Desktop: horizontal skeleton strip */}
                                     <div className="hidden md:flex gap-4 overflow-x-auto pb-6 pt-2 custom-scrollbar">
-                                        {result.timeline.map((event, idx) => (
+                                        {displayTimeline.map((event, idx) => (
                                             <div
                                                 key={idx}
                                                 onClick={() => handleTimelineClick(event.timestamp)}
                                                 className="flex-shrink-0 w-44 cursor-pointer group"
                                             >
                                                 <div
-                                                    onClick={(e) => { if (event.pose_image) { e.stopPropagation(); setLightboxEvent(event) } }}
-                                                    className={`relative h-32 w-44 overflow-hidden rounded border bg-black transition-all duration-300 ${event.pose_image
-                                                        ? 'cursor-zoom-in border-neutral-700 group-hover:scale-[1.02] group-hover:border-brand'
-                                                        : 'flex items-center justify-center border-neutral-800'
+                                                    onClick={(e) => { if (event.pose_image) { e.stopPropagation(); openFrameAnalysis(event) } }}
+                                                    className={`app-timeline-pose relative h-32 w-44 overflow-hidden rounded border bg-black transition-all duration-300 ${event.pose_image
+                                                        ? 'cursor-zoom-in group-hover:scale-[1.02] group-hover:border-brand'
+                                                        : 'flex items-center justify-center border-[var(--border)]'
                                                         }`}
                                                 >
                                                     {event.pose_image ? (

@@ -8,6 +8,15 @@
     content="IsoCourt: AI-powered badminton stroke analysis. Upload a clip and get instant pose tracing, stroke scoring, and personalised coaching tips." />
   <title>IsoCourt · AI Badminton Coach</title>
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <script>
+    (function () {
+      var t = localStorage.getItem('isocourt-theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = 'dark';
+      }
+    })();
+  </script>
 </head>
 
 <body>

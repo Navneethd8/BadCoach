@@ -4,9 +4,8 @@ import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
 import HeroFigmaBackdrop from './HeroFigmaBackdrop'
-
-const BRAND = '#6c9c8d'
-const PAGE_BG = '#fafafa'
+import StrokeTicker from './StrokeTicker'
+import ThemeToggle from './ThemeToggle'
 
 const features = [
     {
@@ -52,7 +51,7 @@ const flowSteps = [
 
 function PhoneCourtDemo({ video, frame, label }) {
     return (
-        <div className="figma-phone-frame aspect-[9/16] w-[min(100%,180px)] sm:w-[220px]">
+        <div className="figma-phone-frame">
             <div className="figma-phone-screen">
                 <video src={video} autoPlay loop muted playsInline aria-label={label} />
             </div>
@@ -61,9 +60,12 @@ function PhoneCourtDemo({ video, frame, label }) {
     )
 }
 
-function Icon({ name, size = 20, className = '' }) {
+function Icon({ name, size, className = '' }) {
     return (
-        <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>
+        <span
+            className={`material-symbols-outlined ${className}`}
+            style={size != null ? { fontSize: size } : undefined}
+        >
             {name}
         </span>
     )
@@ -162,7 +164,7 @@ export default function LandingPage() {
 
     return (
         <>
-            <header className="figma-top-bar" style={{ backgroundColor: BRAND }}>
+            <header className="figma-top-bar">
                 <div className="mx-auto flex h-14 sm:h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
                     <button
                         type="button"
@@ -175,7 +177,7 @@ export default function LandingPage() {
                             IsoCourt
                         </span>
                     </button>
-                    <nav className="flex items-center gap-4 sm:gap-6" aria-label="Primary">
+                    <nav className="flex items-center gap-3 sm:gap-5" aria-label="Primary">
                         <button
                             type="button"
                             onClick={() => goAnalyze('landing_nav')}
@@ -190,14 +192,12 @@ export default function LandingPage() {
                         >
                             Live
                         </button>
+                        <ThemeToggle />
                     </nav>
                 </div>
             </header>
 
-            <div
-                className="figma-landing figma-page-body min-h-screen w-full"
-                style={{ backgroundColor: PAGE_BG, color: '#000' }}
-            >
+            <div className="figma-landing figma-page-body theme-page min-h-screen w-full">
                 <div className="figma-top-bar-spacer" aria-hidden />
 
             {/* Hero — single scaled Figma artboard (1512×870) */}
@@ -209,9 +209,9 @@ export default function LandingPage() {
                 <div className="figma-hero-content">
                     <h1 className="figma-display-title">
                         <span>Meet </span>
-                        <span style={{ color: BRAND }}>Birdzo</span>
+                        <span className="figma-brand-accent">Birdzo</span>
                         <span>, your </span>
-                        <span style={{ color: BRAND }}>second pair of eyes</span>
+                        <span className="figma-brand-accent">second pair of eyes</span>
                         <br />
                         on court.
                     </h1>
@@ -238,14 +238,16 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            <StrokeTicker />
+
             {/* Video demo */}
             <section className="figma-section figma-video-section px-5 sm:px-8 scroll-mt-20">
-                <div className="mx-auto max-w-5xl">
+                <div className="figma-section-inner">
                     <h2 className="figma-section-title text-center">see it in action</h2>
                     <p className="figma-section-lead mt-4 text-center">
                         A real rally breakdown — footwork, contact, and stroke reads in under a minute.
                     </p>
-                    <div className="figma-video-frame mt-10 aspect-video w-full overflow-hidden bg-black">
+                    <div className="figma-video-frame figma-video-block aspect-video w-full overflow-hidden bg-black">
                         <iframe
                             src="https://www.youtube-nocookie.com/embed/UA3KPoj0j70?rel=0&modestbranding=1"
                             title="IsoCourt demo"
@@ -259,16 +261,13 @@ export default function LandingPage() {
 
             {/* Core features */}
             <section id="features" className="figma-section px-5 sm:px-8 scroll-mt-20">
-                <div className="mx-auto max-w-5xl">
+                <div className="figma-section-inner">
                     <h2 className="figma-section-title text-center">core features</h2>
-                    <div className="mt-12 grid gap-6 sm:grid-cols-3">
+                    <div className="figma-feature-grid">
                         {features.map(({ icon, title, description }) => (
                             <article key={title} className="figma-feature-card">
-                                <div
-                                    className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-lg"
-                                    style={{ backgroundColor: `${BRAND}22`, color: BRAND }}
-                                >
-                                    <Icon name={icon} size={24} />
+                                <div className="figma-icon-badge rounded-lg">
+                                    <Icon name={icon} />
                                 </div>
                                 <h3 className="figma-feature-title">{title}</h3>
                                 <p className="figma-feature-desc">{description}</p>
@@ -280,17 +279,17 @@ export default function LandingPage() {
 
             {/* What to do */}
             <section id="how-it-works" className="figma-section px-5 sm:px-8 scroll-mt-20">
-                <div className="mx-auto max-w-5xl">
+                <div className="figma-section-inner">
                     <h2 className="figma-section-title text-center">what to do</h2>
 
-                    <div className="mt-16 space-y-20 sm:space-y-28">
+                    <div className="figma-flow-stack">
                         {flowSteps.map((step, i) => {
                             const isImageLeft = step.imageSide === 'left'
                             return (
                                 <div
                                     key={step.label}
-                                    className={`figma-flow-step grid items-center gap-8 sm:gap-12 md:grid-cols-2 ${
-                                        isImageLeft ? '' : 'md:[&>*:first-child]:order-2'
+                                    className={`figma-flow-step ${
+                                        isImageLeft ? '' : 'lg:[&>*:first-child]:order-2'
                                     }`}
                                 >
                                     <div className="figma-flow-step__visual flex justify-center items-center">
@@ -299,23 +298,23 @@ export default function LandingPage() {
                                     <div className="figma-flow-step__copy flex flex-col justify-center items-center text-center">
                                         <p className="figma-flow-label">{step.label}</p>
                                         {i === 0 && (
-                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm">
+                                            <p className="figma-flow-hint">
                                                 One smash, a messy rally, or a drill — steady camera, shuttle in frame.
                                             </p>
                                         )}
                                         {i === 1 && (
-                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm">
+                                            <p className="figma-flow-hint">
                                                 Poses, strokes, and scores stitch together while you grab water.
                                             </p>
                                         )}
                                         {i === 2 && (
-                                            <p className="mt-3 text-sm text-neutral-500 font-sans max-w-sm">
+                                            <p className="figma-flow-hint">
                                                 A clear read on what broke down, plus cues for your next session.
                                             </p>
                                         )}
                                     </div>
                                     {i === 0 && (
-                                        <div className="hidden md:block col-span-2 relative h-0" aria-hidden>
+                                        <div className="hidden lg:block col-span-2 relative h-0" aria-hidden>
                                             <ShuttleDecor className="absolute right-[18%] top-[-2rem] w-14 opacity-90" rotate={165} />
                                             <ShuttleDecor className="absolute right-[8%] top-[-4rem] w-12 opacity-80" rotate={140} />
                                         </div>
@@ -328,12 +327,12 @@ export default function LandingPage() {
             </section>
 
             {/* Final CTA */}
-            <section className="figma-section figma-final-cta px-5 sm:px-8 pb-24">
-                <div className="mx-auto max-w-3xl text-center">
+            <section className="figma-section figma-final-cta px-5 sm:px-8 scroll-mt-20">
+                <div className="figma-section-inner figma-section-inner--narrow text-center">
                     <h2 className="figma-section-title">what do i do now?</h2>
-                    <p className="figma-final-sub mt-8 max-w-xl mx-auto">
-                        give <span style={{ color: BRAND }}>IsoCourt</span> a go and see what{' '}
-                        <span style={{ color: BRAND }}>birdzo</span> has in mind for you
+                    <p className="figma-final-sub mt-8">
+                        give <span className="figma-brand-accent">IsoCourt</span> a go and see what{' '}
+                        <span className="figma-brand-accent">birdzo</span> has in mind for you
                     </p>
                     <div className="figma-hero-ctas mt-10">
                         <FigmaButton
@@ -356,23 +355,22 @@ export default function LandingPage() {
 
             {/* Feedback — not in Figma frame, kept for product needs */}
             <section id="feedback" className="figma-section figma-feedback px-5 sm:px-8 scroll-mt-20">
-                <div className="mx-auto max-w-xl">
+                <div className="figma-section-inner figma-section-inner--tight">
                     <h2 className="figma-section-title text-center">court notes welcome</h2>
                     <p className="figma-section-lead mt-4 text-center">
                         Wrong call, wild idea, or “this saved my smash.” We read every message between training blocks.
                     </p>
 
                     {fbStatus === 'sent' ? (
-                        <div className="mt-8 rounded-xl border border-[#6c9c8d]/30 bg-[#6c9c8d]/10 p-8 text-center">
-                            <Icon name="check_circle" size={40} className="mx-auto mb-3" style={{ color: BRAND }} />
-                            <h3 className="text-lg font-semibold mb-2" style={{ color: BRAND }}>
+                        <div className="mt-8 rounded-xl border border-brand/30 bg-brand/10 p-8 text-center">
+                            <Icon name="check_circle" size={40} className="mx-auto mb-3 figma-brand-accent" />
+                            <h3 className="text-lg font-semibold mb-2 figma-brand-accent">
                                 Thanks for your feedback!
                             </h3>
                             <button
                                 type="button"
                                 onClick={() => setFbStatus('idle')}
-                                className="text-xs hover:underline"
-                                style={{ color: BRAND }}
+                                className="text-xs hover:underline figma-brand-accent"
                             >
                                 Send another message
                             </button>
@@ -381,7 +379,7 @@ export default function LandingPage() {
                         <form onSubmit={handleFeedbackSubmit} className="figma-feedback-form mt-8 space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label htmlFor="fb-name" className="text-xs font-medium text-neutral-500 block mb-1.5">
+                                    <label htmlFor="fb-name" className="text-xs font-medium text-[var(--text-subtle)] block mb-1.5">
                                         Name
                                     </label>
                                     <input
@@ -394,7 +392,7 @@ export default function LandingPage() {
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="fb-email" className="text-xs font-medium text-neutral-500 block mb-1.5">
+                                    <label htmlFor="fb-email" className="text-xs font-medium text-[var(--text-subtle)] block mb-1.5">
                                         Email
                                     </label>
                                     <input
@@ -408,7 +406,7 @@ export default function LandingPage() {
                                 </div>
                             </div>
                             <div>
-                                <label htmlFor="fb-message" className="text-xs font-medium text-neutral-500 block mb-1.5">
+                                <label htmlFor="fb-message" className="text-xs font-medium text-[var(--text-subtle)] block mb-1.5">
                                     Message
                                 </label>
                                 <textarea
@@ -438,11 +436,11 @@ export default function LandingPage() {
             </section>
 
             <footer className="figma-footer px-5 py-8 text-center sm:text-left">
-                <div className="mx-auto flex max-w-5xl flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="figma-section-inner flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                         <Logo size={20} className="text-brand" />
                         <span className="font-display text-sm font-bold">
-                            Iso<span style={{ color: BRAND }}>Court</span>
+                            Iso<span className="figma-brand-accent">Court</span>
                         </span>
                     </div>
                     <nav className="figma-footer-nav flex flex-wrap justify-center gap-x-6 gap-y-2" aria-label="Legal">

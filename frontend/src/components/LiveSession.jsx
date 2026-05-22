@@ -290,7 +290,7 @@ export default function LiveSession() {
                             {status === 'connecting' && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/80">
                                     <div className="flex items-center gap-3 text-neutral-400">
-                                        <span className="w-5 h-5 border-2 border-[#6c9c8d]/30 border-t-brand rounded-full animate-spin" />
+                                        <span className="w-5 h-5 border-2 border-brand/30 border-t-brand rounded-full animate-spin" />
                                         <span className="text-sm">Starting session...</span>
                                     </div>
                                 </div>
@@ -395,15 +395,15 @@ export default function LiveSession() {
                         className="app-card flex h-[min(18rem,42vh)] w-full shrink-0 flex-col overflow-hidden !p-0 sm:h-[min(20rem,44vh)] lg:min-h-0 lg:max-h-[min(40rem,calc(100dvh-9rem))] lg:w-72 lg:shrink-0 xl:w-80 min-[1700px]:w-96"
                         aria-label="AI Coach chat"
                     >
-                        <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-200 flex-shrink-0">
+                        <div className="app-chat-header flex items-center gap-2 px-4 py-3 flex-shrink-0">
                             <Icon name="smart_toy" size={16} className="text-brand" />
-                            <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider font-mono">AI coach</span>
+                            <span className="text-xs font-semibold text-[var(--text-subtle)] uppercase tracking-wider font-mono">AI coach</span>
                             <div className="ml-auto flex items-center gap-2">
                                 {chatLog.length > 0 && (
-                                    <span className="text-[10px] text-neutral-600">{chatLog.length} messages</span>
+                                    <span className="text-[10px] text-[var(--text-muted)]">{chatLog.length} messages</span>
                                 )}
                                 <button onClick={toggleVoice} title={voiceEnabled ? 'Mute voice' : 'Unmute voice'}
-                                    className={`p-1 rounded transition-colors ${voiceEnabled ? 'text-brand hover:opacity-80' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                                    className={`p-1 rounded transition-colors ${voiceEnabled ? 'text-brand hover:opacity-80' : 'text-[var(--text-subtle)] hover:text-[var(--text)]'}`}>
                                     <Icon name={voiceEnabled ? 'volume_up' : 'volume_off'} size={16} />
                                 </button>
                             </div>
@@ -417,24 +417,24 @@ export default function LiveSession() {
                         >
                             {chatLog.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
-                                    <Icon name="sports" size={28} className="text-neutral-300" />
-                                    <p className="text-xs text-neutral-500">Start a game to see live coaching commentary here.</p>
+                                    <Icon name="sports" size={28} className="text-[var(--border-strong)]" />
+                                    <p className="text-xs text-[var(--text-muted)]">Start a game to see live coaching commentary here.</p>
                                 </div>
                             )}
                                 {chatLog.map(msg => (
                                     <div key={msg.id}
                                         className="flex gap-2.5 items-start">
-                                        <span className="text-[10px] text-neutral-700 font-mono mt-1 flex-shrink-0 w-12">{fmtTime(msg.ts)}</span>
+                                        <span className="text-[10px] text-[var(--text-muted)] font-mono mt-1 flex-shrink-0 w-12">{fmtTime(msg.ts)}</span>
                                         {msg.type === 'coach' ? (
                                             <div className="app-chat-coach flex-1 min-w-0">
                                                 {msg.text}
                                             </div>
                                         ) : msg.type === 'analysis' ? (
-                                            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[11px] text-neutral-600 flex-1 min-w-0">
-                                                <Icon name="sports_tennis" size={11} className="text-neutral-600 align-middle mr-1" />{msg.text}
+                                            <div className="app-chat-analysis flex-1 min-w-0">
+                                                <Icon name="sports_tennis" size={11} className="align-middle mr-1 opacity-70" />{msg.text}
                                             </div>
                                         ) : (
-                                            <div className="text-[11px] text-neutral-500 italic flex-1 min-w-0">{msg.text}</div>
+                                            <div className="text-[11px] text-[var(--text-muted)] italic flex-1 min-w-0">{msg.text}</div>
                                         )}
                                     </div>
                                 ))}
