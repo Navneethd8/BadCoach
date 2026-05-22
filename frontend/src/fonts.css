@@ -1,0 +1,67 @@
+/* Self-hosted fonts: Inter + Iosevka Charon Mono + Material Symbols Outlined (full icon set) */
+@import "@fontsource-variable/material-symbols-outlined/full.css";
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter/inter-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/inter/inter-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/inter/inter-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/inter/inter-latin-700-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Iosevka Charon Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/iosevka-charon-mono/iosevka-charon-mono-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Iosevka Charon Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/iosevka-charon-mono/iosevka-charon-mono-latin-500-normal.woff2') format('woff2');
+}
+
+/* No separate 600 cut — map semibold to Medium */
+@font-face {
+  font-family: 'Iosevka Charon Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/iosevka-charon-mono/iosevka-charon-mono-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Iosevka Charon Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/iosevka-charon-mono/iosevka-charon-mono-latin-700-normal.woff2') format('woff2');
+}

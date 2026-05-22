@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/material-symbols-outlined": "^5.2.45",
     "axios": "^1.6.0",
+    "framer-motion": "^12.38.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
