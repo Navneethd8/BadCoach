@@ -2,7 +2,7 @@
 TimeSformer (divided space-time) + MediaPipe pose token training.
 
 Same dataset, video_level_split, augmentations, losses, and sampler as ``train_full.py``.
-Default pose cache path is ``models/pose_cache_mediapipe.pt`` (shared across trainers; legacy ``pose_cache_staeformer.pt`` is still read if present).
+Default pose cache path is ``models/pose_cache_mediapipe.pt`` (shared across trainers).
 
 Train/val indices come only from video_level_split (no random clip leakage). Default visual
 stem is **Conv patch embed** (no ImageNet ViT). Optional ``--backbone vit`` uses timm for

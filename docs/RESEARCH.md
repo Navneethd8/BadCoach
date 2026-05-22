@@ -61,7 +61,7 @@ Every **native** video/pose trainer in `backend/pipelines/training/` is written 
 ### 2.4 Pose cache (shared skeleton signal)
 
 - Built once: `backend/models/pose_cache_mediapipe.pt` → tensor **`(N, 16, 33, 3)`** aligned to dataset sample index `N`.
-- Legacy name `pose_cache_staeformer.pt` is still loaded if the default file is missing.
+- If `pose_cache_mediapipe.pt` is missing, an older on-disk cache filename in the same folder may still be loaded.
 - Video models accept **`--no-pose`** for RGB-only ablations without rebuilding the cache.
 
 ### 2.5 Skeleton-only baselines (different I/O)

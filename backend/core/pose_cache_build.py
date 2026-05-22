@@ -14,9 +14,10 @@ import torch
 
 from core.training_progress import tqdm_pose_cache_build
 
-# Default on-disk name (shared across trainers). Legacy: ``pose_cache_staeformer.pt``.
+# Default on-disk name (shared across trainers).
 DEFAULT_POSE_CACHE_FILENAME = "pose_cache_mediapipe.pt"
 ST_TR_POSE_CACHE_FILENAME = "pose_cache_st_tr_collated.pt"
+# Older repos used this filename; still loaded if mediapipe cache is missing.
 LEGACY_POSE_CACHE_FILENAME = "pose_cache_staeformer.pt"
 
 
@@ -41,9 +42,8 @@ def _pose_cache_load_candidates(cache_path: str) -> List[str]:
 
 def load_pose_cache_bundle(cache_path: str) -> Optional[Dict[str, Any]]:
     """
-    Load ``{"pose_cache": Tensor, ...}`` from ``cache_path``, or from the legacy
-    ``pose_cache_staeformer.pt`` in the same directory when the requested basename is
-    the default mediapipe name.
+    Load ``{"pose_cache": Tensor, ...}`` from ``cache_path``, or from
+    ``LEGACY_POSE_CACHE_FILENAME`` in the same directory when the default file is absent.
     """
     for p in _pose_cache_load_candidates(cache_path):
         if not os.path.isfile(p):
