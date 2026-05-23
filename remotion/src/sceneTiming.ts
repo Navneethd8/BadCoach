@@ -32,3 +32,7 @@ export const RESULTS_TIMING = {
   timelineBase: 48,
   timelineStagger: 10,
 } as const;
+
+/** 01 + 02 + 03 @ 30fps (~12.6s). */
+export const FULL_FLOW_DURATION =
+  UPLOAD_DURATION + ANALYZING_DURATION + RESULTS_DURATION;

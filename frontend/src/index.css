@@ -85,6 +85,11 @@
   --racket-frame: #0a0a0a;
   --racket-string: #1b4d3e;
   --racket-outline: #2a2a2a;
+
+  /* Split panels: visual column (pose / phone) — softer than pure black */
+  --split-visual-bg: #303030;
+  --split-copy-results-bg: #1a1a1a;
+  --split-copy-process-bg: #222222;
 }
 
 html {
@@ -998,6 +1003,168 @@ select:focus-visible {
   font-size: var(--section-title-size);
   line-height: 1.1;
   text-transform: lowercase;
+}
+
+/* —— Landing split panels (results + process) —— */
+.figma-split {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .figma-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: min(42rem, 85vh);
+  }
+}
+
+.figma-split__panel--copy {
+  background-color: var(--surface-elevated, var(--surface));
+  color: var(--text);
+}
+
+.dark .figma-split--results .figma-split__panel--copy {
+  background-color: var(--split-copy-results-bg);
+}
+
+.dark .figma-split--process .figma-split__panel--copy {
+  background-color: var(--split-copy-process-bg);
+}
+
+.figma-split__panel--visual {
+  background-color: var(--page);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20rem;
+}
+
+.dark .figma-split__panel--visual {
+  background-color: var(--split-visual-bg);
+}
+
+.figma-split__inner {
+  max-width: 28rem;
+  margin-inline: auto;
+  padding: clamp(2rem, 5vw, 3.5rem) clamp(1.25rem, 4vw, 2.5rem);
+}
+
+@media (min-width: 1024px) {
+  .figma-split__inner {
+    margin-inline: 0;
+    margin-left: clamp(1.5rem, 6vw, 4rem);
+    padding-right: 2rem;
+  }
+}
+
+.figma-split-title {
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+  color: var(--text);
+}
+
+.figma-split-lead {
+  margin-top: 1rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.figma-split-steps {
+  margin: 2.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.figma-split-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem 1.25rem;
+  align-items: start;
+}
+
+.figma-split-step__num {
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-subtle);
+}
+
+.figma-split-step__title {
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.2;
+  text-transform: lowercase;
+  color: var(--text);
+}
+
+.figma-split-step__body {
+  margin-top: 0.5rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.figma-split__panel--pose {
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.figma-split-pose {
+  display: block;
+  width: auto;
+  max-width: min(100%, 24rem);
+  height: auto;
+  max-height: min(38rem, 75vh);
+  margin-inline: auto;
+  object-fit: contain;
+  object-position: center center;
+}
+
+.dark .figma-split__panel--pose {
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.dark .figma-split-pose {
+  max-width: min(100%, 26rem);
+  max-height: min(42rem, 85vh);
+}
+
+.figma-split__panel--video {
+  padding: clamp(2rem, 5vw, 3.5rem);
+  overflow: hidden;
+}
+
+.figma-phone-frame--split {
+  width: min(100%, clamp(16rem, 42vw, 22rem));
+  margin-inline: auto;
+}
+
+@media (min-width: 1024px) {
+  .figma-split__panel--video {
+    padding: clamp(2.5rem, 4vw, 4rem);
+  }
+
+  .figma-phone-frame--split {
+    width: min(100%, clamp(18rem, 32vw, 26rem));
+  }
+}
+
+.landing-preview {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .figma-final-cta {

@@ -4,6 +4,7 @@ import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
 import HeroFigmaBackdrop from './HeroFigmaBackdrop'
+import LandingResultsPreview from './LandingResultsPreview'
 import StrokeTicker from './StrokeTicker'
 import ThemeToggle from './ThemeToggle'
 
@@ -28,30 +29,29 @@ const features = [
     },
 ]
 
-const flowSteps = [
+const processSteps = [
     {
-        label: 'upload a clip',
-        video: '/demo-videos/01-upload.mp4',
-        frame: '/phone-mockup.svg',
-        imageSide: 'left',
+        num: '01',
+        title: 'toss us a clip',
+        body: 'One smash, a messy rally, a drill. Keep the shuttle in frame and the camera steady.',
     },
     {
-        label: 'let birdzo do its thing',
-        video: '/demo-videos/02-analyzing.mp4',
-        frame: '/phone-mockup-alt.svg',
-        imageSide: 'right',
+        num: '02',
+        title: 'we do the tedious bit',
+        body: 'Poses, strokes, and scores stitched together while you grab water. No manual tagging.',
     },
     {
-        label: 'review the rally',
-        video: '/demo-videos/03-results.mp4',
-        frame: '/phone-mockup.svg',
-        imageSide: 'left',
+        num: '03',
+        title: 'walk back on court smarter',
+        body: 'Clear read on what broke down, plus a few cues to run before your next session.',
     },
 ]
 
+const FULL_FLOW_VIDEO = '/demo-videos/full-flow.mp4'
+
 function PhoneCourtDemo({ video, frame, label }) {
     return (
-        <div className="figma-phone-frame">
+        <div className="figma-phone-frame figma-phone-frame--split">
             <div className="figma-phone-screen">
                 <video src={video} autoPlay loop muted playsInline aria-label={label} />
             </div>
@@ -104,18 +104,6 @@ function FigmaButton({
         <button type={type} onClick={onClick} disabled={disabled || loading} className={classes}>
             {content}
         </button>
-    )
-}
-
-function ShuttleDecor({ className = '', rotate = 0 }) {
-    return (
-        <img
-            src="/shuttlecock.png"
-            alt=""
-            aria-hidden
-            className={`shuttle-decor ${className}`}
-            style={{ transform: `rotate(${rotate}deg)` }}
-        />
     )
 }
 
@@ -240,26 +228,26 @@ export default function LandingPage() {
 
             <StrokeTicker />
 
-            {/* Video demo */}
-            <section className="figma-section figma-video-section px-5 sm:px-8 scroll-mt-20">
-                <div className="figma-section-inner">
-                    <h2 className="figma-section-title text-center">see it in action</h2>
-                    <p className="figma-section-lead mt-4 text-center">
-                        A real rally breakdown — footwork, contact, and stroke reads in under a minute.
-                    </p>
-                    <div className="figma-video-frame figma-video-block aspect-video w-full overflow-hidden bg-black">
-                        <iframe
-                            src="https://www.youtube-nocookie.com/embed/UA3KPoj0j70?rel=0&modestbranding=1"
-                            title="IsoCourt demo"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="h-full w-full"
-                        />
+            {/* Results preview + pose */}
+            <section id="results-preview" className="figma-split figma-split--results scroll-mt-20">
+                <div className="figma-split__panel figma-split__panel--copy">
+                    <div className="figma-split__inner">
+                        <h2 className="figma-split-title">
+                            read the rally. <span className="figma-brand-accent">see the gap.</span>
+                        </h2>
+                        <LandingResultsPreview />
                     </div>
+                </div>
+                <div className="figma-split__panel figma-split__panel--visual figma-split__panel--pose">
+                    <img
+                        src="/marketing/pose-trace-hero.png"
+                        alt="Athlete mid-smash with pose skeleton overlay traced frame by frame"
+                        className="figma-split-pose"
+                    />
                 </div>
             </section>
 
-            {/* Core features */}
+            {/* Core features — before process video */}
             <section id="features" className="figma-section px-5 sm:px-8 scroll-mt-20">
                 <div className="figma-section-inner">
                     <h2 className="figma-section-title text-center">core features</h2>
@@ -277,52 +265,32 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* What to do */}
-            <section id="how-it-works" className="figma-section px-5 sm:px-8 scroll-mt-20">
-                <div className="figma-section-inner">
-                    <h2 className="figma-section-title text-center">what to do</h2>
-
-                    <div className="figma-flow-stack">
-                        {flowSteps.map((step, i) => {
-                            const isImageLeft = step.imageSide === 'left'
-                            return (
-                                <div
-                                    key={step.label}
-                                    className={`figma-flow-step ${
-                                        isImageLeft ? '' : 'lg:[&>*:first-child]:order-2'
-                                    }`}
-                                >
-                                    <div className="figma-flow-step__visual flex justify-center items-center">
-                                        <PhoneCourtDemo video={step.video} frame={step.frame} label={step.label} />
+            {/* Three steps + full process video */}
+            <section id="how-it-works" className="figma-split figma-split--process scroll-mt-20">
+                <div className="figma-split__panel figma-split__panel--copy">
+                    <div className="figma-split__inner">
+                        <h2 className="figma-split-title">
+                            three steps. <span className="figma-brand-accent">smarter court.</span>
+                        </h2>
+                        <ol className="figma-split-steps">
+                            {processSteps.map((step) => (
+                                <li key={step.num} className="figma-split-step">
+                                    <span className="figma-split-step__num">{step.num}</span>
+                                    <div>
+                                        <h3 className="figma-split-step__title">{step.title}</h3>
+                                        <p className="figma-split-step__body">{step.body}</p>
                                     </div>
-                                    <div className="figma-flow-step__copy flex flex-col justify-center items-center text-center">
-                                        <p className="figma-flow-label">{step.label}</p>
-                                        {i === 0 && (
-                                            <p className="figma-flow-hint">
-                                                One smash, a messy rally, or a drill — steady camera, shuttle in frame.
-                                            </p>
-                                        )}
-                                        {i === 1 && (
-                                            <p className="figma-flow-hint">
-                                                Poses, strokes, and scores stitch together while you grab water.
-                                            </p>
-                                        )}
-                                        {i === 2 && (
-                                            <p className="figma-flow-hint">
-                                                A clear read on what broke down, plus cues for your next session.
-                                            </p>
-                                        )}
-                                    </div>
-                                    {i === 0 && (
-                                        <div className="hidden lg:block col-span-2 relative h-0" aria-hidden>
-                                            <ShuttleDecor className="absolute right-[18%] top-[-2rem] w-14 opacity-90" rotate={165} />
-                                            <ShuttleDecor className="absolute right-[8%] top-[-4rem] w-12 opacity-80" rotate={140} />
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
+                                </li>
+                            ))}
+                        </ol>
                     </div>
+                </div>
+                <div className="figma-split__panel figma-split__panel--visual figma-split__panel--video">
+                    <PhoneCourtDemo
+                        video={FULL_FLOW_VIDEO}
+                        frame="/phone-mockup.svg"
+                        label="Full IsoCourt flow: upload, analyze, and review results"
+                    />
                 </div>
             </section>
 
