@@ -444,24 +444,24 @@ export default function LiveSession() {
 
                             {/* Commentary overlay — YouTube-style translucent feed */}
                             {(status === 'live' || status === 'paused') && overlayMessages.length > 0 && (
-                                <div className="app-live-commentary absolute right-2 top-14 bottom-[4.5rem] z-[2] w-[min(16rem,44%)] pointer-events-none sm:right-3 sm:w-[min(18rem,38%)]">
+                                <div className="app-live-commentary absolute right-2 top-14 bottom-[4.5rem] z-[2] pointer-events-none sm:right-3">
                                     <div className="app-live-commentary__fade" aria-hidden="true" />
                                     <div ref={overlayScrollRef} className="app-live-commentary__scroll h-full overflow-hidden">
-                                        <div className="flex min-h-full flex-col justify-end gap-1.5 px-2 py-2">
+                                        <div className="flex min-h-full flex-col justify-end gap-1.5 px-1.5 py-2 sm:px-2">
                                             {overlayMessages.map(msg => (
                                                 <div key={msg.id} className="app-live-commentary__msg">
                                                     {msg.type === 'coach' ? (
                                                         <>
                                                             <span className="app-live-commentary__author">Coach</span>
-                                                            <span className="app-live-commentary__text">{msg.text}</span>
+                                                            <p className="app-live-commentary__text">{msg.text}</p>
                                                         </>
                                                     ) : msg.type === 'analysis' ? (
                                                         <>
                                                             <span className="app-live-commentary__author app-live-commentary__author--stroke">Stroke</span>
-                                                            <span className="app-live-commentary__text app-live-commentary__text--muted">{msg.text}</span>
+                                                            <p className="app-live-commentary__text app-live-commentary__text--muted">{msg.text}</p>
                                                         </>
                                                     ) : (
-                                                        <span className="app-live-commentary__text app-live-commentary__text--system">{msg.text}</span>
+                                                        <p className="app-live-commentary__text app-live-commentary__text--system">{msg.text}</p>
                                                     )}
                                                 </div>
                                             ))}
