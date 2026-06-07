@@ -12,16 +12,22 @@ function Icon({ name, size = 20, className = '' }) {
 
 const FRAME_INTERVAL_MS = 200
 
+function getActiveFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null
+}
+
 export default function LiveSession() {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
     const wsBase = apiUrl.replace(/^http/, 'ws')
 
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
+    const videoContainerRef = useRef(null)
     const wsRef = useRef(null)
     const streamRef = useRef(null)
     const intervalRef = useRef(null)
     const chatScrollRef = useRef(null)
+    const overlayScrollRef = useRef(null)
 
     const [sessionId, setSessionId] = useState(null)
     const [status, setStatus] = useState('idle')   // idle | connecting | live | paused | error | capacity
@@ -34,6 +40,9 @@ export default function LiveSession() {
     const [chatLog, setChatLog] = useState([])
     const [voiceEnabled, setVoiceEnabled] = useState(true)
     const voiceEnabledRef = useRef(true)
+    const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
+    const [isImmersive, setIsImmersive] = useState(false)
+    const isExpanded = isNativeFullscreen || isImmersive
 
     const bestVoiceRef = useRef(null)
     const pickBestVoice = useCallback(() => {
@@ -89,6 +98,70 @@ export default function LiveSession() {
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }, [chatLog])
 
+    useEffect(() => {
+        const el = overlayScrollRef.current
+        if (!el) return
+        el.scrollTop = el.scrollHeight
+    }, [chatLog])
+
+    const exitExpanded = useCallback(async () => {
+        if (isImmersive) {
+            setIsImmersive(false)
+            document.body.classList.remove('app-live-immersive-active')
+        }
+        const active = getActiveFullscreenElement()
+        if (active === videoContainerRef.current) {
+            try {
+                if (document.exitFullscreen) await document.exitFullscreen()
+                else if (document.webkitExitFullscreen) await document.webkitExitFullscreen()
+            } catch {}
+        }
+    }, [isImmersive])
+
+    useEffect(() => {
+        const onFullscreenChange = () => {
+            setIsNativeFullscreen(getActiveFullscreenElement() === videoContainerRef.current)
+        }
+        document.addEventListener('fullscreenchange', onFullscreenChange)
+        document.addEventListener('webkitfullscreenchange', onFullscreenChange)
+        return () => {
+            document.removeEventListener('fullscreenchange', onFullscreenChange)
+            document.removeEventListener('webkitfullscreenchange', onFullscreenChange)
+            document.body.classList.remove('app-live-immersive-active')
+        }
+    }, [])
+
+    const toggleFullscreen = useCallback(async () => {
+        const el = videoContainerRef.current
+        if (!el) return
+
+        if (isImmersive) {
+            setIsImmersive(false)
+            document.body.classList.remove('app-live-immersive-active')
+            return
+        }
+
+        if (getActiveFullscreenElement() === el) {
+            try {
+                if (document.exitFullscreen) await document.exitFullscreen()
+                else if (document.webkitExitFullscreen) await document.webkitExitFullscreen()
+            } catch {}
+            return
+        }
+
+        const requestFs = el.requestFullscreen?.bind(el) || el.webkitRequestFullscreen?.bind(el)
+        if (requestFs) {
+            try {
+                await requestFs()
+                return
+            } catch {}
+        }
+
+        // iOS Safari and some mobile browsers lack element fullscreen — use fixed overlay.
+        setIsImmersive(true)
+        document.body.classList.add('app-live-immersive-active')
+    }, [isImmersive])
+
     const stopCamera = useCallback(() => {
         window.speechSynthesis?.cancel()
         if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -102,6 +175,7 @@ export default function LiveSession() {
     }, [])
 
     const endSession = useCallback(async () => {
+        await exitExpanded()
         stopCamera()
         if (sessionId) {
             try { await fetch(`${apiUrl}/live/sessions/${sessionId}`, { method: 'DELETE' }) } catch {}
@@ -110,7 +184,7 @@ export default function LiveSession() {
         setStatus('idle')
         setStatusMsg(null)
         setLastResult(null)
-    }, [sessionId, apiUrl, stopCamera])
+    }, [sessionId, apiUrl, stopCamera, exitExpanded])
 
     function beginFrameLoop(video, canvas, ws) {
         if (intervalRef.current) clearInterval(intervalRef.current)
@@ -241,6 +315,8 @@ export default function LiveSession() {
 
     const fmtTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
 
+    const overlayMessages = chatLog.slice(-10)
+
     return (
         <AppShell active="live" mainClassName="mx-auto max-w-[min(1920px,calc(100vw-1.25rem))] px-3 py-6 sm:px-5 sm:py-8">
                 <h1 className="app-page-title">
@@ -273,9 +349,21 @@ export default function LiveSession() {
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-4 xl:gap-5 min-[1700px]:gap-6">
 
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                        <div className="app-panel-dark relative aspect-video w-full overflow-hidden">
+                        <div
+                            ref={videoContainerRef}
+                            className={`app-panel-dark app-live-video relative aspect-video w-full overflow-hidden touch-manipulation ${isImmersive ? 'app-live-video--immersive' : ''} ${isNativeFullscreen ? 'app-live-video--fullscreen' : ''}`}
+                        >
                             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                             <canvas ref={canvasRef} className="hidden" />
+
+                            {(status === 'live' || status === 'paused') && (
+                                <button
+                                    type="button"
+                                    className="absolute inset-0 z-[1] cursor-pointer border-0 bg-transparent p-0 touch-manipulation"
+                                    onClick={toggleFullscreen}
+                                    aria-label={isExpanded ? 'Exit fullscreen' : 'Enter fullscreen'}
+                                />
+                            )}
 
                             {status === 'idle' && (
                                 <div className="app-live-idle absolute inset-0 flex flex-col items-center justify-center gap-5 px-6">
@@ -298,7 +386,7 @@ export default function LiveSession() {
 
                             {/* LIVE / PAUSED badge + status line */}
                             {(status === 'live' || status === 'paused') && (
-                                <div className="absolute top-3 left-3 flex items-center gap-2">
+                                <div className="app-live-video__hud-top absolute top-3 left-3 z-[3] flex max-w-[calc(100%-5.5rem)] items-center gap-2 pointer-events-none sm:max-w-none">
                                     {status === 'live' ? (
                                         <div className="flex items-center gap-1.5 bg-red-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg">
                                             <span className="w-2 h-2 bg-white rounded-full" />
@@ -321,8 +409,8 @@ export default function LiveSession() {
 
                             {/* Paused overlay */}
                             {status === 'paused' && (
-                                <div className="absolute inset-0 bg-neutral-950/50 flex items-center justify-center">
-                                    <button type="button" onClick={resumeSession} className="figma-cta figma-cta--primary">
+                                <div className="absolute inset-0 z-[4] pointer-events-none bg-neutral-950/50 flex items-center justify-center">
+                                    <button type="button" onClick={resumeSession} className="figma-cta figma-cta--primary pointer-events-auto">
                                         <Icon name="play_arrow" size={18} className="align-middle -ml-0.5 mr-1" />
                                         resume
                                     </button>
@@ -330,22 +418,69 @@ export default function LiveSession() {
                             )}
 
                             {(status === 'live' || status === 'paused') && (
-                                <div className="absolute top-3 right-3 flex items-center gap-2">
+                                <div className="app-live-video__hud-top app-live-video__controls absolute top-3 right-3 z-[3] flex items-center gap-1.5 sm:gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={toggleFullscreen}
+                                        className="app-live-control-btn bg-neutral-800/80 hover:bg-neutral-700 text-white text-xs font-medium rounded-lg transition-colors pointer-events-auto"
+                                        title={isExpanded ? 'Exit fullscreen' : 'Fullscreen'}
+                                        aria-label={isExpanded ? 'Exit fullscreen' : 'Enter fullscreen'}
+                                    >
+                                        <Icon name={isExpanded ? 'fullscreen_exit' : 'fullscreen'} size={16} />
+                                    </button>
                                     {status === 'live' && (
-                                        <button onClick={pauseSession} className="bg-neutral-800/80 hover:bg-neutral-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-                                            <Icon name="pause" size={13} className="align-middle mr-0.5" />Pause
+                                        <button type="button" onClick={pauseSession} className="app-live-control-btn bg-neutral-800/80 hover:bg-neutral-700 text-white text-xs font-medium rounded-lg transition-colors pointer-events-auto" aria-label="Pause session">
+                                            <Icon name="pause" size={16} />
+                                            <span className="hidden sm:inline sm:ml-0.5">Pause</span>
                                         </button>
                                     )}
-                                    <button onClick={endSession} className="bg-red-900/60 hover:bg-red-800/80 text-red-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-                                        End Session
+                                    <button type="button" onClick={endSession} className="app-live-control-btn bg-red-900/60 hover:bg-red-800/80 text-red-200 text-xs font-medium rounded-lg transition-colors pointer-events-auto" aria-label="End session">
+                                        <Icon name="stop_circle" size={16} className="sm:hidden" />
+                                        <span className="hidden sm:inline">End Session</span>
+                                        <span className="sm:hidden sr-only">End session</span>
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Commentary overlay — YouTube-style translucent feed */}
+                            {(status === 'live' || status === 'paused') && overlayMessages.length > 0 && (
+                                <div className="app-live-commentary absolute right-2 top-14 bottom-[4.5rem] z-[2] w-[min(16rem,44%)] pointer-events-none sm:right-3 sm:w-[min(18rem,38%)]">
+                                    <div className="app-live-commentary__fade" aria-hidden="true" />
+                                    <div ref={overlayScrollRef} className="app-live-commentary__scroll h-full overflow-hidden">
+                                        <div className="flex min-h-full flex-col justify-end gap-1.5 px-2 py-2">
+                                            {overlayMessages.map(msg => (
+                                                <div key={msg.id} className="app-live-commentary__msg">
+                                                    {msg.type === 'coach' ? (
+                                                        <>
+                                                            <span className="app-live-commentary__author">Coach</span>
+                                                            <span className="app-live-commentary__text">{msg.text}</span>
+                                                        </>
+                                                    ) : msg.type === 'analysis' ? (
+                                                        <>
+                                                            <span className="app-live-commentary__author app-live-commentary__author--stroke">Stroke</span>
+                                                            <span className="app-live-commentary__text app-live-commentary__text--muted">{msg.text}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="app-live-commentary__text app-live-commentary__text--system">{msg.text}</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!isExpanded && (status === 'live' || status === 'paused') && !lastResult && !onBreak && (
+                                <div className="absolute bottom-3 left-3 z-[2] pointer-events-none flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white/70 backdrop-blur-sm">
+                                    <Icon name="touch_app" size={12} />
+                                    Tap video for fullscreen
                                 </div>
                             )}
 
                             {/* Break overlay */}
                             {onBreak && status === 'live' && (
                                 <div
-                                    className={`absolute bottom-0 inset-x-0 rounded-b-lg px-4 py-3 flex items-center justify-center gap-2 ${onBreak === 'no_badminton' ? 'bg-amber-950/80' : 'bg-neutral-950/80'} backdrop-blur-sm`}>
+                                    className={`absolute bottom-0 inset-x-0 z-[2] rounded-b-lg px-4 py-3 flex items-center justify-center gap-2 pointer-events-none ${onBreak === 'no_badminton' ? 'bg-amber-950/80' : 'bg-neutral-950/80'} backdrop-blur-sm`}>
                                     <Icon name={onBreak === 'no_badminton' ? 'videocam_off' : 'pause_circle'} size={16}
                                         className={onBreak === 'no_badminton' ? 'text-amber-500' : 'text-neutral-500'} />
                                     <span className={`text-xs ${onBreak === 'no_badminton' ? 'text-amber-300' : 'text-neutral-400'}`}>
@@ -359,7 +494,7 @@ export default function LiveSession() {
                             {/* Metrics HUD overlay */}
                                 {lastResult && !onBreak && (status === 'live' || status === 'paused') && (
                                     <div
-                                        className="absolute bottom-0 inset-x-0 rounded-b-lg bg-neutral-950/75 backdrop-blur-sm px-3 py-2.5">
+                                        className="absolute bottom-0 inset-x-0 z-[2] rounded-b-lg bg-neutral-950/75 backdrop-blur-sm px-3 py-2.5 pointer-events-none">
                                         <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-center">
                                             <div>
                                                 <p className="text-[8px] text-neutral-500 uppercase tracking-wider">Stroke</p>
