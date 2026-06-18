@@ -1,5 +1,7 @@
 # EC2 bare-metal training (no Docker)
 
+> **Note:** Primary GPU training has moved to the UW cluster (**nd17**). See **[`scripts/cluster/README.md`](../cluster/README.md)**. This EC2 guide remains for reference.
+
 For GPU instances such as `g4dn.xlarge` (T4). Flow: **rsync push → bootstrap → tmux train → rsync pull**.
 
 ## Rsync quick reference

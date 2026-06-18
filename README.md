@@ -32,7 +32,30 @@ The raw data from the model (e.g., "Backhand Clear, Mid-Back, Quality 4/7") is s
 
 ---
 
-## EC2 GPU training (quick copy-paste)
+## Cluster GPU training (nd17)
+
+Primary training target: **`nd17@is-aiclinic.ischool.uw.edu`**. Copy **`scripts/cluster.env.example`** to **`scripts/cluster.env`** (gitignored):
+
+```bash
+CLUSTER_HOST=nd17@is-aiclinic.ischool.uw.edu
+KEY_FILE=
+REMOTE_REPO='~/IsoCourt'
+REMOTE_DATA=/data/isocourt   # shared volume — edit after checking df -h on nd17
+```
+
+From the repo root:
+
+```bash
+./scripts/cluster/rsync_push_code.sh
+./scripts/cluster/rsync_push_data.sh    # FineBadminton-20K only; large, resumable
+./scripts/cluster/rsync_pull.sh
+```
+
+Full flow (symlink data volume, bootstrap, tmux): **[`scripts/cluster/README.md`](scripts/cluster/README.md)**.
+
+---
+
+## EC2 GPU training (legacy)
 
 Use this for **`scripts/ec2/rsync_push.sh`** / **`scripts/ec2/rsync_pull.sh`**: create **`scripts/ec2.env`** at the repo root (that file is gitignored). Example:
 

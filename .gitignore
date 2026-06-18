@@ -87,4 +87,5 @@ backend.zip
 scripts/*.pem
 # Optional local env (not required for the repo)
 scripts/ec2.env
+scripts/cluster.env
 logs/.isocourt_tmux_inner.sh
