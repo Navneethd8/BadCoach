@@ -14,7 +14,7 @@ For the legacy EC2 workflow, see **[`scripts/ec2/README.md`](../ec2/README.md)**
 CLUSTER_HOST=nd17@is-aiclinic.ischool.uw.edu
 KEY_FILE=                        # leave empty to type NetID password at prompt
 REMOTE_REPO='~/IsoCourt'         # code in your home (quote ~)
-REMOTE_DATA=/data/isocourt       # shared volume — edit to your lab's mount
+REMOTE_DATA=/data/models/navneeth       # shared volume — edit to your lab's mount
 ```
 
 ### Find `REMOTE_DATA` on nd17
@@ -27,10 +27,10 @@ df -h
 ls -ld /data /mnt/data /shared /scratch 2>/dev/null
 ```
 
-Set `REMOTE_DATA` in `scripts/cluster.env` to a directory you can write on that volume, e.g. `/data/isocourt` or `/mnt/data/yourgroup/isocourt`. Create it if needed:
+Set `REMOTE_DATA` in `scripts/cluster.env` to a directory you can write on that volume, e.g. `/data/models/navneeth` or `/mnt/data/yourgroup/isocourt`. Create it if needed:
 
 ```bash
-mkdir -p /data/isocourt    # use the path your admins expect
+mkdir -p /data/models/navneeth    # use the path your admins expect
 ```
 
 | Direction | Command | What it syncs |
@@ -53,7 +53,7 @@ Override host/path for one run:
 
 ```bash
 ./scripts/cluster/rsync_push_code.sh nd17@is-aiclinic.ischool.uw.edu:~/IsoCourt
-./scripts/cluster/rsync_push_data.sh nd17@is-aiclinic.ischool.uw.edu:/data/isocourt
+./scripts/cluster/rsync_push_data.sh nd17@is-aiclinic.ischool.uw.edu:/data/models/navneeth
 ```
 
 ## 1. From your laptop (repo root)
@@ -81,7 +81,7 @@ ssh nd17@is-aiclinic.ischool.uw.edu
 cd ~/IsoCourt
 chmod +x scripts/cluster/*.sh
 
-# Wire ~/data/isocourt → backend/data
+# Wire ~/data/models/navneeth → backend/data
 ./scripts/cluster/setup_data_symlink.sh
 ls -la backend/data/FineBadminton-20K/videos/
 
@@ -122,19 +122,19 @@ Unlike EC2, there is **no** `ISOCOURT_SHUTDOWN` — this is a shared persistent 
 ```
 ~/IsoCourt/                         # code, venv, models, mlruns (your home)
 ├── backend/
-│   ├── data → /data/isocourt       # symlink to shared volume
+│   ├── data → /data/models/navneeth       # symlink to shared volume
 │   ├── models/
 │   └── pipelines/
 └── scripts/cluster/
 
-/data/isocourt/                     # shared cluster data volume (REMOTE_DATA)
+/data/models/navneeth/                     # shared cluster data volume (REMOTE_DATA)
 ├── FineBadminton-20K/
 │   ├── videos/
 │   └── dataset/image/
 └── transformed_combined_rounds_output_en_evals_translated.json
 ```
 
-(`/data/isocourt` is an example — use your lab's actual mount path in `REMOTE_DATA`.)
+(`/data/models/navneeth` is an example — use your lab's actual mount path in `REMOTE_DATA`.)
 
 ## Model names for `run_train_tmux.sh`
 

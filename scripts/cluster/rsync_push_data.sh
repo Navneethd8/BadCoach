@@ -29,7 +29,7 @@ if [[ -z "${DEST}" ]]; then
     echo "Set CLUSTER_HOST in scripts/cluster.env or pass user@host:path" >&2
     exit 1
   fi
-  REMOTE_DATA="${REMOTE_DATA:-/data/isocourt}"
+  REMOTE_DATA="${REMOTE_DATA:-/data/models/navneeth}"
   DEST="${CLUSTER_HOST}:${REMOTE_DATA}"
 fi
 
@@ -38,7 +38,7 @@ REMOTE_HOST="$(cluster_dest_host "${DEST}")"
 
 if [[ "${REMOTE_DATA_PATH}" == ~* ]] || [[ "${REMOTE_DATA_PATH}" == "${HOME}"* ]]; then
   echo "WARN: REMOTE_DATA looks like a home path (${REMOTE_DATA_PATH})." >&2
-  echo "      Use the cluster shared data volume (e.g. /data/isocourt), not ~/data/..." >&2
+  echo "      Use the cluster shared data volume (e.g. /data/models/navneeth), not ~/data/..." >&2
 fi
 
 LIST_FILE="${REPO_ROOT}/backend/data/transformed_combined_rounds_output_en_evals_translated.json"

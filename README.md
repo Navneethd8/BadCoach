@@ -40,7 +40,7 @@ Primary training target: **`nd17@is-aiclinic.ischool.uw.edu`**. Copy **`scripts/
 CLUSTER_HOST=nd17@is-aiclinic.ischool.uw.edu
 KEY_FILE=
 REMOTE_REPO='~/IsoCourt'
-REMOTE_DATA=/data/isocourt   # shared volume — edit after checking df -h on nd17
+REMOTE_DATA=/data/models/navneeth   # shared volume — edit after checking df -h on nd17
 ```
 
 From the repo root:

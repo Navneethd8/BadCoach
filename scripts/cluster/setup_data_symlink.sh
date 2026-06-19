@@ -6,7 +6,7 @@
 #
 # Env (optional; defaults match scripts/cluster.env.example):
 #   REMOTE_REPO   clone root in home (default: ~/IsoCourt)
-#   REMOTE_DATA   shared data volume (default: /data/isocourt)
+#   REMOTE_DATA   shared data volume (default: /data/models/navneeth)
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ if [[ -f "${CLUSTER_ENV}" ]]; then
 fi
 
 REMOTE_REPO="${REMOTE_REPO:-~/IsoCourt}"
-REMOTE_DATA="${REMOTE_DATA:-/data/isocourt}"
+REMOTE_DATA="${REMOTE_DATA:-/data/models/navneeth}"
 
 expand_path() {
   local p="$1"
