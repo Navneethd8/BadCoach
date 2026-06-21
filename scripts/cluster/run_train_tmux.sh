@@ -14,7 +14,9 @@
 #   ISOCOURT_TMUX_SESSION   tmux session name (default: isocourt-train)
 #   ISOCOURT_TMUX_REPLACE   if 1, kill existing session with same name first
 #   ISOCOURT_TRAIN_LOG      log file (default: repo/logs/train-UTC.log)
-#   ISOCOURT_VENV           venv path (default: repo/.venv)
+#   ISOCOURT_VENV           venv or conda env dir (default: repo/.venv)
+#   ISOCOURT_PYTHON         python binary (default: ${ISOCOURT_VENV}/bin/python)
+#   ISOCOURT_DISABLE_MLFLOW if 1, skip MLflow (recommended on cluster)
 #   ISOCOURT_RSYNC_DEST     after success: rsync models + mlruns to this ssh path
 #   ISOCOURT_RSYNC_EXTRA    extra rsync args (one string)
 
@@ -23,8 +25,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 VENV="${ISOCOURT_VENV:-${REPO_ROOT}/.venv}"
+PYTHON="${ISOCOURT_PYTHON:-${VENV}/bin/python}"
 SESSION="${ISOCOURT_TMUX_SESSION:-isocourt-train}"
 LOG="${ISOCOURT_TRAIN_LOG:-}"
+DISABLE_MLFLOW="${ISOCOURT_DISABLE_MLFLOW:-}"
 
 MODEL_RAW="${1:?Usage: $0 MODEL [train script args...]}"
 shift
@@ -61,8 +65,9 @@ case "${MODEL}" in
   *) echo "Unknown MODEL=${MODEL_RAW}" >&2; exit 2 ;;
 esac
 
-if [[ ! -x "${VENV}/bin/python" ]]; then
-  echo "Missing venv at ${VENV}; run scripts/cluster/bootstrap_cluster.sh first." >&2
+if [[ ! -x "${PYTHON}" ]]; then
+  echo "Missing python at ${PYTHON}; set ISOCOURT_VENV (conda env dir) or ISOCOURT_PYTHON." >&2
+  echo "Example: export ISOCOURT_VENV=\$HOME/miniconda3/envs/isocourt" >&2
   exit 1
 fi
 
@@ -86,13 +91,17 @@ mkdir -p "${REPO_ROOT}/logs"
 
 {
   echo "#!/usr/bin/env bash"
-  echo "set -euo pipefail"
+  echo "set -eo pipefail"
   echo "cd $(printf '%q' "${REPO_ROOT}")"
-  echo "source $(printf '%q' "${VENV}/bin/activate")"
   echo "export PYTHONUNBUFFERED=1"
+  echo "export PYTHONPATH=$(printf '%q' "${REPO_ROOT}/backend"):\${PYTHONPATH:-}"
+  if [[ -n "${DISABLE_MLFLOW}" ]]; then
+    echo "export ISOCOURT_DISABLE_MLFLOW=$(printf '%q' "${DISABLE_MLFLOW}")"
+  fi
   echo "export MLFLOW_TRACKING_URI=\"\${MLFLOW_TRACKING_URI:-file:$(printf '%q' "${REPO_ROOT}")/backend/mlruns}\""
   echo "echo \"=== \$(date -u -Iseconds) start ===\" | tee -a $(printf '%q' "${LOG}")"
-  echo -n "python $(printf '%q' "${REPO_ROOT}/${TRAIN_SCRIPT}")"
+  echo "echo \"python=$(printf '%q' "${PYTHON}")\" | tee -a $(printf '%q' "${LOG}")"
+  echo -n "$(printf '%q' "${PYTHON}") $(printf '%q' "${REPO_ROOT}/${TRAIN_SCRIPT}")"
   for a in "$@"; do echo -n " $(printf '%q' "$a")"; done
   echo " 2>&1 | tee -a $(printf '%q' "${LOG}")"
   echo "code=\${PIPESTATUS[0]}"
