@@ -10,6 +10,7 @@ External paper baselines (BST, TemPose collate, ST-GCN) may use different T/batc
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from typing import Dict, Optional, Tuple
 
 import torch
@@ -70,6 +71,45 @@ def configure_mlflow(backend_root: str) -> str:
         os.environ["MLFLOW_TRACKING_URI"] = uri
     mlflow.set_tracking_uri(uri)
     return uri
+
+
+def mlflow_disabled() -> bool:
+    """True when ``ISOCOURT_DISABLE_MLFLOW=1`` (cluster / NFS-safe training)."""
+    return os.environ.get("ISOCOURT_DISABLE_MLFLOW", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+@contextmanager
+def mlflow_training_context(experiment_name: str, backend_root: str):
+    """MLflow run wrapper; no-op when ``ISOCOURT_DISABLE_MLFLOW`` is set."""
+    if mlflow_disabled():
+        yield
+        return
+    import mlflow
+
+    configure_mlflow(backend_root)
+    mlflow.set_experiment(experiment_name)
+    with mlflow.start_run():
+        yield
+
+
+def mlflow_log_params(params: Dict) -> None:
+    if mlflow_disabled():
+        return
+    import mlflow
+
+    mlflow.log_params(params)
+
+
+def mlflow_log_metrics(metrics: Dict, step: Optional[int] = None) -> None:
+    if mlflow_disabled():
+        return
+    import mlflow
+
+    mlflow.log_metrics(metrics, step=step)
 
 
 def build_task_classes(dataset: FineBadmintonDataset) -> Dict[str, int]:

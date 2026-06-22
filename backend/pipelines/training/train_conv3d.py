@@ -19,7 +19,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
-import mlflow
 
 from core.conv3d_pose import Conv3DPoseMultitaskModel, backbone_parameter_groups
 from core.dataset import FineBadmintonDataset
@@ -27,6 +26,11 @@ from core.pose_cache_build import default_pose_cache_path
 from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
+from core.training_standards import (
+    mlflow_log_metrics,
+    mlflow_log_params,
+    mlflow_training_context,
+)
 from core.model_registry import register_training_checkpoint
 
 _tf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_timesformer.py")
@@ -81,9 +85,8 @@ def train_conv3d(
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
 
-    mlflow.set_experiment("IsoCourt_Training_Conv3D_Pose")
-    with mlflow.start_run():
-        mlflow.log_params(
+    with mlflow_training_context("IsoCourt_Training_Conv3D_Pose", backend_root):
+        mlflow_log_params(
             {
                 "epochs": epochs,
                 "batch_size": batch_size,
@@ -104,6 +107,7 @@ def train_conv3d(
                 "stroke_loss_weight": stroke_loss_weight,
                 "aug_strength": aug_strength,
                 "use_pose": use_pose,
+                "save_path": save_path,
                 "script": "train_conv3d.py",
             }
         )
@@ -305,7 +309,7 @@ def train_conv3d(
             if len(lrs) > 1:
                 metrics["lr_3d"] = lrs[0]
                 metrics["lr_other"] = lrs[1]
-            mlflow.log_metrics(metrics, step=epoch)
+            mlflow_log_metrics(metrics, step=epoch)
 
             lr_str = ", ".join(f"{x:.6f}" for x in lrs)
             print(
@@ -436,6 +440,13 @@ if __name__ == "__main__":
         action="store_true",
         help="RGB 3D trunk only; skips MediaPipe cache build.",
     )
+    parser.add_argument(
+        "--save-path",
+        type=str,
+        default=None,
+        help="Checkpoint path (default: backend/models/badminton_model_conv3d_pose.pth). "
+        "Set distinct paths when running pose vs --no-pose in parallel.",
+    )
     parser.add_argument("--resume-checkpoint", type=str, default=None)
     parser.add_argument("--start-epoch", type=int, default=0)
 
@@ -448,6 +459,14 @@ if __name__ == "__main__":
     )
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
+    save_path = args.save_path
+    if save_path is None:
+        fname = (
+            "badminton_model_conv3d_pose.pth"
+            if not args.no_pose
+            else "badminton_model_conv3d_nopose.pth"
+        )
+        save_path = os.path.join(backend_root, "models", fname)
     train_conv3d(
         data_root=data_root,
         list_file=list_file,
@@ -455,6 +474,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         lr=args.lr,
         device=device,
+        save_path=save_path,
         pose_cache_path=args.pose_cache,
         max_train_batches=args.max_train_batches,
         resume_checkpoint=args.resume_checkpoint,

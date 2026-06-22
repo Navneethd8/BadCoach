@@ -17,6 +17,7 @@
 #   ISOCOURT_VENV           venv or conda env dir (default: repo/.venv)
 #   ISOCOURT_PYTHON         python binary (default: ${ISOCOURT_VENV}/bin/python)
 #   ISOCOURT_DISABLE_MLFLOW if 1, skip MLflow (recommended on cluster)
+#   CUDA_VISIBLE_DEVICES      GPU index for this session (e.g. 1 or 2)
 #   ISOCOURT_RSYNC_DEST     after success: rsync models + mlruns to this ssh path
 #   ISOCOURT_RSYNC_EXTRA    extra rsync args (one string)
 
@@ -74,7 +75,11 @@ fi
 if [[ -z "${LOG}" ]]; then
   mkdir -p "${REPO_ROOT}/logs"
   LOG="${REPO_ROOT}/logs/train-$(date -u +%Y%m%dT%H%M%SZ).log"
+else
+  LOG="${LOG/#\~/$HOME}"
+  mkdir -p "$(dirname "${LOG}")"
 fi
+LOG="$(cd "$(dirname "${LOG}")" && pwd)/$(basename "${LOG}")"
 
 if [[ "${ISOCOURT_TMUX_REPLACE:-0}" == "1" ]]; then
   tmux kill-session -t "${SESSION}" 2>/dev/null || true
@@ -93,10 +98,14 @@ mkdir -p "${REPO_ROOT}/logs"
   echo "#!/usr/bin/env bash"
   echo "set -eo pipefail"
   echo "cd $(printf '%q' "${REPO_ROOT}")"
+  echo "mkdir -p $(printf '%q' "$(dirname "${LOG}")")"
   echo "export PYTHONUNBUFFERED=1"
   echo "export PYTHONPATH=$(printf '%q' "${REPO_ROOT}/backend"):\${PYTHONPATH:-}"
   if [[ -n "${DISABLE_MLFLOW}" ]]; then
     echo "export ISOCOURT_DISABLE_MLFLOW=$(printf '%q' "${DISABLE_MLFLOW}")"
+  fi
+  if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+    echo "export CUDA_VISIBLE_DEVICES=$(printf '%q' "${CUDA_VISIBLE_DEVICES}")"
   fi
   echo "export MLFLOW_TRACKING_URI=\"\${MLFLOW_TRACKING_URI:-file:$(printf '%q' "${REPO_ROOT}")/backend/mlruns}\""
   echo "echo \"=== \$(date -u -Iseconds) start ===\" | tee -a $(printf '%q' "${LOG}")"
@@ -116,6 +125,8 @@ mkdir -p "${REPO_ROOT}/logs"
   echo "    fi"
   echo "  fi"
   echo "else"
+  echo "  echo \"Training failed (exit \${code}). Log: $(printf '%q' "${LOG}")\" >&2"
+  echo "  sleep 30"
   echo "  exit \"\${code}\""
   echo "fi"
 } > "${INNER}"

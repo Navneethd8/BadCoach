@@ -7,7 +7,9 @@
 #   export ISOCOURT_SHUTDOWN_ON_ERROR=1                 # optional: halt if training fails
 #   ./scripts/ec2/run_train_tmux.sh MODEL [train script args...]
 #
-# MODEL: cnn_lstm | conv3d | timesformer | st_tr | gcn_st_tr | st_tr_vit | skateformer | skateformer_b | st_tr_prep | bst_prep | bst_baseline
+#   k_st_vit: v2 defaults conv3d vision + hit_centered, no early stopping; pass e.g.
+#     --vision-backbone conv3d --resume-checkpoint backend/models/badminton_model_conv3d_pose.pth
+#     --resume-k-st-vit backend/models/badminton_model_k_st_vit.pth --sampling hit_centered
 #   (aliases: resnet50, full, conv3d_pose, sttr, official_st_tr, st_tr_official, st_tr_collate, skate)
 #
 # Env (export before running if you need them inside tmux):
@@ -50,6 +52,12 @@ case "${MODEL}" in
   skateformer_b|skateformer-b|skate_b|skateformer_b_fusion)
     TRAIN_SCRIPT="backend/pipelines/training/train_skateformer_b.py"
     ;;
+  gv_xattn|gv-xattn|gv_x_attn|graph_vision_xattn)
+    TRAIN_SCRIPT="backend/pipelines/training/train_gv_xattn.py"
+    ;;
+  k_st_vit|k-st-vit|kstvit|kinematic_st_vit)
+    TRAIN_SCRIPT="backend/pipelines/training/train_k_st_vit.py"
+    ;;
   st_tr_prep|st_tr_collate|st_tr_collated)
     TRAIN_SCRIPT="backend/pipelines/training/prepare_st_tr_collated.py"
     ;;
@@ -58,15 +66,23 @@ case "${MODEL}" in
   *) echo "Unknown MODEL=${MODEL_RAW}" >&2; exit 2 ;;
 esac
 
-if [[ ! -x "${VENV}/bin/python" ]]; then
+if [[ ! -x "${VENV}/bin/python" && ! -x "${VENV}/bin/python3" ]]; then
   echo "Missing venv at ${VENV}; run scripts/ec2/bootstrap_ec2.sh first." >&2
   exit 1
+fi
+PYTHON_BIN="${VENV}/bin/python"
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  PYTHON_BIN="${VENV}/bin/python3"
 fi
 
 if [[ -z "${LOG}" ]]; then
   mkdir -p "${REPO_ROOT}/logs"
   LOG="${REPO_ROOT}/logs/train-$(date -u +%Y%m%dT%H%M%SZ).log"
+else
+  LOG="${LOG/#\~/$HOME}"
+  mkdir -p "$(dirname "${LOG}")"
 fi
+LOG="$(cd "$(dirname "${LOG}")" && pwd)/$(basename "${LOG}")"
 
 if [[ "${ISOCOURT_TMUX_REPLACE:-0}" == "1" ]]; then
   tmux kill-session -t "${SESSION}" 2>/dev/null || true
@@ -83,13 +99,19 @@ mkdir -p "${REPO_ROOT}/logs"
 
 {
   echo "#!/usr/bin/env bash"
-  echo "set -euo pipefail"
+  echo "set -eo pipefail"
   echo "cd $(printf '%q' "${REPO_ROOT}")"
+  echo "mkdir -p $(printf '%q' "$(dirname "${LOG}")")"
+  echo "set +u"
   echo "source $(printf '%q' "${VENV}/bin/activate")"
+  echo "set -u"
   echo "export PYTHONUNBUFFERED=1"
+  if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+    echo "export CUDA_VISIBLE_DEVICES=$(printf '%q' "${CUDA_VISIBLE_DEVICES}")"
+  fi
   echo "export MLFLOW_TRACKING_URI=\"\${MLFLOW_TRACKING_URI:-file:$(printf '%q' "${REPO_ROOT}")/backend/mlruns}\""
   echo "echo \"=== \$(date -u -Iseconds) start ===\" | tee -a $(printf '%q' "${LOG}")"
-  echo -n "python $(printf '%q' "${REPO_ROOT}/${TRAIN_SCRIPT}")"
+  echo -n "$(printf '%q' "${PYTHON_BIN}") $(printf '%q' "${REPO_ROOT}/${TRAIN_SCRIPT}")"
   for a in "$@"; do echo -n " $(printf '%q' "$a")"; done
   echo " 2>&1 | tee -a $(printf '%q' "${LOG}")"
   echo "code=\${PIPESTATUS[0]}"
@@ -110,6 +132,8 @@ mkdir -p "${REPO_ROOT}/logs"
   echo "  if [[ \"\${ISOCOURT_SHUTDOWN_ON_ERROR:-0}\" == \"1\" ]]; then"
   echo "    sudo shutdown -h now"
   echo "  fi"
+  echo "  echo \"Training failed (exit \${code}). Log: $(printf '%q' "${LOG}")\" >&2"
+  echo "  sleep 30"
   echo "  exit \"\${code}\""
   echo "fi"
 } > "${INNER}"
