@@ -61,6 +61,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--max_new_tokens", type=int, default=256)
     p.add_argument("--max_pixels_per_image", type=int, default=DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE)
     p.add_argument(
+        "--prompt_mode",
+        choices=("classify", "jsonl"),
+        default="classify",
+        help="classify = 9-class benchmark prompt; jsonl = legacy open caption in JSONL.",
+    )
+    p.add_argument(
         "--dump_samples",
         type=int,
         default=0,
@@ -109,6 +115,7 @@ def main() -> None:
             row["instruction"],
             pose_cache if args.pose_mode == "cache_text" else None,
             num_frames=args.num_frames,
+            prompt_mode=args.prompt_mode,
         )
         user_content: list[dict] = [{"type": "text", "text": instruction}]
         for _ in images:

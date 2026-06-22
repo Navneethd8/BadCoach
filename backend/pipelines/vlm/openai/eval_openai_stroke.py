@@ -47,6 +47,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--max_samples", type=int, default=None)
     p.add_argument("--cache_path", type=str, default=None)
     p.add_argument("--resume", action="store_true")
+    p.add_argument(
+        "--prompt_mode",
+        choices=("classify", "jsonl"),
+        default="classify",
+        help="classify = 9-class benchmark prompt; jsonl = legacy open caption in JSONL.",
+    )
     return p.parse_args()
 
 
@@ -102,6 +108,7 @@ def main() -> None:
                 row["instruction"],
                 pose_cache if args.pose_mode == "cache_text" else None,
                 num_frames=args.num_frames,
+                prompt_mode=args.prompt_mode,
             )
             pred = generate_stroke_caption(client, instruction, images, model=args.model)
             predictions.append(pred)

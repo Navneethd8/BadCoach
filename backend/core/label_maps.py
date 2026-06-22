@@ -34,18 +34,29 @@ HIT_TYPE_TO_STROKE_TYPE: dict[str, str] = {
 
 
 def map_hit_type_to_stroke_class(hit_type: str) -> str:
-    """Map raw annotation ``hit_type`` or 9-class name to ``stroke_type`` name."""
+    """Map raw annotation ``hit_type``, free text, or 9-class name to ``stroke_type``."""
     raw = (hit_type or "").strip()
     if not raw:
         return "Other"
     mapped = HIT_TYPE_TO_STROKE_TYPE.get(raw.lower())
     if mapped is not None:
         return mapped
-    compact = raw.lower().replace("_", " ")
+    lowered = raw.lower()
+    compact = lowered.replace("_", " ")
     for cls in STROKE_TYPE_CLASSES:
-        if cls.lower() == raw.lower() or cls.lower().replace("_", " ") == compact:
+        if cls.lower() == lowered or cls.lower().replace("_", " ") == compact:
             return cls
-    return "Other"
+    # e.g. "Backhand Clear" / "Forehand Smash" -> Clear / Smash
+    best: str | None = None
+    best_len = 0
+    for cls in STROKE_TYPE_CLASSES:
+        for form in (cls.lower(), cls.lower().replace("_", " ")):
+            if len(form) < 3:
+                continue
+            if form in lowered and len(form) > best_len:
+                best = cls
+                best_len = len(form)
+    return best if best is not None else "Other"
 
 
 def stroke_class_to_index(name: str) -> int:
