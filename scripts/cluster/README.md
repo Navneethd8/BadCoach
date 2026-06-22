@@ -36,6 +36,7 @@ mkdir -p /data/models/navneeth    # use the path your admins expect
 | Direction | Command | What it syncs |
 | --------- | ------- | --------------- |
 | **Push code** | `./scripts/cluster/rsync_push_code.sh` | Repo → remote `~/IsoCourt/` (excludes `backend/data/`) |
+| **Push VLM only** | `./scripts/cluster/rsync_push_vlm.sh` | Just 16-frame VLM scaffold (fast; no full repo sync) |
 | **Push data** | `./scripts/cluster/rsync_push_data.sh` | `FineBadminton-20K/` + labels JSON → **`REMOTE_DATA`** on shared volume |
 | **Pull** | `./scripts/cluster/rsync_pull.sh` | Remote `backend/models/` + `backend/mlruns/` → local |
 
@@ -62,7 +63,11 @@ Override host/path for one run:
 cp scripts/cluster.env.example scripts/cluster.env
 # edit CLUSTER_HOST / REMOTE_DATA if needed
 
-./scripts/cluster/rsync_push_code.sh
+# Full code sync (slow):
+# ./scripts/cluster/rsync_push_code.sh
+
+# VLM scaffold only (recommended before Qwen train):
+./scripts/cluster/rsync_push_vlm.sh
 
 export RSYNC_EXTRA='--progress'   # macOS; use --info=progress2 on GNU rsync
 ./scripts/cluster/rsync_push_data.sh
@@ -102,6 +107,25 @@ export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh timesformer --epochs 5 --batch-size 2
 tmux attach -t isocourt-train    # detach with Ctrl-b d
 ```
+
+### Qwen3-VL-8B (16-frame + pose cache)
+
+```bash
+chmod +x scripts/cluster/prepare_vlm_16frame.sh
+./scripts/cluster/prepare_vlm_16frame.sh
+
+# Install Unsloth stack once (GPU node):
+# pip install -r backend/pipelines/vlm/common/requirements-unsloth-vlm.txt
+
+./scripts/cluster/run_train_tmux.sh qwen3_vl_8b --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
+  --pose_mode cache_text \
+  --num_frames 16 --frame_size 224 \
+  --num_train_epochs 5 \
+  --per_device_train_batch_size 2 \
+  --output_dir backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_lora
+```
+
+Ensure `backend/models/pose_cache_span_linspace.pt` exists before training with `--pose_mode cache_text` (build via `build_full_pose_cache.py --sampling span_linspace`).
 
 Optional: after success, push checkpoints to your laptop (set before invoking `run_train_tmux.sh`):
 

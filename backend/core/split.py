@@ -81,6 +81,8 @@ def vlm_jsonl_video_level_split(
     video_to_indices: Dict[str, List[int]] = {}
     for i, row in enumerate(rows):
         rel = row[image_key]
+        if isinstance(rel, list):
+            rel = rel[0] if rel else ""
         stem = Path(rel).stem
         if "_" in stem:
             v_key = stem.rsplit("_", 1)[0]

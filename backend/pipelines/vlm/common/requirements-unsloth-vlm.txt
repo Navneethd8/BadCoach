@@ -1,10 +1,14 @@
-# Optional: use a dedicated venv for VLM fine-tuning.
-# CUDA: follow https://unsloth.ai/docs/get-started/install — often:
-#   pip install unsloth
-# Then:
-#   pip install -r requirements-unsloth-vlm.txt
+# VLM fine-tuning (Qwen3-VL + Unsloth). Use a GPU env (conda isocourt on cluster).
 #
-# Versions align with Unsloth Qwen3-VL notebooks (transformers 4.57+).
+# If bootstrap_cluster already installed torch 2.5.x, install Unsloth FIRST, then
+# realign the torch triplet (avoids torchaudio 2.5 vs torch 2.10 warnings):
+#
+#   pip install -r backend/pipelines/vlm/common/requirements-unsloth-vlm.txt
+#   pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+#     --index-url https://download.pytorch.org/whl/cu124
+#
+# Pick cu124 (driver >=550) or cu121 (driver >=525). Verify:
+#   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 
 unsloth
 transformers>=4.57.0

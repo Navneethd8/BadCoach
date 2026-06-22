@@ -2,17 +2,17 @@
 """
 Fine-tune Qwen3-VL-8B-Instruct with Unsloth (LoRA + 4-bit base).
 
-Default dataset: FineBadminton-master with ``finebadminton_vlm_train_40v.jsonl``
-(40 videos); point --jsonl at that file next to dataset/image/ on Colab/Drive.
+16-frame FineBadminton-20K example (H100):
 
-Requires a CUDA GPU and the dependencies in requirements-unsloth-vlm.txt.
-
-Example:
-  cd backend/pipelines/vlm
-  pip install -r requirements-unsloth-vlm.txt
+  cd backend/pipelines/vlm/qwen-8b
+  pip install -r ../common/requirements-unsloth-vlm.txt
   python train_qwen3_vl_8b.py \\
-    --jsonl ../../data/FineBadminton-master/dataset/finebadminton_vlm_train_40v.jsonl \\
-    --output_dir ./outputs/qwen3vl8b_lora
+    --jsonl ../../../data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \\
+    --num_frames 16 --frame_size 224 \\
+    --pose_mode cache_text \\
+    --num_train_epochs 5 \\
+    --per_device_train_batch_size 2 \\
+    --output_dir ./outputs/qwen3_vl_8b_16frame_lora
 """
 
 from __future__ import annotations
@@ -22,8 +22,14 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
+_COMMON_DIR = _SCRIPT_DIR.parent / "common"
+for _p in (_SCRIPT_DIR, _COMMON_DIR):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+_BACKEND = _SCRIPT_DIR.parent.parent.parent
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
 
 from load_dataset_jsonl import (
     load_jsonl_conversations,
@@ -32,120 +38,57 @@ from load_dataset_jsonl import (
 )
 from core.split import SPLIT_RATIO, SPLIT_SEED
 from qwen3_vl_config import DEFAULT_MAX_SEQ_LENGTH, DEFAULT_MODEL_ID_8B
+from vlm_processor_utils import apply_vision_processor_limits
+from vlm_qwen3_defaults import DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE
+from vlm_stroke_protocol import SEQUENCE_LENGTH
 from vlm_train_metrics import build_sft_eval_compute_metrics
 
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Unsloth SFT for Qwen3-VL-8B-Instruct")
-    p.add_argument(
-        "--jsonl",
-        type=str,
-        required=True,
-        help="Path to JSONL (image path, instruction, response per line).",
-    )
-    p.add_argument(
-        "--model_name",
-        type=str,
-        default=DEFAULT_MODEL_ID_8B,
-        help="Hugging Face model id (default: Unsloth 4-bit Qwen3-VL-8B-Instruct).",
-    )
-    p.add_argument(
-        "--output_dir",
-        type=str,
-        default="outputs/qwen3_vl_8b_lora",
-        help="Directory for checkpoints and final adapter.",
-    )
+    p.add_argument("--jsonl", type=str, required=True)
+    p.add_argument("--model_name", type=str, default=DEFAULT_MODEL_ID_8B)
+    p.add_argument("--output_dir", type=str, default="outputs/qwen3_vl_8b_lora")
     p.add_argument("--max_seq_length", type=int, default=DEFAULT_MAX_SEQ_LENGTH)
     p.add_argument("--load_in_4bit", action=argparse.BooleanOptionalAction, default=True)
-    p.add_argument(
-        "--gradient_checkpointing",
-        type=str,
-        default="unsloth",
-        help='Use "unsloth", True, or False (see Unsloth docs).',
-    )
-    p.add_argument("--r", type=int, default=16, help="LoRA rank.")
+    p.add_argument("--gradient_checkpointing", type=str, default="unsloth")
+    p.add_argument("--r", type=int, default=16)
     p.add_argument("--lora_alpha", type=int, default=16)
     p.add_argument(
         "--per_device_train_batch_size",
         type=int,
         default=1,
-        help="Default 1 for 8B VRAM; increase if you have headroom.",
+        help="Use 2+ on H100 for 16-frame; default 1 for <=24GB.",
     )
     p.add_argument("--gradient_accumulation_steps", type=int, default=8)
     p.add_argument("--learning_rate", type=float, default=2e-4)
     p.add_argument("--warmup_steps", type=int, default=5)
     p.add_argument("--max_steps", type=int, default=None)
-    p.add_argument("--num_train_epochs", type=float, default=60.0)
+    p.add_argument("--num_train_epochs", type=float, default=5.0)
     p.add_argument("--logging_steps", type=int, default=1)
     p.add_argument("--seed", type=int, default=3407)
-    p.add_argument(
-        "--report_to",
-        type=str,
-        default="none",
-        help='Set to "wandb" if configured.',
-    )
-    p.add_argument(
-        "--finetune_vision",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-    )
-    p.add_argument(
-        "--finetune_language",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-    )
+    p.add_argument("--report_to", type=str, default="none")
+    p.add_argument("--finetune_vision", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--finetune_language", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument(
         "--pose_mode",
         type=str,
-        choices=("none", "overlay", "text", "both"),
-        default="none",
-        help="MediaPipe pose: overlay draws skeleton on images; text prepends landmark "
-        "summary; both. Requires backend/models/pose_landmarker_lite.task by default.",
+        choices=("none", "overlay", "text", "both", "cache_text"),
+        default="cache_text",
     )
-    p.add_argument(
-        "--pose_model_path",
-        type=str,
-        default=None,
-        help="Optional path to pose_landmarker *.task file.",
-    )
-    p.add_argument(
-        "--pose_min_short_edge",
-        type=int,
-        default=960,
-        help="Upscale frame before MediaPipe if min(h,w) is below this (helps wide shots). 0 disables.",
-    )
-    p.add_argument(
-        "--no_val_split",
-        action="store_true",
-        help="Train on full JSONL with no validation (no eval_loss / eval_accuracy).",
-    )
+    p.add_argument("--pose_model_path", type=str, default=None)
+    p.add_argument("--pose_cache_path", type=str, default=None)
+    p.add_argument("--pose_min_short_edge", type=int, default=960)
+    p.add_argument("--num_frames", type=int, default=SEQUENCE_LENGTH)
+    p.add_argument("--frame_size", type=int, default=224)
+    p.add_argument("--max_pixels_per_image", type=int, default=DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE)
+    p.add_argument("--no_val_split", action="store_true")
     p.add_argument("--split_seed", type=int, default=SPLIT_SEED)
-    p.add_argument(
-        "--split_ratio",
-        type=float,
-        default=SPLIT_RATIO,
-        help="Video-level train fraction (same policy as core.split.video_level_split).",
-    )
+    p.add_argument("--split_ratio", type=float, default=SPLIT_RATIO)
     p.add_argument("--per_device_eval_batch_size", type=int, default=1)
-    p.add_argument(
-        "--max_eval_samples",
-        type=int,
-        default=None,
-        help="Cap validation size (first N after split). Strongly recommended on low-RAM "
-        "hosts: eval with compute_metrics materializes logits for the whole val set.",
-    )
-    p.add_argument(
-        "--dataloader_num_workers",
-        type=int,
-        default=0,
-        help="Use 0 on Colab to avoid extra RAM from worker processes.",
-    )
-    p.add_argument(
-        "--save_total_limit",
-        type=int,
-        default=3,
-        help="Max checkpoints to keep when using val split (epoch saves).",
-    )
+    p.add_argument("--max_eval_samples", type=int, default=500)
+    p.add_argument("--dataloader_num_workers", type=int, default=0)
+    p.add_argument("--save_total_limit", type=int, default=3)
     return p.parse_args()
 
 
@@ -154,10 +97,7 @@ def main() -> None:
     import torch
 
     if not torch.cuda.is_available():
-        print(
-            "CUDA is not available. Unsloth Qwen3-VL training expects an NVIDIA GPU.",
-            file=sys.stderr,
-        )
+        print("CUDA is not available. Unsloth Qwen3-VL training expects an NVIDIA GPU.", file=sys.stderr)
         sys.exit(1)
 
     from trl import SFTConfig, SFTTrainer
@@ -171,6 +111,7 @@ def main() -> None:
         load_in_4bit=args.load_in_4bit,
         use_gradient_checkpointing=args.gradient_checkpointing,
     )
+    apply_vision_processor_limits(tokenizer, max_pixels=args.max_pixels_per_image)
 
     model = FastVisionModel.get_peft_model(
         model,
@@ -187,29 +128,29 @@ def main() -> None:
         loftq_config=None,
     )
 
-    print(f"Loading dataset: {args.jsonl}")
+    print(f"Loading dataset: {args.jsonl} (num_frames={args.num_frames}, pose_mode={args.pose_mode})")
     pose_min = None if args.pose_min_short_edge == 0 else args.pose_min_short_edge
+    loader_kw = dict(
+        pose_mode=args.pose_mode,
+        pose_model_path=args.pose_model_path,
+        pose_min_short_edge=pose_min,
+        frame_size=args.frame_size,
+        num_frames=args.num_frames,
+        pose_cache_path=args.pose_cache_path,
+    )
     if args.no_val_split:
-        train_dataset = load_jsonl_conversations(
-            args.jsonl,
-            pose_mode=args.pose_mode,
-            pose_model_path=args.pose_model_path,
-            pose_min_short_edge=pose_min,
-        )
+        train_dataset = load_jsonl_conversations(args.jsonl, **loader_kw)
         eval_dataset = None
     else:
         train_dataset, eval_dataset = load_jsonl_conversations_train_val(
             args.jsonl,
-            pose_mode=args.pose_mode,
-            pose_model_path=args.pose_model_path,
-            pose_min_short_edge=pose_min,
             split_seed=args.split_seed,
             split_ratio=args.split_ratio,
+            **loader_kw,
         )
         if args.max_eval_samples is not None and len(eval_dataset) > args.max_eval_samples:
             print(
-                f"Capping eval_dataset: {len(eval_dataset)} -> {args.max_eval_samples} "
-                f"(RAM-friendly eval; metrics are on this subset only).",
+                f"Capping eval_dataset: {len(eval_dataset)} -> {args.max_eval_samples}",
                 file=sys.stderr,
             )
             eval_dataset = eval_dataset[: args.max_eval_samples]

@@ -2,11 +2,12 @@
 """
 Run inference with Unsloth Qwen3-VL-8B-Instruct (base or saved LoRA folder).
 
-Example (base 4-bit model):
-  python infer_qwen3_vl_8b.py --image /path/to/img.jpg --prompt "Describe this image."
+Single image:
+  python infer_qwen3_vl_8b.py --image img.jpg --prompt "..."
 
-Example (after training):
-  python infer_qwen3_vl_8b.py --lora_path outputs/qwen3_vl_8b_lora/lora_adapter --image img.jpg --prompt "..."
+16-frame clip:
+  python infer_qwen3_vl_8b.py --images f0.jpg f1.jpg ... --prompt "..."
+  python infer_qwen3_vl_8b.py --image_dir /path/to/frames/ --prompt "..."
 """
 
 from __future__ import annotations
@@ -16,8 +17,10 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
+_COMMON_DIR = _SCRIPT_DIR.parent / "common"
+for _p in (_SCRIPT_DIR, _COMMON_DIR):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from qwen3_vl_config import DEFAULT_MODEL_ID_8B
 from vlm_pose import apply_pose_to_pil, create_pose_estimator
@@ -25,44 +28,40 @@ from vlm_pose import apply_pose_to_pil, create_pose_estimator
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Inference: Qwen3-VL-8B via Unsloth")
-    p.add_argument("--image", type=str, required=True, help="Path to an image file.")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--image", type=str, help="Single image path.")
+    g.add_argument("--images", type=str, nargs="+", help="Multiple frame paths (16-frame clip).")
+    g.add_argument("--image_dir", type=str, help="Directory of frames (sorted by name).")
     p.add_argument("--prompt", type=str, default="Describe this image in detail.")
-    p.add_argument(
-        "--model_name",
-        type=str,
-        default=DEFAULT_MODEL_ID_8B,
-        help="Base model id when not loading from --lora_path.",
-    )
-    p.add_argument(
-        "--lora_path",
-        type=str,
-        default=None,
-        help="Directory with saved LoRA adapter (from train_qwen3_vl_8b.py).",
-    )
+    p.add_argument("--model_name", type=str, default=DEFAULT_MODEL_ID_8B)
+    p.add_argument("--lora_path", type=str, default=None)
     p.add_argument("--max_new_tokens", type=int, default=256)
     p.add_argument("--temperature", type=float, default=1.5)
     p.add_argument("--min_p", type=float, default=0.1)
     p.add_argument("--load_in_4bit", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--frame_size", type=int, default=224)
     p.add_argument(
         "--pose_mode",
         type=str,
         choices=("none", "overlay", "text", "both"),
         default="none",
-        help="MediaPipe pose: overlay / text / both (see train_qwen3_vl_8b.py).",
     )
-    p.add_argument(
-        "--pose_model_path",
-        type=str,
-        default=None,
-        help="Optional path to pose_landmarker *.task file.",
-    )
-    p.add_argument(
-        "--pose_min_short_edge",
-        type=int,
-        default=960,
-        help="Upscale before pose if min(h,w) below this; 0 disables.",
-    )
+    p.add_argument("--pose_model_path", type=str, default=None)
+    p.add_argument("--pose_min_short_edge", type=int, default=960)
     return p.parse_args()
+
+
+def _collect_paths(args: argparse.Namespace) -> list[Path]:
+    if args.image:
+        return [Path(args.image).expanduser().resolve()]
+    if args.images:
+        return [Path(p).expanduser().resolve() for p in args.images]
+    d = Path(args.image_dir).expanduser().resolve()
+    exts = {".jpg", ".jpeg", ".png", ".webp"}
+    paths = sorted(p for p in d.iterdir() if p.suffix.lower() in exts)
+    if not paths:
+        raise SystemExit(f"No images in {d}")
+    return paths
 
 
 def _device() -> str:
@@ -70,11 +69,7 @@ def _device() -> str:
 
     if torch.cuda.is_available():
         return "cuda"
-    print(
-        "Warning: CUDA not available. Unsloth Qwen3-VL is intended for GPU; "
-        "CPU/MPS may fail or be extremely slow.",
-        file=sys.stderr,
-    )
+    print("Warning: CUDA not available.", file=sys.stderr)
     return "cpu"
 
 
@@ -84,53 +79,50 @@ def main() -> None:
     from transformers import TextStreamer
     from unsloth import FastVisionModel
 
-    image_path = Path(args.image).expanduser().resolve()
-    if not image_path.is_file():
-        print(f"Image not found: {image_path}", file=sys.stderr)
-        sys.exit(1)
+    paths = _collect_paths(args)
+    images = []
+    for p in paths:
+        if not p.is_file():
+            print(f"Image not found: {p}", file=sys.stderr)
+            sys.exit(1)
+        im = Image.open(p).convert("RGB")
+        if args.frame_size > 0:
+            im = im.resize((args.frame_size, args.frame_size), Image.Resampling.BILINEAR)
+        images.append(im)
 
-    image = Image.open(image_path).convert("RGB")
     prompt = args.prompt
-    if args.pose_mode != "none":
+    if len(images) == 1 and args.pose_mode != "none":
         pose_estimator = create_pose_estimator(args.pose_model_path)
         pose_min = None if args.pose_min_short_edge == 0 else args.pose_min_short_edge
-        image, prompt = apply_pose_to_pil(
-            image,
+        images[0], prompt = apply_pose_to_pil(
+            images[0],
             pose_estimator,
             mode=args.pose_mode,
             instruction=prompt,
             min_short_edge_for_pose=pose_min,
         )
+
     device = _device()
 
     if args.lora_path:
         model, tokenizer = FastVisionModel.from_pretrained(
-            args.lora_path,
-            load_in_4bit=args.load_in_4bit,
+            args.lora_path, load_in_4bit=args.load_in_4bit
         )
     else:
         model, tokenizer = FastVisionModel.from_pretrained(
-            args.model_name,
-            load_in_4bit=args.load_in_4bit,
+            args.model_name, load_in_4bit=args.load_in_4bit
         )
 
     FastVisionModel.for_inference(model)
 
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image"},
-                {"type": "text", "text": prompt},
-            ],
-        }
-    ]
-    input_text = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-    )
+    user_content: list[dict] = [{"type": "text", "text": prompt}]
+    for _ in images:
+        user_content.append({"type": "image"})
+    messages = [{"role": "user", "content": user_content}]
+    input_text = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
+    vision_input = images[0] if len(images) == 1 else images
     inputs = tokenizer(
-        image,
+        vision_input,
         input_text,
         add_special_tokens=False,
         return_tensors="pt",

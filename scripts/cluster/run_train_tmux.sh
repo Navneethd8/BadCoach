@@ -58,6 +58,9 @@ case "${MODEL}" in
   k_st_vit|k-st-vit|kstvit|kinematic_st_vit)
     TRAIN_SCRIPT="backend/pipelines/training/train_k_st_vit.py"
     ;;
+  qwen3_vl_8b|qwen3-vl-8b|qwen_vl_8b|qwen8b_vlm)
+    TRAIN_SCRIPT="backend/pipelines/vlm/qwen-8b/train_qwen3_vl_8b.py"
+    ;;
   st_tr_prep|st_tr_collate|st_tr_collated)
     TRAIN_SCRIPT="backend/pipelines/training/prepare_st_tr_collated.py"
     ;;
