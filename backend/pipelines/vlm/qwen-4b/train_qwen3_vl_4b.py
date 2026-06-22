@@ -242,7 +242,7 @@ def main() -> None:
 
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=UnslothVisionDataCollator(model, tokenizer),
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,

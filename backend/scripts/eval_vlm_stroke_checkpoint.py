@@ -13,11 +13,10 @@ Evaluate Qwen3-VL-8B stroke_type accuracy on the val split (16-frame JSONL).
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
-_backend = Path(__file__).resolve().parent.parent.parent
+_backend = Path(__file__).resolve().parent.parent
 _vlm_common = _backend / "pipelines" / "vlm" / "common"
 _qwen8b = _backend / "pipelines" / "vlm" / "qwen-8b"
 for p in (_backend, _vlm_common, _qwen8b):
@@ -103,12 +102,13 @@ def main() -> None:
             num_frames=args.num_frames,
         )
         user_content: list[dict] = [{"type": "text", "text": instruction}]
-        for im in images:
-            user_content.append({"type": "image", "image": im})
+        for _ in images:
+            user_content.append({"type": "image"})
         messages = [{"role": "user", "content": user_content}]
         input_text = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
+        vision_input = images[0] if len(images) == 1 else images
         inputs = tokenizer(
-            images,
+            vision_input,
             input_text,
             add_special_tokens=False,
             return_tensors="pt",
