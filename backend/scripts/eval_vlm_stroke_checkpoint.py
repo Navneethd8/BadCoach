@@ -27,11 +27,14 @@ from core.split import SPLIT_RATIO, SPLIT_SEED
 from qwen3_vl_config import DEFAULT_MODEL_ID_8B
 from vlm_eval_common import (
     build_instruction_with_pose,
+    ground_truth_stroke_index,
     load_row_images,
     load_val_rows,
+    prediction_stroke_index,
     print_eval_report,
     score_predictions,
 )
+from vlm_train_metrics import extract_stroke_label, parse_stroke_type
 from vlm_pose_cache import load_pose_cache_tensor, resolve_pose_cache_path
 from vlm_processor_utils import apply_vision_processor_limits
 from vlm_qwen3_defaults import DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE
@@ -57,6 +60,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--max_samples", type=int, default=None)
     p.add_argument("--max_new_tokens", type=int, default=256)
     p.add_argument("--max_pixels_per_image", type=int, default=DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE)
+    p.add_argument(
+        "--dump_samples",
+        type=int,
+        default=0,
+        help="Print first N (gt, pred, parsed) triples for debugging.",
+    )
     return p.parse_args()
 
 
@@ -114,14 +123,27 @@ def main() -> None:
             return_tensors="pt",
         )
         inputs = {k: v.to(device) if hasattr(v, "to") else v for k, v in inputs.items()}
+        input_len = int(inputs["input_ids"].shape[-1])
         with torch.no_grad():
             out_ids = model.generate(
                 **inputs,
                 max_new_tokens=args.max_new_tokens,
                 use_cache=True,
             )
-        text = tokenizer.decode(out_ids[0], skip_special_tokens=True)
+        new_ids = out_ids[0, input_len:]
+        text = tokenizer.decode(new_ids, skip_special_tokens=True)
         predictions.append(text)
+        if args.dump_samples and i < args.dump_samples:
+            gt_raw = parse_stroke_type(row.get("response", ""))
+            pred_raw = extract_stroke_label(text)
+            gt_i = ground_truth_stroke_index(row)
+            pr_i = prediction_stroke_index(text)
+            print(
+                f"\n--- sample {i} ---\ngt: {gt_raw!r} ({gt_i})\n"
+                f"pred: {pred_raw!r} ({pr_i})\n"
+                f"text: {text[:400]!r}",
+                flush=True,
+            )
         if (i + 1) % 10 == 0:
             print(f"Evaluated {i + 1}/{len(val_rows)}", flush=True)
 

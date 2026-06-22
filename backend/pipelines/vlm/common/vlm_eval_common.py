@@ -26,7 +26,7 @@ from core.split import SPLIT_RATIO, SPLIT_SEED, vlm_jsonl_video_level_split
 from load_dataset_jsonl import _image_paths_from_row, _load_image
 from vlm_pose_cache import load_pose_cache_tensor, pose_text_for_dataset_index
 from vlm_stroke_protocol import FRAME_SIZE, build_user_instruction
-from vlm_train_metrics import parse_stroke_type
+from vlm_train_metrics import extract_stroke_label, parse_stroke_type
 
 
 def read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
@@ -103,7 +103,7 @@ def load_row_images(
 
 
 def prediction_stroke_index(prediction: str) -> int | None:
-    raw = parse_stroke_type(prediction)
+    raw = extract_stroke_label(prediction)
     if raw is None:
         return None
     return map_hit_type_to_stroke_index(raw)
@@ -151,7 +151,10 @@ def print_eval_report(metrics: dict[str, Any], *, title: str = "VLM stroke_type 
         f"({100.0 * metrics['accuracy']:.2f}%)"
     )
     if metrics["unparsed"]:
-        print(f"Unparsed predictions: {metrics['unparsed']}")
+        print(
+            f"Unparsed predictions: {metrics['unparsed']} "
+            f"({100.0 * metrics['unparsed'] / metrics['total']:.1f}%)"
+        )
     print("\nPer-class (correct/total):")
     for i, name in enumerate(STROKE_TYPE_CLASSES):
         c = metrics["per_class_correct"].get(i, 0)

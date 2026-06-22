@@ -34,8 +34,18 @@ HIT_TYPE_TO_STROKE_TYPE: dict[str, str] = {
 
 
 def map_hit_type_to_stroke_class(hit_type: str) -> str:
-    """Map raw annotation ``hit_type`` to 9-class ``stroke_type`` name."""
-    return HIT_TYPE_TO_STROKE_TYPE.get((hit_type or "").lower(), "Other")
+    """Map raw annotation ``hit_type`` or 9-class name to ``stroke_type`` name."""
+    raw = (hit_type or "").strip()
+    if not raw:
+        return "Other"
+    mapped = HIT_TYPE_TO_STROKE_TYPE.get(raw.lower())
+    if mapped is not None:
+        return mapped
+    compact = raw.lower().replace("_", " ")
+    for cls in STROKE_TYPE_CLASSES:
+        if cls.lower() == raw.lower() or cls.lower().replace("_", " ") == compact:
+            return cls
+    return "Other"
 
 
 def stroke_class_to_index(name: str) -> int:

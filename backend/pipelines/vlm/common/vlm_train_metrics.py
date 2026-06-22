@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
 
 _STROKE_ANCHOR = re.compile(r"Stroke:\s*", re.IGNORECASE)
+_FORMAT_PLACEHOLDER = re.compile(r"^<[^>]+>$")
 
 
 def parse_stroke_type(text: str) -> str | None:
@@ -16,18 +17,52 @@ def parse_stroke_type(text: str) -> str | None:
     Main stroke label from FineBadminton-style captions, e.g.
     ``Stroke: push shot Subtype: flat lift`` → ``push shot``.
     Stops before ``Subtype:``, ``Player:``, ``Hitter side:``, or newline.
+
+    Uses the **last** ``Stroke:`` match so format hints in the prompt
+    (``Stroke: <hit type>``) are not mistaken for the model answer.
     """
     if not text:
         return None
-    m = _STROKE_ANCHOR.search(text)
-    if not m:
+    matches = list(_STROKE_ANCHOR.finditer(text))
+    if not matches:
         return None
-    rest = text[m.end() :]
+    rest = text[matches[-1].end() :]
     for stop in (" Subtype:", " Player:", " Hitter side:", "\n", "\r"):
         if stop in rest:
             rest = rest.split(stop, 1)[0]
     s = rest.strip()
-    return s if s else None
+    if not s or _FORMAT_PLACEHOLDER.match(s):
+        return None
+    return s
+
+
+def infer_stroke_label_from_text(text: str) -> str | None:
+    """Fallback when the model skips the ``Stroke:`` prefix."""
+    if not text:
+        return None
+    lowered = text.lower()
+    # Prefer longer multi-word hit types first (e.g. "push shot" before "shot").
+    from core.label_maps import HIT_TYPE_TO_STROKE_TYPE, STROKE_TYPE_CLASSES
+
+    candidates: list[tuple[int, str]] = []
+    for raw in HIT_TYPE_TO_STROKE_TYPE:
+        if raw in lowered:
+            candidates.append((len(raw), raw))
+    for cls in STROKE_TYPE_CLASSES:
+        for form in (cls.lower(), cls.lower().replace("_", " ")):
+            if form in lowered:
+                candidates.append((len(form), form))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda x: x[0])[1]
+
+
+def extract_stroke_label(text: str) -> str | None:
+    """Parse ``Stroke: ...`` or fall back to keyword search in free text."""
+    raw = parse_stroke_type(text)
+    if raw is not None:
+        return raw
+    return infer_stroke_label_from_text(text)
 
 
 def _normalize_stroke(s: str) -> str:
