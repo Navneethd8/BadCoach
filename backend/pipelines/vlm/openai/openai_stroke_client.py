@@ -12,6 +12,43 @@ from PIL import Image
 from openai_vlm_config import DEFAULT_IMAGE_DETAIL, DEFAULT_MODEL, DEFAULT_REQUEST_TIMEOUT
 
 
+def _is_unsupported_token_limit_param(exc: Exception) -> bool:
+    if getattr(exc, "status_code", None) != 400:
+        return False
+    msg = str(exc).lower()
+    return "max_tokens" in msg or "max_completion_tokens" in msg
+
+
+def _chat_completion(
+    client: Any,
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    timeout: float,
+) -> Any:
+    """Newer models (e.g. gpt-5.x) use max_completion_tokens; older use max_tokens."""
+    last_err: Exception | None = None
+    for kwargs in (
+        {"max_completion_tokens": max_tokens},
+        {"max_tokens": max_tokens},
+    ):
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages,
+                timeout=timeout,
+                **kwargs,
+            )
+        except Exception as e:
+            if _is_unsupported_token_limit_param(e):
+                last_err = e
+                continue
+            raise
+    assert last_err is not None
+    raise last_err
+
+
 def _image_to_data_url(img: Image.Image, *, fmt: str = "JPEG") -> str:
     buf = io.BytesIO()
     img.save(buf, format=fmt, quality=92)
@@ -55,7 +92,8 @@ def generate_stroke_caption(
     last_err: Exception | None = None
     for attempt in range(max_retries):
         try:
-            resp = client.chat.completions.create(
+            resp = _chat_completion(
+                client,
                 model=model,
                 messages=messages,
                 max_tokens=max_tokens,

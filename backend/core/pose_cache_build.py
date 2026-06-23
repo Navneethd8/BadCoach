@@ -45,17 +45,19 @@ def load_pose_cache_bundle(cache_path: str) -> Optional[Dict[str, Any]]:
     Load ``{"pose_cache": Tensor, ...}`` from ``cache_path``, or from
     ``LEGACY_POSE_CACHE_FILENAME`` in the same directory when the default file is absent.
     """
+    requested = os.path.abspath(cache_path)
     for p in _pose_cache_load_candidates(cache_path):
-        if not os.path.isfile(p):
+        resolved = os.path.abspath(p)
+        if not os.path.isfile(resolved):
             continue
-        if p != os.path.abspath(cache_path):
+        if resolved != requested:
             print(
-                f"Loading pose cache from {p} (legacy filename; "
+                f"Loading pose cache from {resolved} (legacy filename; "
                 f"prefer renaming to {DEFAULT_POSE_CACHE_FILENAME})"
             )
         else:
-            print(f"Loading pose cache from {p}...")
-        return torch.load(p, map_location="cpu", weights_only=False)
+            print(f"Loading pose cache from {resolved}...")
+        return torch.load(resolved, map_location="cpu", weights_only=False)
     return None
 
 

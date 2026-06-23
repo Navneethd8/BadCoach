@@ -94,7 +94,10 @@ def main() -> None:
     cached = _load_cache(cache_path) if cache_path and args.resume else {}
 
     predictions: list[str] = []
-    cache_f = cache_path.open("a", encoding="utf-8") if cache_path else None
+    cache_f = None
+    if cache_path is not None:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_f = cache_path.open("a", encoding="utf-8")
 
     try:
         for i, row in enumerate(val_rows):

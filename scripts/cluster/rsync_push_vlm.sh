@@ -39,6 +39,7 @@ fi
 # Paths relative to repo root (created on remote as needed).
 VLM_PATHS=(
   backend/core/label_maps.py
+  backend/core/pose_cache_build.py
   backend/core/split.py
   backend/scripts/eval_vlm_stroke_checkpoint.py
   backend/pipelines/vlm/common/vlm_stroke_protocol.py
