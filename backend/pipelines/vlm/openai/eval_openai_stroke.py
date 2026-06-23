@@ -23,15 +23,18 @@ for p in (_BACKEND, _COMMON, _SCRIPT):
         sys.path.insert(0, str(p))
 
 from openai import OpenAI
-from openai_vlm_config import DEFAULT_MODEL
+from openai_vlm_config import DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
 from openai_stroke_client import generate_stroke_caption
 from vlm_eval_common import (
     build_instruction_with_pose,
+    ground_truth_stroke_index,
     load_row_images,
     load_val_rows,
+    prediction_stroke_index,
     print_eval_report,
     score_predictions,
 )
+from vlm_train_metrics import extract_stroke_label, parse_stroke_type
 from vlm_pose_cache import load_pose_cache_tensor, resolve_pose_cache_path
 from vlm_stroke_protocol import SEQUENCE_LENGTH
 
@@ -53,6 +56,18 @@ def _parse_args() -> argparse.Namespace:
         default="classify",
         help="classify = 9-class benchmark prompt; jsonl = legacy open caption in JSONL.",
     )
+    p.add_argument("--max_completion_tokens", type=int, default=DEFAULT_MAX_COMPLETION_TOKENS)
+    p.add_argument(
+        "--reasoning_effort",
+        default=DEFAULT_REASONING_EFFORT,
+        help="gpt-5.x reasoning budget (use minimal for one-line classify).",
+    )
+    p.add_argument(
+        "--dump_samples",
+        type=int,
+        default=0,
+        help="Print first N (gt, pred, raw) triples for debugging.",
+    )
     return p.parse_args()
 
 
@@ -73,8 +88,9 @@ def _load_cache(path: Path) -> dict[str, str]:
                 continue
             rec = json.loads(line)
             rid = rec.get("row_id")
-            if rid and rec.get("response"):
-                out[str(rid)] = rec["response"]
+            resp = rec.get("response")
+            if rid and resp:
+                out[str(rid)] = str(resp)
     return out
 
 
@@ -113,8 +129,24 @@ def main() -> None:
                 num_frames=args.num_frames,
                 prompt_mode=args.prompt_mode,
             )
-            pred = generate_stroke_caption(client, instruction, images, model=args.model)
+            pred = generate_stroke_caption(
+                client,
+                instruction,
+                images,
+                model=args.model,
+                max_tokens=args.max_completion_tokens,
+                reasoning_effort=args.reasoning_effort or None,
+            )
             predictions.append(pred)
+            if args.dump_samples and i < args.dump_samples:
+                gt_raw = parse_stroke_type(row.get("response", ""))
+                pred_raw = extract_stroke_label(pred)
+                print(
+                    f"\n--- sample {i} ---\ngt: {gt_raw!r} ({ground_truth_stroke_index(row)})\n"
+                    f"pred: {pred_raw!r} ({prediction_stroke_index(pred)})\n"
+                    f"raw: {pred[:400]!r}",
+                    flush=True,
+                )
             if cache_f:
                 cache_f.write(
                     json.dumps({"row_id": rid, "response": pred}, ensure_ascii=False) + "\n"
