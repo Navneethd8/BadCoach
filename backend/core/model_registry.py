@@ -33,6 +33,7 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "st_tr_vit",
     "skateformer",
     "skateformer_b",
+    "k_st_vit",
     "timesformer",
     "vit_gcn",
 )
@@ -46,6 +47,7 @@ CATEGORY_GROUPS: Dict[str, str] = {
     "st_tr_vit": "graph",
     "skateformer": "graph",
     "skateformer_b": "graph",
+    "k_st_vit": "graph",
     "vit_gcn": "graph",
     "timesformer": "video_transformer",
 }
@@ -58,6 +60,7 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_st_tr_vit.py": "st_tr_vit",
     "train_skateformer.py": "skateformer",
     "train_skateformer_b.py": "skateformer_b",
+    "train_k_st_vit.py": "k_st_vit",
     "train_timesformer.py": "timesformer",
     "train_vit_gcn.py": "vit_gcn",
 }
@@ -111,6 +114,8 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
         return "vit_gcn"
     if "st_tr" in fn or "sttr" in fn:
         return "st_tr"
+    if "k_st_vit" in fn or "kstvit" in fn:
+        return "k_st_vit"
     return "cnn_lstm"
 
 

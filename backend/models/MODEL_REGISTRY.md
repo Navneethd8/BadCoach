@@ -25,10 +25,11 @@ These are the **only** valid keys under `models.architectures.`* and for `infere
 | `conv3d_pose`          | video_cnn         | `pipelines/training/train_conv3d.py`               | `core/conv3d_pose.py`              | Torchvision R(2+1)D / R3D / MC3 + late-fused MediaPipe joints; optional Grad-CAM on `layer4`.                                       |
 | `st_tr`                | graph             | `pipelines/training/train_st_tr.py`                | `core/st_tr.py` (`STTRModel`)      | ST-TR dual transformer on MediaPipe pose. **Not supported** by `/analyze` (pose-only).                                              |
 | `timesformer`          | video_transformer | `pipelines/training/train_timesformer.py`          | `core/timesformer.py`              | Divided space–time attention + pose tokens; ViT-style stem when `backbone=vit`.                                                     |
+| `k_st_vit`             | graph             | `pipelines/training/train_k_st_vit.py`             | `core/k_st_vit.py`                 | SkateFormer joints + Conv3D/ViT patches, divided ST fusion; default `hit_centered` sampling.                                        |
 | `vit_gcn`              | graph             | `pipelines/training/train_vit_gcn.py`              | `core/vit_gcn.py`                  | Per-frame timm ViT CLS + fixed skeleton GCN on MediaPipe joints.                                                                    |
 
 
-**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `st_tr`, `timesformer`, `vit_gcn`.
+**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `st_tr`, `timesformer`, `k_st_vit`, `vit_gcn`.
 
 ---
 

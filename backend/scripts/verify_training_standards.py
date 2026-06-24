@@ -30,6 +30,7 @@ PRIMARY_TRAINERS = (
     "train_gcn_st_tr.py",
     "train_st_tr_vit.py",
     "train_skateformer.py",
+    "train_k_st_vit.py",
 )
 
 # Paper baselines — documented exceptions.

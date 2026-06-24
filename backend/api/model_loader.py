@@ -30,6 +30,7 @@ ARCH_CONV3D_POSE = "conv3d_pose"
 ARCH_TIMESFORMER = "timesformer"
 ARCH_ST_TR = "st_tr"
 ARCH_VIT_GCN = "vit_gcn"
+ARCH_K_ST_VIT = "k_st_vit"
 
 _SCRIPT_TO_ARCH = {
     "train_full.py": ARCH_CNN_LSTM,
@@ -37,6 +38,7 @@ _SCRIPT_TO_ARCH = {
     "train_timesformer.py": ARCH_TIMESFORMER,
     "train_st_tr.py": ARCH_ST_TR,
     "train_vit_gcn.py": ARCH_VIT_GCN,
+    "train_k_st_vit.py": ARCH_K_ST_VIT,
 }
 
 
@@ -44,6 +46,9 @@ def split_checkpoint(raw: Any) -> Tuple[Dict[str, Any], Dict[str, torch.Tensor]]
     if isinstance(raw, dict) and "model" in raw and isinstance(raw["model"], dict):
         meta = {k: v for k, v in raw.items() if k != "model"}
         return meta, raw["model"]
+    if isinstance(raw, dict) and "k_st_vit" in raw and isinstance(raw["k_st_vit"], dict):
+        meta = {k: v for k, v in raw.items() if k != "k_st_vit"}
+        return meta, raw["k_st_vit"]
     if isinstance(raw, dict):
         return {}, raw
     raise TypeError(f"Unexpected checkpoint type: {type(raw)}")
@@ -80,6 +85,8 @@ def resolve_architecture(
         return ARCH_TIMESFORMER
     if "vit_gcn" in fn or "vitgcn" in fn:
         return ARCH_VIT_GCN
+    if "k_st_vit" in fn or "kstvit" in fn:
+        return ARCH_K_ST_VIT
     return ARCH_CNN_LSTM
 
 
@@ -161,6 +168,24 @@ def build_model(
             vit_unfreeze_last_n=int(_i("vit_unfreeze_last_n", 0)),
             pretrained=bool(_i("pretrained", False)),
             use_pose=bool(_i("use_pose", True)),
+        )
+
+    if arch == ARCH_K_ST_VIT:
+        from core.k_st_vit import build_k_st_vit
+
+        return build_k_st_vit(
+            task_classes,
+            window_size=int(_i("num_frames", 16)),
+            embed_dim=int(_i("embed_dim", 128)),
+            st_depth=int(_i("st_depth", 4)),
+            num_cross_layers=int(_i("num_cross_layers", 2)),
+            num_heads=int(_i("num_heads", 4)),
+            vision_backbone=str(_i("vision_backbone", "conv3d")),
+            video_backbone=str(_i("video_backbone", "r2plus1d_18")),
+            spatial_size=int(_i("spatial_size", 224)),
+            vit_model_name=str(_i("vit_model_name", "vit_small_patch16_224")),
+            vit_unfreeze_last_n=int(_i("vit_unfreeze_last_n", 4)),
+            use_shuttle=bool(_i("use_shuttle", False)),
         )
 
     raise ValueError(f"Unknown architecture {arch!r}")

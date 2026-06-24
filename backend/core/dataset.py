@@ -98,6 +98,7 @@ class FineBadmintonDataset(Dataset):
         transform=None,
         sequence_length: int = 16,
         frame_interval: int = 2,
+        sampling_mode: str = "span_linspace",
         image_dir: Optional[str] = None,
         prefer_video: bool = False,
     ):
@@ -105,6 +106,11 @@ class FineBadmintonDataset(Dataset):
         self.transform = transform
         self.sequence_length = sequence_length
         self.frame_interval = frame_interval
+        if sampling_mode not in ("span_linspace", "hit_centered"):
+            raise ValueError(
+                f"sampling_mode must be span_linspace|hit_centered, got {sampling_mode!r}"
+            )
+        self.sampling_mode = sampling_mode
         self.prefer_video = prefer_video
         if prefer_video:
             self.image_dir: Optional[str] = None
@@ -179,11 +185,16 @@ class FineBadmintonDataset(Dataset):
                 
             for hit in video_item['hitting']:
                 if 'start_frame' not in hit or 'end_frame' not in hit: continue
-                    
+
+                hit_frame = hit.get("hit_frame")
+                if hit_frame is None:
+                    hit_frame = (int(hit["start_frame"]) + int(hit["end_frame"])) // 2
+
                 samples.append({
                     'video_path': video_path,
                     'start_frame': hit['start_frame'],
                     'end_frame': hit['end_frame'],
+                    'hit_frame': int(hit_frame),
                     'hit_type': hit.get('hit_type', 'Other'),
                     'subtype': hit.get('subtype', []),
                     'player_actions': hit.get('player_actions', []),
@@ -280,6 +291,7 @@ class FineBadmintonDataset(Dataset):
             sample['video_path'],
             sample['start_frame'],
             sample['end_frame'],
+            sample.get('hit_frame'),
         )
 
         if self.transform:
@@ -305,25 +317,49 @@ class FineBadmintonDataset(Dataset):
             self._video_caps[video_path] = cap
         return self._video_caps[video_path]
 
+    def _frame_indices(
+        self, start_frame: int, end_frame: int, hit_frame: Optional[int] = None
+    ) -> np.ndarray:
+        """Return ``sequence_length`` frame indices for the stroke clip."""
+        duration = end_frame - start_frame
+        if duration <= 0:
+            return np.zeros(self.sequence_length, dtype=int)
+        if self.sampling_mode == "span_linspace" or hit_frame is None:
+            return np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
+        center = self.sequence_length // 2
+        hit = int(np.clip(hit_frame, start_frame, end_frame - 1))
+        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
+        indices[center] = hit
+        return indices
+
     def _load_frames(
         self, video_path: str, start_frame: int, end_frame: int,
+        hit_frame: Optional[int] = None,
     ) -> List[torch.Tensor]:
-        """Sample sequence_length evenly-spaced frames (JPEG cache or MP4 decode)."""
+        """Sample sequence_length frames (JPEG cache or MP4 decode)."""
         if self.image_dir is not None:
-            return self._load_frames_from_jpeg(video_path, start_frame, end_frame)
-        return self._load_frames_from_video(video_path, start_frame, end_frame)
+            return self._load_frames_from_jpeg(
+                video_path, start_frame, end_frame, hit_frame
+            )
+        return self._load_frames_from_video(
+            video_path, start_frame, end_frame, hit_frame
+        )
 
     def _load_frames_from_jpeg(
-        self, video_path: str, start_frame: int, end_frame: int,
+        self,
+        video_path: str,
+        start_frame: int,
+        end_frame: int,
+        hit_frame: Optional[int] = None,
     ) -> List[torch.Tensor]:
-        """Same frame indices as ``extract_training_frames`` / video path (linspace)."""
+        """Frame indices follow ``sampling_mode`` (linspace or hit-centered)."""
         blank = [torch.zeros((3, 224, 224)) for _ in range(self.sequence_length)]
         duration = end_frame - start_frame
         if duration <= 0:
             return blank
         assert self.image_dir is not None
         stem = Path(video_path).stem
-        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
+        indices = self._frame_indices(start_frame, end_frame, hit_frame)
         frames: List[torch.Tensor] = []
         for idx in indices:
             fp = os.path.join(self.image_dir, f"{stem}_{int(idx)}.jpg")
@@ -337,15 +373,19 @@ class FineBadmintonDataset(Dataset):
         return frames
 
     def _load_frames_from_video(
-        self, video_path: str, start_frame: int, end_frame: int,
+        self,
+        video_path: str,
+        start_frame: int,
+        end_frame: int,
+        hit_frame: Optional[int] = None,
     ) -> List[torch.Tensor]:
-        """Sample sequence_length evenly-spaced frames from the video clip."""
+        """Sample sequence_length frames from the video clip."""
         blank = [torch.zeros((3, 224, 224)) for _ in range(self.sequence_length)]
         duration = end_frame - start_frame
         if duration <= 0:
             return blank
 
-        indices = np.linspace(start_frame, end_frame - 1, self.sequence_length).astype(int)
+        indices = self._frame_indices(start_frame, end_frame, hit_frame)
 
         cap = self._get_cap(video_path)
         if cap is None:
