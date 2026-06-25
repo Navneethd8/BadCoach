@@ -1,0 +1,97 @@
+% JVC architecture — paper figure (minimal)
+%
+% Standalone:
+%   cd docs/figures && pdflatex jvc_architecture.tex
+%
+% In your paper preamble:
+%   \usepackage{tikz}
+%   \usetikzlibrary{positioning,fit,arrows.meta,calc,backgrounds}
+%
+% In the paper body:
+%   \input{figures/jvc_architecture_body.tex}
+
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit,arrows.meta,calc,backgrounds}
+
+% --- styles ---
+\tikzset{
+  input/.style={
+    draw, rounded corners=3pt, fill=yellow!15, minimum width=2.1cm,
+    minimum height=1.05cm, align=center, font=\small
+  },
+  encoder/.style={
+    draw, fill=blue!8, minimum width=2.2cm, minimum height=1.05cm,
+    align=center, font=\small
+  },
+  tokens/.style={
+    draw, fill=white, minimum width=1.7cm, minimum height=1.05cm,
+    align=center, font=\small
+  },
+  fusion/.style={
+    draw, fill=orange!18, line width=0.6pt, minimum width=2.0cm,
+    minimum height=1.25cm, align=center, font=\small\bfseries
+  },
+  block/.style={
+    draw, fill=cyan!8, minimum width=1.85cm, minimum height=1.25cm,
+    align=center, font=\small
+  },
+  pool/.style={
+    draw, fill=orange!10, minimum width=2.0cm, minimum height=1.25cm,
+    align=center, font=\small
+  },
+  head/.style={
+    draw, fill=gray!10, minimum width=1.6cm, minimum height=1.25cm,
+    align=center, font=\small
+  },
+  output/.style={
+    draw, rounded corners=3pt, fill=green!15, line width=0.7pt,
+    minimum width=2.0cm, minimum height=1.35cm, align=center,
+    font=\small\bfseries
+  },
+  arr/.style={-{Stealth[length=2.2mm]}, thick, draw=gray!70!black},
+  lbl/.style={font=\scriptsize, text=gray!60!black}
+}
+
+\begin{document}
+\begin{tikzpicture}[node distance=0.55cm and 0.65cm]
+
+  % --- inputs ---
+  \node[input] (vin) {RGB clip $\mathbf{V}$\\{\scriptsize $T{\times}3{\times}H{\times}W$}};
+  \node[input, below=of vin] (sin) {Skeleton clip $\mathbf{S}$\\{\scriptsize $T{\times}J{\times}3$}};
+
+  % --- encoders ---
+  \node[encoder, right=of vin] (ev) {Visual encoder $\mathcal{E}_v$\\{\scriptsize R(2+1)D-18}};
+  \node[encoder, right=of sin] (es) {Kinematic encoder $\mathcal{E}_s$\\{\scriptsize SkateFormer}};
+
+  % --- tokens ---
+  \node[tokens, right=of ev] (zv) {Patch tokens\\$\mathbf{Z}_v$};
+  \node[tokens, right=of es] (zs) {Joint tokens\\$\mathbf{Z}_s$};
+
+  % --- fusion + temporal ---
+  \node[fusion, right=1.1cm of zv, yshift=-0.55cm] (xa) {Joint--Vision\\Cross-Attn\\{\scriptsize $\mathbf{Q}{\leftarrow}\mathbf{Z}_s$}};
+  \node[block, right=of xa] (st) {Divided ST\\Transformer};
+  \node[pool, right=of st] (pool) {Temporal pool\\contact + max\\clip $\mathbf{f}$};
+  \node[head, right=of pool] (clf) {Linear\\+ Softmax};
+  \node[output, right=of clf] (out) {Output $\hat{y}$\\stroke type\\{\scriptsize 9 classes}};
+
+  % --- edges: inputs -> encoders -> tokens ---
+  \draw[arr] (vin) -- (ev);
+  \draw[arr] (sin) -- (es);
+  \draw[arr] (ev) -- (zv);
+  \draw[arr] (es) -- (zs);
+  \draw[arr] (zv.east) -- ++(0.35,0) |- (xa.west);
+  \draw[arr] (zs.east) -- ++(0.35,0) |- (xa.west);
+
+  % --- main trunk ---
+  \draw[arr] (xa) -- (st);
+  \draw[arr] (st) -- (pool);
+  \draw[arr] (pool) -- (clf);
+  \draw[arr] (clf) -- (out);
+
+  % --- caption note (optional; comment out for \input in paper) ---
+  \node[lbl, below=0.9cm of sin, anchor=north west, xshift=-0.1cm] (note)
+    {One annotated hit $\rightarrow$ one 16-frame clip $\rightarrow$ one stroke-type label ($T{=}16$, $J{=}33$).};
+
+\end{tikzpicture}
+\end{document}

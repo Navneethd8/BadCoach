@@ -1,0 +1,16 @@
+% Drop into paper (requires tikz + libraries from jvc_architecture.tex header).
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \input{figures/jvc_architecture_tikz_only.tex}%
+  }
+  \caption{\textbf{JVC overview.}
+    A hit-centered RGB clip $\mathbf{V}$ and skeleton clip $\mathbf{S}$ are encoded into
+    patch tokens $\mathbf{Z}_v$ and joint tokens $\mathbf{Z}_s$.
+    Joint tokens cross-attend to visual patches ($\mathbf{Q}$ from $\mathbf{Z}_s$,
+    $\mathbf{K},\mathbf{V}$ from $\mathbf{Z}_v$), then a divided spatiotemporal
+    transformer and contact-weighted temporal pooling produce a clip embedding
+    $\mathbf{f}$, which is classified into one of nine stroke types.
+    $T{=}16$ frames per hit; skeletons from MediaPipe.}
+  \label{fig:jvc}
+\end{figure}
