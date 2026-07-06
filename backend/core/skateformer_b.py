@@ -129,6 +129,12 @@ class SkateFormerBEncoder(nn.Module):
             output = output + self.backbone.joint_person_temporal_embedding
         return output
 
+    def encode_joint_tokens(self, pose: torch.Tensor) -> torch.Tensor:
+        """Per-frame joint tokens ``(B, T, V, feat_dim)`` before global pool."""
+        data, index_t = self._to_input(pose)
+        x = self.backbone.forward_features(self._embed(data, index_t))
+        return self.dropout(x.permute(0, 2, 3, 1).contiguous())
+
     def encode_skeleton(self, pose: torch.Tensor) -> torch.Tensor:
         """Pooled skeleton embedding ``(B, feat_dim)``."""
         data, index_t = self._to_input(pose)

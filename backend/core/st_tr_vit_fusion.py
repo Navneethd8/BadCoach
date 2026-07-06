@@ -70,21 +70,39 @@ class ViTClipEncoder(nn.Module):
                 for p in blk.parameters():
                     p.requires_grad = True
 
+    def _vit_token_features(self, frames: torch.Tensor) -> torch.Tensor:
+        """Raw ViT tokens ``(B * T, 1 + P, vit_dim)``."""
+        B, T, C, H, W = frames.shape
+        if T != self.num_frames:
+            raise ValueError(f"Expected T={self.num_frames}, got {T}")
+        x = frames.view(B * T, C, H, W)
+        tok = self.vit.forward_features(x)
+        if tok.dim() != 3:
+            raise RuntimeError(f"Unexpected ViT feature shape: {tok.shape}")
+        return tok
+
+    def forward_patch_tokens(self, frames: torch.Tensor) -> torch.Tensor:
+        """
+        Patch tokens (no CLS), projected to ``vit_embed_dim``.
+
+        Returns:
+            ``(B, T, P, vit_embed_dim)`` where P = (img_size // patch_size) ** 2.
+        """
+        B, T, C, H, W = frames.shape
+        tok = self._vit_token_features(frames)
+        patch = int(self.vit.patch_embed.patch_size[0])
+        grid = H // patch
+        patches = self.dropout(self.proj(tok[:, 1:, :]))
+        return patches.view(B, T, grid * grid, -1)
+
     def forward(self, frames: torch.Tensor) -> torch.Tensor:
         """
         Args:
             frames: ``(B, T, 3, H, W)`` ImageNet-normalized RGB.
         """
         B, T, C, H, W = frames.shape
-        if T != self.num_frames:
-            raise ValueError(f"Expected T={self.num_frames}, got {T}")
-
-        x = frames.view(B * T, C, H, W)
-        tok = self.vit.forward_features(x)
-        if tok.dim() != 3:
-            raise RuntimeError(f"Unexpected ViT feature shape: {tok.shape}")
-        cls = self.proj(tok[:, 0, :])
-        cls = self.dropout(cls)
+        tok = self._vit_token_features(frames)
+        cls = self.dropout(self.proj(tok[:, 0, :]))
         seq = cls.view(B, T, -1)
         avg = seq.mean(dim=1)
         mx, _ = seq.max(dim=1)

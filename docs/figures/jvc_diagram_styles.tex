@@ -1,0 +1,46 @@
+% Shared TikZ styles for JVC / K-STViT architecture figures.
+\tikzset{
+  every node/.style={font=\rmfamily\small},
+  input/.style={
+    draw=black!75, line width=0.35pt, rounded corners=4pt,
+    fill=gray!10, minimum width=2.05cm, minimum height=1.0cm,
+    align=center
+  },
+  encoder/.style args={#1}{
+    draw=black!75, line width=0.35pt, rounded corners=4pt,
+    fill=#1, minimum width=2.15cm, minimum height=1.0cm,
+    align=center
+  },
+  encoder/.default=blue!14,
+  tokens/.style={
+    draw=black!75, line width=0.35pt, rounded corners=4pt,
+    fill=white, minimum width=1.85cm, minimum height=1.25cm,
+    align=center
+  },
+  block/.style={
+    draw=black!75, line width=0.35pt, rounded corners=4pt,
+    fill=gray!10, minimum width=1.9cm, minimum height=1.15cm,
+    align=center
+  },
+  jvc/.style={
+    draw=black!75, line width=0.45pt, rounded corners=4pt,
+    fill=blue!18!violet!24, minimum width=3.05cm, minimum height=2.1cm,
+    align=center
+  },
+  head/.style={
+    draw=black!75, line width=0.35pt, rounded corners=4pt,
+    fill=gray!10, minimum width=1.55cm, minimum height=1.15cm,
+    align=center
+  },
+  output/.style={
+    draw=black!75, line width=0.35pt, rounded corners=4pt,
+    fill=orange!16, minimum width=1.95cm, minimum height=1.2cm,
+    align=center
+  },
+  arr/.style={
+    ->, >=latex, line width=0.45pt, draw=black
+  },
+  arrlabel/.style={
+    font=\scriptsize\rmfamily, text=black, inner sep=1pt
+  }
+}

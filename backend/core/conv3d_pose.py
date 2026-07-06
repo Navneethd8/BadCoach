@@ -175,6 +175,91 @@ class Conv3DPoseMultitaskModel(nn.Module):
         return {task: head(feat) for task, head in self.heads.items()}
 
 
+class Conv3DClipTokenEncoder(nn.Module):
+    """
+    R(2+1)D trunk exporting per-frame spatial tokens for cross-attention fusion.
+
+    Input ``(B, T, 3, H, W)`` ImageNet-normalized RGB; output ``(B, T, P, embed_dim)``
+    where P is the layer4 spatial grid (7×7 at 224² for R2+1D-18).
+    """
+
+    def __init__(
+        self,
+        num_frames: int = 16,
+        spatial_size: int = 224,
+        embed_dim: int = 128,
+        video_backbone: str = "r2plus1d_18",
+        pretrained: bool = True,
+        freeze_backbone: bool = True,
+        unfreeze_layer4: bool = True,
+    ) -> None:
+        super().__init__()
+        self.num_frames = int(num_frames)
+        self.spatial_size = int(spatial_size)
+        self.embed_dim = int(embed_dim)
+        self.video_backbone_name = str(video_backbone).lower().strip()
+        self.freeze_backbone = bool(freeze_backbone)
+        self.unfreeze_layer4 = bool(unfreeze_layer4)
+
+        self.backbone, self.backbone_dim = _build_torchvision_video_backbone(
+            self.video_backbone_name, pretrained=pretrained
+        )
+        self.feat_proj = nn.Linear(self.backbone_dim, embed_dim)
+        self._configure_backbone_requires_grad()
+
+    def _configure_backbone_requires_grad(self) -> None:
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+        if self.freeze_backbone:
+            if self.unfreeze_layer4 and hasattr(self.backbone, "layer4"):
+                for p in self.backbone.layer4.parameters():
+                    p.requires_grad = True
+        else:
+            for p in self.backbone.parameters():
+                p.requires_grad = True
+
+    @property
+    def num_patches(self) -> int:
+        side = max(1, self.spatial_size // 32)
+        return side * side
+
+    def _layer4_feature_maps(self, x: torch.Tensor) -> torch.Tensor:
+        """``x``: ``(B, 3, T, H, W)`` -> ``(B, C, T, Hp, Wp)``."""
+        x = self.backbone.stem(x)
+        x = self.backbone.layer1(x)
+        x = self.backbone.layer2(x)
+        x = self.backbone.layer3(x)
+        return self.backbone.layer4(x)
+
+    def forward_patch_tokens(self, frames: torch.Tensor) -> torch.Tensor:
+        B, T, C, H, W = frames.shape
+        if T != self.num_frames:
+            raise ValueError(f"Expected T={self.num_frames}, got {T}")
+        if C != 3:
+            raise ValueError(f"Expected 3 RGB channels, got {C}")
+
+        x = frames.permute(0, 2, 1, 3, 4).contiguous()
+        if H != self.spatial_size or W != self.spatial_size:
+            x = F.interpolate(
+                x,
+                size=(T, self.spatial_size, self.spatial_size),
+                mode="trilinear",
+                align_corners=False,
+            )
+
+        feat = self._layer4_feature_maps(x)
+        _, c, tp, hp, wp = feat.shape
+        if tp != T:
+            feat = F.interpolate(
+                feat,
+                size=(T, hp, wp),
+                mode="trilinear",
+                align_corners=False,
+            )
+        tokens = feat.permute(0, 2, 3, 4, 1).contiguous().view(B, T, hp * wp, c)
+        return self.feat_proj(tokens)
+
+
 def backbone_parameter_groups(model: "Conv3DPoseMultitaskModel") -> Tuple[list, list]:
     """Split 3D trunk vs fusion+heads for differential LR (matches other two-stream video trainers)."""
     bb, other = [], []

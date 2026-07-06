@@ -16,7 +16,7 @@
 #   ISOCOURT_TRAIN_LOG      log file (default: repo/logs/train-UTC.log)
 #   ISOCOURT_VENV           venv or conda env dir (default: repo/.venv)
 #   ISOCOURT_PYTHON         python binary (default: ${ISOCOURT_VENV}/bin/python)
-#   ISOCOURT_DISABLE_MLFLOW if 1, skip MLflow (recommended on cluster)
+#   ISOCOURT_DISABLE_MLFLOW skip MLflow (default 1 on cluster; set 0 to enable)
 #   CUDA_VISIBLE_DEVICES      GPU index for this session (e.g. 1 or 2)
 #   ISOCOURT_RSYNC_DEST     after success: rsync models + mlruns to this ssh path
 #   ISOCOURT_RSYNC_EXTRA    extra rsync args (one string)
@@ -29,7 +29,7 @@ VENV="${ISOCOURT_VENV:-${REPO_ROOT}/.venv}"
 PYTHON="${ISOCOURT_PYTHON:-${VENV}/bin/python}"
 SESSION="${ISOCOURT_TMUX_SESSION:-isocourt-train}"
 LOG="${ISOCOURT_TRAIN_LOG:-}"
-DISABLE_MLFLOW="${ISOCOURT_DISABLE_MLFLOW:-}"
+DISABLE_MLFLOW="${ISOCOURT_DISABLE_MLFLOW:-1}"
 
 MODEL_RAW="${1:?Usage: $0 MODEL [train script args...]}"
 shift
@@ -57,6 +57,9 @@ case "${MODEL}" in
     ;;
   k_st_vit|k-st-vit|kstvit|kinematic_st_vit)
     TRAIN_SCRIPT="backend/pipelines/training/train_k_st_vit.py"
+    ;;
+  jvc_no_xattn|jvc-no-xattn|jvc_no_cross_attn|jvc)
+    TRAIN_SCRIPT="backend/pipelines/training/train_jvc_no_xattn.py"
     ;;
   qwen3_vl_8b|qwen3-vl-8b|qwen_vl_8b|qwen8b_vlm)
     TRAIN_SCRIPT="backend/pipelines/vlm/qwen-8b/train_qwen3_vl_8b.py"
@@ -104,13 +107,13 @@ mkdir -p "${REPO_ROOT}/logs"
   echo "mkdir -p $(printf '%q' "$(dirname "${LOG}")")"
   echo "export PYTHONUNBUFFERED=1"
   echo "export PYTHONPATH=$(printf '%q' "${REPO_ROOT}/backend"):\${PYTHONPATH:-}"
-  if [[ -n "${DISABLE_MLFLOW}" ]]; then
-    echo "export ISOCOURT_DISABLE_MLFLOW=$(printf '%q' "${DISABLE_MLFLOW}")"
-  fi
+  echo "export ISOCOURT_DISABLE_MLFLOW=$(printf '%q' "${DISABLE_MLFLOW}")"
   if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
     echo "export CUDA_VISIBLE_DEVICES=$(printf '%q' "${CUDA_VISIBLE_DEVICES}")"
   fi
-  echo "export MLFLOW_TRACKING_URI=\"\${MLFLOW_TRACKING_URI:-file:$(printf '%q' "${REPO_ROOT}")/backend/mlruns}\""
+  if [[ "${DISABLE_MLFLOW}" != "1" && "${DISABLE_MLFLOW,,}" != "true" && "${DISABLE_MLFLOW,,}" != "yes" ]]; then
+    echo "export MLFLOW_TRACKING_URI=\"\${MLFLOW_TRACKING_URI:-file:$(printf '%q' "${REPO_ROOT}")/backend/mlruns}\""
+  fi
   echo "echo \"=== \$(date -u -Iseconds) start ===\" | tee -a $(printf '%q' "${LOG}")"
   echo "echo \"python=$(printf '%q' "${PYTHON}")\" | tee -a $(printf '%q' "${LOG}")"
   echo -n "$(printf '%q' "${PYTHON}") $(printf '%q' "${REPO_ROOT}/${TRAIN_SCRIPT}")"
