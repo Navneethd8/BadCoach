@@ -28,8 +28,6 @@ ENV_INFERENCE_CATEGORY = "ISOCOURT_INFERENCE_CATEGORY"
 ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
-    "skateformer",
-    "skateformer_b",
     "k_st_vit",
     "jvc_no_xattn",
     "timesformer",
@@ -40,8 +38,6 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
 CATEGORY_GROUPS: Dict[str, str] = {
     "cnn_lstm": "cnn",
     "conv3d_pose": "video_cnn",
-    "skateformer": "graph",
-    "skateformer_b": "graph",
     "k_st_vit": "graph",
     "jvc_no_xattn": "graph",
     "vit_gcn": "graph",
@@ -51,8 +47,6 @@ CATEGORY_GROUPS: Dict[str, str] = {
 SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_full.py": "cnn_lstm",
     "train_conv3d.py": "conv3d_pose",
-    "train_skateformer.py": "skateformer",
-    "train_skateformer_b.py": "skateformer_b",
     "train_k_st_vit.py": "k_st_vit",
     "train_jvc_no_xattn.py": "jvc_no_xattn",
     "train_timesformer.py": "timesformer",

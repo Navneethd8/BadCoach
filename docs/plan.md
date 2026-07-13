@@ -2,7 +2,7 @@
 
 IsoCourt research plan — **badminton SOTA on FineBadminton-20K**, not general NTU action recognition.
 
-**Status:** SkateFormer-B + ViT (late fusion) in training; GV-XAttn is the **next architecture** to implement after that run completes.
+**Status:** K-STViT and JVC no-xattn are the active graph–vision models; GV-XAttn is the next architecture to implement.
 
 ---
 
@@ -14,7 +14,7 @@ Build and evaluate **GV-XAttn** (Graph–Vision Cross-Attention): graph joint to
 
 - Same protocol as other IsoCourt primary trainers: **16 frames**, `frame_interval=2`, MediaPipe **33** joints, `video_level_split` seed **42**, batch **4**.
 - Reuse `pose_cache_mediapipe.pt` and RGB clips — **no shuttle track / court homography** in v1.
-- Compare fairly against **BST / TemPose baselines** and **late-fusion RGB+pose** (SkateFormer-B, ViT-GCN, Conv3D+pose).
+- Compare fairly against **BST / TemPose baselines** and **late-fusion RGB+pose** (ViT-GCN, Conv3D+pose, K-STViT).
 
 ---
 
@@ -29,7 +29,7 @@ Build and evaluate **GV-XAttn** (Graph–Vision Cross-Attention): graph joint to
 
 **Success (any one is a strong result):**
 
-1. Beat **SkateFormer-B** (late fusion) by **≥ 2–3 pts** val stroke_type, or  
+1. Beat **Conv3D+pose** / **K-STViT** baselines by **≥ 2–3 pts** val stroke_type, or  
 2. Beat **Conv3D+pose** (~71%) on the same split, or  
 3. Beat **BST baseline** on FineBadminton (same reimplementation protocol).
 
@@ -39,13 +39,17 @@ Build and evaluate **GV-XAttn** (Graph–Vision Cross-Attention): graph joint to
 
 ```mermaid
 flowchart TB
-  subgraph poseOnly [Skeleton-only - insufficient alone]
-    Skate[SkateFormer]
+  subgraph poseOnly [Skeleton-only baselines]
+    BSTpose[BST / TemPose collate]
   end
 
-  subgraph lateFusion [Late fusion RGB plus skeleton]
+  subgraph active [Active RGB plus skeleton]
+    KSTViT[K-STViT cross-attn]
+    JVC[JVC no-xattn late fusion]
+  end
+
+  subgraph lateFusion [Other late fusion]
     ViTGCN[ViT-GCN]
-    SkateB[SkateFormer-B plus ViT]
   end
 
   subgraph proposed [Proposed interaction fusion]
@@ -72,7 +76,8 @@ flowchart TB
 | Model | Skeleton | Vision | Fusion |
 |-------|----------|--------|--------|
 | ViT-GCN | GCN per frame, pool | ViT CLS, pool | Concat |
-| SkateFormer-B | SkateFormer 4-stream pool | ViT mean+max | Concat + MLP |
+| K-STViT | SkateFormer joint tokens | Conv3D/ViT patches | Cross-attn + divided ST |
+| JVC no-xattn | SkateFormer pool | Conv3D pool | Late concat + MLP |
 | **GV-XAttn** | Graph node tokens `(B,T,33,D)` | ViT **patch** tokens `(B,T,P,D)` | **Cross-attn per frame**, then temporal pool |
 | BST (baseline) | J+B, COCO-17 | — | Shuttle + court (structured) |
 
@@ -190,8 +195,8 @@ Recreate **`docs/paper_eval_tables.md`** (badminton-centric).
 | Conv3D+pose | ✓ | ✓ | — | ~71% |
 | TimeSformer+pose | ✓ | ✓ | — | ~53% |
 | ViT-GCN | ✓ | ✓ | — | (fill) |
-| SkateFormer | — | ✓ | — | (fill) |
-| SkateFormer-B | ✓ | ✓ | — | (training) |
+| K-STViT | ✓ | ✓ | — | ~81% |
+| JVC no-xattn | ✓ | ✓ | — | (fill) |
 | **GV-XAttn** | ✓ | ✓ | — | TBD |
 | BST baseline | — | ✓ | partial† | (fill) |
 | TemPose baseline | — | ✓ | — | (fill) |
@@ -214,7 +219,7 @@ Published BST / TemPose on ShuttleSet, BadmintonDB — footnote protocol mismatc
 
 ## 7. Implementation checklist
 
-- [ ] **Phase 0:** Let SkateFormer-B finish; record best val stroke_type.  
+- [ ] **Phase 0:** Retrain K-STViT / JVC on benchmark-holdout split; record val + test stroke_type.  
 - [ ] **Phase 1:** `ViTClipEncoder.forward_tokens()` — non-breaking.  
 - [ ] **Phase 1:** `backend/core/gv_xattn.py` — `GraphVisionCrossAttnModel`.  
 - [ ] **Phase 1:** `train_gv_xattn.py` + registry `gv_xattn` + tmux alias.  
@@ -236,7 +241,7 @@ Published BST / TemPose on ShuttleSet, BadmintonDB — footnote protocol mismatc
 | `backend/pipelines/training/train_gv_xattn.py` | **New** trainer |
 | `backend/core/model_registry.py` | Add `gv_xattn` category |
 | `scripts/ec2/run_train_tmux.sh` | Add `gv_xattn` model alias |
-| `backend/pipelines/training/train_skateformer_b.py` | Late-fusion control / warm-start reference |
+| `backend/core/skateformer_b.py` | Shared SkateFormer skeleton encoder (K-STViT / JVC) |
 
 ---
 

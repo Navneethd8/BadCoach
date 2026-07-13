@@ -117,23 +117,12 @@ Same as the **Pull** row in [Rsync quick reference](#rsync-quick-reference) abov
 | `cnn_lstm`    | `train_full.py`          |
 | `conv3d`      | `train_conv3d.py`        |
 | `timesformer` | `train_timesformer.py`   |
-| `skateformer` | `train_skateformer.py` — MediaPipe 16 frames, batch 4 (aliases: `skate`) |
+| `k_st_vit`    | `train_k_st_vit.py`      |
+| `jvc_no_xattn`| `train_jvc_no_xattn.py`  |
 | `bst_prep`    | `prepare_bst_finebadminton_collated.py` — BST tensor collate (COCO-17 + bones) |
 | `bst_baseline`| `train_bst_baseline.py`  |
 
 Extra CLI flags are passed through to the trainer (see each script’s `--help`).
-
-### SkateFormer (pose-only, 16 frames, batch 4)
-
-Uses shared `pose_cache_mediapipe.pt` and `training_standards` (same clip length as other IsoCourt trainers).
-
-```bash
-export ISOCOURT_TMUX_REPLACE=1
-./scripts/ec2/run_train_tmux.sh skateformer --epochs 60 --batch-size 4 --embed-dim 64 --num-heads 16
-tmux attach -t isocourt-train
-```
-
-MLflow experiment: `IsoCourt_Training_SkateFormer` under `backend/mlruns/`.
 
 ### BST baseline (two-step)
 

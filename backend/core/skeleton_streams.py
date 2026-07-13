@@ -2,7 +2,7 @@
 Joint / bone / motion streams for skeleton models (MediaPipe 33).
 
 Derived from cached ``(B, T, J, 3)`` tensors — no extra pose extraction.
-Used by SkateFormer-B (4×3 = 12 input channels).
+Used by K-STViT / JVC skeleton encoders (4×3 = 12 input channels).
 """
 
 from __future__ import annotations

@@ -244,21 +244,5 @@ def load_jvc_no_xattn_skeleton_branch(
     *,
     device: torch.device | str = "cpu",
 ) -> None:
-    """Warm-start skeleton from pose-only or SkateFormer-B checkpoints."""
-    from core.skateformer_b import SkateFormerBFusion
-
-    proxy = SkateFormerBFusion(
-        model.task_classes,
-        window_size=model.window_size,
-        four_stream=model.skeleton.four_stream,
-    )
-    load_skateformer_b_skeleton_branch(proxy, checkpoint_path, device=device)
-    tgt = model.skeleton.state_dict()
-    src = proxy.skeleton.state_dict()
-    filtered = {k: v for k, v in src.items() if k in tgt and v.shape == tgt[k].shape}
-    tgt.update(filtered)
-    model.skeleton.load_state_dict(tgt, strict=False)
-    print(
-        f"Loaded JVC no-xattn skeleton from {checkpoint_path} "
-        f"({len(filtered)}/{len(src)} tensors)"
-    )
+    """Warm-start skeleton from legacy SkateFormer / SkateFormer-B checkpoints."""
+    load_skateformer_b_skeleton_branch(model.skeleton, checkpoint_path, device=device)

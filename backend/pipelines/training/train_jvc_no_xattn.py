@@ -8,7 +8,7 @@ Example (cluster):
   ./scripts/cluster/run_train_tmux.sh jvc_no_xattn \\
     --registry-experiment \\
     --pose-cache backend/models/pose_cache_span_linspace.pt \\
-    --resume-skeleton backend/models/badminton_model_skateformer.pth \\
+    --resume-skeleton backend/models/badminton_model_skateformer_b.pth \\
     --resume-checkpoint backend/models/badminton_model_conv3d_pose.pth
 """
 from __future__ import annotations

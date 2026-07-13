@@ -125,31 +125,6 @@
         },
         "registrations": []
       },
-      "skateformer": {
-        "primary": null,
-        "registrations": []
-      },
-      "skateformer_b": {
-        "primary": {
-          "accuracy": 51.34,
-          "epoch": 46,
-          "timestamp": "2026-05-24T19:29:51.620678",
-          "script": "train_skateformer_b.py",
-          "architecture": "skateformer_b",
-          "four_stream": true,
-          "vit_model_name": "vit_small_patch16_224",
-          "file": "badminton_model_skateformer_b.pth",
-          "dataset": {
-            "id": "finebadminton_20k",
-            "source": "Moujuruo/Finebadminton-20K",
-            "list_file": "data/transformed_combined_rounds_output_en_evals_translated.json",
-            "data_root_relative": "data/FineBadminton-20K/videos",
-            "frames": "uniform_16_in_hit_span"
-          },
-          "experiment": false
-        },
-        "registrations": []
-      },
       "k_st_vit": {
         "primary": {
           "accuracy": 80.61,

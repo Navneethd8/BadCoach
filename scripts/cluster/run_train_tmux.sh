@@ -39,15 +39,6 @@ case "${MODEL}" in
   cnn_lstm|resnet50|full) TRAIN_SCRIPT="backend/pipelines/training/train_full.py" ;;
   conv3d|conv3d_pose) TRAIN_SCRIPT="backend/pipelines/training/train_conv3d.py" ;;
   timesformer) TRAIN_SCRIPT="backend/pipelines/training/train_timesformer.py" ;;
-  skateformer|skate|skate_former)
-    TRAIN_SCRIPT="backend/pipelines/training/train_skateformer.py"
-    ;;
-  skateformer_b|skateformer-b|skate_b|skateformer_b_fusion)
-    TRAIN_SCRIPT="backend/pipelines/training/train_skateformer_b.py"
-    ;;
-  gv_xattn|gv-xattn|gv_x_attn|graph_vision_xattn)
-    TRAIN_SCRIPT="backend/pipelines/training/train_gv_xattn.py"
-    ;;
   k_st_vit|k-st-vit|kstvit|kinematic_st_vit)
     TRAIN_SCRIPT="backend/pipelines/training/train_k_st_vit.py"
     ;;

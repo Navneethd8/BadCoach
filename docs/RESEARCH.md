@@ -89,9 +89,10 @@ IsoCourt’s main research thread is **fusing appearance (video) with body kinem
 | **Conv3D + pose** | **Late** | R(2+1)D trunk features ∥ pose MLP → multitask heads |
 | **TimeSformer + pose** | **Token** | One **pose token** prepended to patch tokens **each frame**, then divided space–time blocks |
 | **ViT + GCN** | **Dual-stream** | Per-frame ViT CLS ∥ per-frame GCN on 33 joints → concat → fusion MLP |
-| **SkateFormer-B** | **Late** | Four-stream SkateFormer skeleton embedding ∥ **ViT** clip embedding (`SkateFormerBFusion`) → fusion MLP |
+| **K-STViT** | **Cross-attn** | SkateFormer joint tokens cross-attend Conv3D/ViT patch tokens, then divided ST |
+| **JVC no-xattn** | **Late** | SkateFormer skeleton pool ∥ Conv3D pool → fusion MLP (ablation without cross-attn) |
 
-**Skeleton-only** paths (no RGB): pose-only **`train_skateformer.py`**, and collated **BST / TemPose / ST-GCN**. **SkateFormer-B** (`train_skateformer_b.py`) is **multimodal** (RGB + skeleton), not skeleton-only.
+**Skeleton-only** paths (no RGB): collated **BST / TemPose / ST-GCN** baselines under `third_party/`.
 
 ### Is “Image + Skeleton Fusion” our main novel contribution?
 
@@ -103,7 +104,7 @@ IsoCourt’s main research thread is **fusing appearance (video) with body kinem
   2. **Systematic pose ablations** via `--no-pose` on every RGB-capable native model (same cache, same split).
   3. **Multiple fusion mechanisms** compared under identical data (early, late, token, dual-stream) — not only one fusion design.
   4. **End-to-end product coupling:** sliding-window inference, skeleton overlay, and **LLM coaching** on structured model outputs (deployment story beyond a single accuracy table).
-  5. **SkateFormer-B on badminton:** four-stream MediaPipe-33 kinematics (joint / bone / motion) with **late ViT fusion** — extends generic SkateFormer (ECCV 2024) beyond skeleton-only transfer.
+  5. **K-STViT / JVC on badminton:** four-stream BlazePose kinematics fused with Conv3D vision under the shared 16-frame contract.
 
 The strongest **empirical** claim today is: **late-fused 3D CNN + MediaPipe pose beats RGB-only CNN-LSTM on `stroke_type` val acc** (see §4). Token-level TimeSformer (scratch) has **not** yet beaten the CNN-LSTM baseline without ViT pretraining and tuning.
 
@@ -124,7 +125,8 @@ Metric: **best validation `stroke_type` accuracy (%)** on the standard video-lev
 | **TimeSformer (ViT)** | RGB + pose token | *TBD* | — | Run: `--backbone vit --vit-model vit_small_patch16_224` (+ unfreeze sweeps in TIMESFORMER_HYPERPARAMS.md) |
 | **ViT + GCN** | RGB + skeleton graph | *TBD* | — | `vit_gcn` — no `primary` in registry yet |
 | **ViT + GCN** | RGB only | *TBD* | — | Run: `train_vit_gcn.py --no-pose` |
-| **SkateFormer-B** | RGB + four-stream skeleton (late ViT) | **Yes** | **49.7** (epoch 3) | `skateformer_b` — early checkpoint; training ongoing (`train_skateformer_b.py`) |
+| **K-STViT** | RGB + four-stream skeleton (cross-attn) | **Yes** | **80.61** | `k_st_vit` — current best native model |
+| **JVC no-xattn** | RGB + skeleton (late Conv3D) | **Yes** | *TBD* | `jvc_no_xattn` — cross-attn ablation |
 
 > **Update this table** after each MLflow run: copy best `val_type_acc` into `model_registry.json` or your lab spreadsheet. Rows marked *TBD* are the **pose vs no-pose ablation** cells you should fill next.
 
@@ -180,14 +182,11 @@ Keep **seed, split, epochs, batch size, and aug** fixed; only toggle `--no-pose`
 - **Fusion:** concat **4×embed_dim** → MLP → heads (or **2×embed_dim** RGB-only with `--no-pose`).
 - **Role in research:** explicit **graph structure** on skeleton vs unstructured pose tokens in TimeSformer.
 
-### 5.6 SkateFormer-B (`train_skateformer_b.py` → `core/skateformer_b.py`)
+### 5.6 K-STViT / JVC (`train_k_st_vit.py`, `train_jvc_no_xattn.py`)
 
-- **Modality:** **RGB frames** (16×224×224, ImageNet norm) **+** MediaPipe pose from `pose_cache_mediapipe.pt` — same native clip contract as Conv3D / K-STViT.
-- **Skeleton trunk:** vendored [SkateFormer](https://github.com/KAIST-VICLab/SkateFormer) (`core/skateformer/official.py`) with **four-stream** input on **33 joints**, **T=16**: joint, bone, joint-motion, bone-motion (`core/skeleton_streams.py` → 12 input channels).
-- **Fusion module:** `SkateFormerBFusion` — `SkateFormerBEncoder` embedding ∥ `ViTClipEncoder` (default `vit_small_patch16_224`) → concat → fusion MLP → multitask heads (late fusion).
-- **“B” profile:** compact badminton config (`embed_dim=64`, `num_heads=16`, Skate-MSA partitions for T=16 / V=33); distinguish from pose-only `train_skateformer.py` and full NTU-scale upstream configs.
-- **Training:** weighted sampler, stroke-weighted loss, optional skeleton warm-start (`--resume-skeleton`), stroke-only warmup epochs; EC2: `./scripts/ec2/run_train_tmux.sh skateformer_b` (aliases: `skateformer-b`, `skate_b`, `skateformer_b_fusion`).
-- **Registry (May 2026):** primary **49.7%** `stroke_type` val acc at **epoch 3** — treat as **early / in progress**, not final SOTA.
+- **Skeleton trunk:** vendored [SkateFormer](https://github.com/KAIST-VICLab/SkateFormer) four-stream encoder (`core/skateformer_b.py` → `core/skateformer/official.py`).
+- **Vision:** R(2+1)D Conv3D (default); K-STViT optionally uses ViT patches.
+- **Fusion:** K-STViT = graph–vision cross-attention + divided ST; JVC = late concat ablation without cross-attn.
 
 ---
 
@@ -200,8 +199,6 @@ These live under `backend/third_party/` and separate training scripts. They answ
 | **BST** | `train_bst_baseline.py` | COCO-17 pose (+ bones), **shuttle**, **court position**, video length | MIT [BST](https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer); default **BST_CG_AP**, T=30 collate |
 | **TemPose_V** | `train_tempose_baseline.py` | Skeleton **only** (joints + bones) | Fairer “pose-only SOTA” reference than full BST |
 | **ST-GCN** | `train_stgcn_baseline.py` | COCO-17 joints, 2 players × 17 | Classic graph conv baseline; no shuttle |
-| **SkateFormer** (pose-only) | `train_skateformer.py` / `core/skateformer` | MediaPipe 33, T=16 | Skeleton-only IsoCourt adapter (no RGB) |
-| **SkateFormer-B** | `train_skateformer_b.py` | Four-stream pose + RGB (ViT late fusion) | Multimodal badminton experiment (see §5.6) |
 
 **Prepare collated tensors (once):**
 
@@ -221,9 +218,7 @@ Use these as **claims to support with tables and ablations**, not as established
 1. **Unified multimodal benchmark on FineBadminton-20K** — comparable 16-frame clips, video-level split, and multitask evaluation across CNN, 3D CNN, divided space–time transformers, ViT-GCN, and skeleton transformers.
 2. **Fusion-point study for badminton** — early (LSTM), late (Conv3D), token (TimeSformer), and graph dual-stream (ViT-GCN) under shared pose cache and metrics.
 3. **Empirical finding (current):** **late fusion with 3D CNN + MediaPipe** outperforms **RGB-only ResNet-LSTM** on stroke_type (+2.6 pp val acc in registry) — supports kinematics when RGB alone plateaus.
-4. **SkateFormer-B for badminton:** **four-stream** BlazePose kinematics + **late ViT fusion** under the same 16-frame / video-split contract — a concrete multimodal variant beyond skeleton-only SkateFormer transfer.
-5. **Transfer of ECCV 2024 SkateFormer** (pose-only path) and related skeleton transformers to **racket sports** — complements BST/TemPose skeleton-first lines.
-6. **Production-oriented HAR:** coupling stroke models with **real-time sliding windows**, skeleton visualization, and **LLM-generated coaching** from structured predictions (system paper angle).
+4. **K-STViT for badminton:** four-stream BlazePose kinematics with graph–vision cross-attention under the shared 16-frame contract.
 
 **What is weaker as a novelty claim:** “We invented image + skeleton fusion.” Prior work (including BST/TemPose for badminton, and generic two-stream HAR) already combines modalities. Frame the contribution as **rigorous comparison + badminton-specific benchmark + deployment**, not fusion itself.
 
@@ -237,8 +232,7 @@ Use these as **claims to support with tables and ablations**, not as established
 | High | **TimeSformer ViT** + unfreeze sweep | `train_timesformer.py --backbone vit` + TIMESFORMER_HYPERPARAMS.md |
 | High | **CNN+LSTM with pose** | `train_full.py` (pose on) vs current RGB-only primary |
 | Medium | **ViT-GCN** pose on/off | `train_vit_gcn.py` / `--no-pose` |
-| Medium | **SkateFormer-B** full training to convergence | `train_skateformer_b.py` or EC2 `run_train_tmux.sh skateformer_b` |
-| Medium | **TemPose_V** vs **SkateFormer** (pose-only) on same collate/split | baseline scripts + `train_skateformer.py` |
+| Medium | **TemPose_V** vs BST on same collate/split | baseline scripts |
 | Medium | Promote best checkpoint | `python -m api.inference_model_cli set <category>` |
 
 ---
@@ -251,10 +245,10 @@ Use these as **claims to support with tables and ablations**, not as established
 | Split | `backend/core/split.py` |
 | Pose cache | `backend/core/pose_cache_build.py` |
 | Models | `backend/core/model.py`, `conv3d_pose.py`, `timesformer.py`, `vit_gcn.py`, `vit_clip_encoder.py`, `skateformer_b.py`, `skateformer/`, `skeleton_streams.py` |
-| Training | `backend/pipelines/training/train_*.py` (SkateFormer-B: `train_skateformer_b.py`; EC2: `scripts/ec2/run_train_tmux.sh`) |
+| Training | `backend/pipelines/training/train_*.py` (active: `train_k_st_vit.py`, `train_jvc_no_xattn.py`; EC2: `scripts/ec2/run_train_tmux.sh`) |
 | Registry | `backend/models/model_registry.json`, `MODEL_REGISTRY.md` |
 | Baselines | `backend/third_party/BST-*` |
 
 ---
 
-*Last synced with registry checkpoints: May 2026. SkateFormer-B primary (49.7% @ epoch 3) is early — update §4 when training converges.*
+*Last synced with registry checkpoints: Jul 2026.*

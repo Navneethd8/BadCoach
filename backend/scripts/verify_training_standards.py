@@ -26,7 +26,6 @@ PRIMARY_TRAINERS = (
     "train_conv3d.py",
     "train_timesformer.py",
     "train_vit_gcn.py",
-    "train_skateformer.py",
     "train_k_st_vit.py",
 )
 
