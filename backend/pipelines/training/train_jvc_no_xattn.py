@@ -1,7 +1,7 @@
 """
 JVC no-cross-attention ablation: SkateFormer + Conv3D late fusion (span_linspace only).
 
-Training loop matches K-STViT v2 (losses, LR groups, scheduler) except architecture and sampling.
+Training loop matches JVC (losses, LR groups, scheduler) except architecture and sampling.
 
 Example (cluster):
 
@@ -218,7 +218,7 @@ def train_jvc_no_xattn(
     save_path=None,
     pose_cache_path=None,
     resume_checkpoint=None,
-    resume_k_st_vit=None,
+    resume_jvc=None,
     resume_skeleton=None,
     start_epoch=0,
     seed=42,
@@ -315,7 +315,7 @@ def train_jvc_no_xattn(
         wrapper_train = FramePoseDataset(dataset, pose_cache)
         wrapper_val = FramePoseDataset(val_dataset, pose_cache)
 
-        train_indices, val_indices = video_level_split(dataset.samples)
+        train_indices, val_indices, _test_indices = video_level_split(dataset.samples)
         train_subset = Subset(wrapper_train, train_indices)
         val_subset = Subset(wrapper_val, val_indices)
 
@@ -359,12 +359,12 @@ def train_jvc_no_xattn(
         best_acc = 0.0
         if resume_skeleton and os.path.exists(resume_skeleton):
             load_jvc_no_xattn_skeleton_branch(model, resume_skeleton, device=device)
-        if resume_k_st_vit and os.path.exists(resume_k_st_vit):
-            ckpt = torch.load(resume_k_st_vit, map_location=device, weights_only=False)
+        if resume_jvc and os.path.exists(resume_jvc):
+            ckpt = torch.load(resume_jvc, map_location=device, weights_only=False)
             load_jvc_no_xattn_partial(model, ckpt)
             best_acc = float(ckpt.get("best_acc", 0.0))
             print(
-                f"Loaded K-STViT weights from {resume_k_st_vit} "
+                f"Loaded JVC weights from {resume_jvc} "
                 f"(prior best val stroke {best_acc:.1f}%)"
             )
         if resume_checkpoint and os.path.exists(resume_checkpoint):
@@ -625,16 +625,22 @@ def main() -> None:
         help="Pose-only SkateFormer / SkateFormer-B .pth for skeleton trunk.",
     )
     p.add_argument(
+        "--resume-jvc",
+        type=str,
+        default=None,
+        help="Prior JVC .pth (skeleton + Conv3D vision partial load).",
+    )
+    p.add_argument(
         "--resume-k-st-vit",
         type=str,
         default=None,
-        help="Prior K-STViT .pth (skeleton + Conv3D vision partial load).",
+        help=argparse.SUPPRESS,
     )
     p.add_argument(
         "--resume-checkpoint",
         type=str,
         default=None,
-        help="Conv3D pose .pth (vision), JVC no-xattn, or K-STViT .pth.",
+        help="Conv3D pose .pth (vision), JVC no-xattn, or JVC .pth.",
     )
     p.add_argument("--start-epoch", type=int, default=0)
     p.add_argument("--registry-experiment", action="store_true")
@@ -690,7 +696,7 @@ def main() -> None:
         freeze_skeleton_epochs=args.freeze_skeleton_epochs,
         early_stop_patience=args.early_stop_patience,
         resume_skeleton=args.resume_skeleton,
-        resume_k_st_vit=args.resume_k_st_vit,
+        resume_jvc=args.resume_jvc or args.resume_k_st_vit,
         resume_checkpoint=args.resume_checkpoint,
         start_epoch=args.start_epoch,
         pose_cache_path=args.pose_cache,

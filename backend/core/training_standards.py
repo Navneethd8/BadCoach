@@ -1,7 +1,7 @@
 """
 Shared training constants for comparable IsoCourt experiments.
 
-All primary trainers (CNN-LSTM, Conv3D, TimeSformer, K-STViT, JVC, …)
+All primary trainers (CNN-LSTM, Conv3D, TimeSformer, JVC, …)
 should import from here so clip length, pose layout, split, and multitask heads stay aligned.
 
 External paper baselines (BST, TemPose collate, ST-GCN) may use different T/batch by design.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Evaluate stroke_type accuracy for K-STViT / Conv3D checkpoints on the val split.
+Evaluate stroke_type accuracy for JVC / Conv3D checkpoints on the val split.
 
 Optional horizontal-flip TTA on RGB (pose unchanged).
 
@@ -22,7 +22,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 
 from core.dataset import FineBadmintonDataset
-from core.k_st_vit import build_k_st_vit, load_k_st_vit_partial
+from core.jvc import build_jvc, load_jvc_partial
 from core.pose_cache_build import default_pose_cache_path, load_pose_cache_bundle
 from core.shuttle_cache import load_shuttle_cache_bundle
 from core.split import video_level_split
@@ -130,17 +130,17 @@ def main() -> None:
             shuttle_cache = sb["shuttle_cache"]
             use_shuttle = True
 
-    _, val_idx = video_level_split(ds.samples)
+    _, val_idx, _test_idx = video_level_split(ds.samples)
     val_ds = EvalDataset(Subset(ds, val_idx), pose_cache, shuttle_cache)
     loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    model = build_k_st_vit(
+    model = build_jvc(
         task_classes,
         vision_backbone=args.vision_backbone,
         use_shuttle=use_shuttle,
     ).to(device)
-    load_k_st_vit_partial(model, ckpt, device=device)
+    load_jvc_partial(model, ckpt, device=device)
 
     acc, per_class = evaluate(model, loader, device, args.tta_flip, use_shuttle)
     print(f"Val stroke_type: {acc:.2f}%  (T={ds.sequence_length}, sampling={args.sampling})")

@@ -35,7 +35,7 @@ for p in (str(BACKEND_ROOT), str(FIG_DIR)):
 
 from core.dataset import FineBadmintonDataset  # noqa: E402
 from core.jvc_no_xattn import build_jvc_no_xattn, load_jvc_no_xattn_partial  # noqa: E402
-from core.k_st_vit import build_k_st_vit, load_k_st_vit_partial  # noqa: E402
+from core.jvc import build_jvc, load_jvc_partial  # noqa: E402
 from core.jvc_no_xattn import default_jvc_no_xattn_pose_cache_path  # noqa: E402
 from core.pose_cache_build import load_pose_cache_bundle  # noqa: E402
 from core.split import video_level_split  # noqa: E402
@@ -135,10 +135,12 @@ def _task_classes(ds: FineBadmintonDataset, bundle: Optional[Dict[str, Any]]) ->
 
 def _load_checkpoint_meta(path: str) -> Dict[str, Any]:
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
-    meta = {k: ckpt[k] for k in ckpt if k not in ("k_st_vit", "jvc_no_xattn", "model", "optimizer", "scheduler")}
+    meta = {k: ckpt[k] for k in ckpt if k not in ("jvc", "k_st_vit", "jvc_no_xattn", "model", "optimizer", "scheduler")}
     meta["_ckpt"] = ckpt
-    if "k_st_vit" in ckpt:
-        meta["architecture"] = "k_st_vit"
+    if "jvc" in ckpt:
+        meta["architecture"] = "jvc"
+    elif "k_st_vit" in ckpt:
+        meta["architecture"] = "jvc"
     elif "jvc_no_xattn" in ckpt:
         meta["architecture"] = "jvc_no_xattn"
     else:
@@ -152,8 +154,8 @@ def _load_checkpoint_meta(path: str) -> Dict[str, Any]:
 
 def _build_model(meta: Dict[str, Any], task_classes: Dict[str, int], device: torch.device):
     arch = meta["architecture"]
-    if arch == "k_st_vit":
-        model = build_k_st_vit(
+    if arch in ("jvc", "k_st_vit"):
+        model = build_jvc(
             task_classes,
             vision_backbone=meta.get("vision_backbone", "conv3d"),
             video_backbone=meta.get("video_backbone", "r2plus1d_18"),
@@ -163,7 +165,7 @@ def _build_model(meta: Dict[str, Any], task_classes: Dict[str, int], device: tor
             four_stream=bool(meta.get("four_stream", True)),
             use_shuttle=bool(meta.get("use_shuttle", False)),
         )
-        load_k_st_vit_partial(model, meta["_ckpt"], device=device)
+        load_jvc_partial(model, meta["_ckpt"], device=device)
     else:
         model = build_jvc_no_xattn(
             task_classes,
@@ -1064,7 +1066,7 @@ def main() -> None:
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     parser.add_argument("--pose-cache", type=Path, default=DEFAULT_POSE_CACHE)
     parser.add_argument("--checkpoint", type=Path, default=BACKEND_ROOT / "models" / "badminton_model_k_st_vit.pth")
-    parser.add_argument("--model-label", default="JVC (K-STViT)")
+    parser.add_argument("--model-label", default="JVC")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-correct", type=int, default=2, help="Correct examples to show (default: 2)")
@@ -1268,7 +1270,7 @@ def main() -> None:
         print(f"Render-only: {len(examples)} panels (skipping inference)", flush=True)
     else:
         task_classes = _task_classes(ds, bundle)
-        _, val_idx = video_level_split(ds.samples)
+        _, val_idx, _test_idx = video_level_split(ds.samples)
         val_ds = EvalDataset(Subset(ds, val_idx), pose_cache)
         loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
 

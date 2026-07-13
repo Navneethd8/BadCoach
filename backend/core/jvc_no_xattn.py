@@ -199,8 +199,13 @@ def load_jvc_no_xattn_partial(
         model.load_state_dict(ckpt["jvc_no_xattn"], strict=False)
         print(f"Loaded JVC no-xattn from {label}")
         return
-    if "k_st_vit" in ckpt:
-        state = ckpt["k_st_vit"]
+    state_key = None
+    if "jvc" in ckpt:
+        state_key = "jvc"
+    elif "k_st_vit" in ckpt:
+        state_key = "k_st_vit"
+    if state_key is not None:
+        state = ckpt[state_key]
         skel_state = {
             k.replace("skeleton.", "", 1): v
             for k, v in state.items()
@@ -208,7 +213,7 @@ def load_jvc_no_xattn_partial(
         }
         if skel_state:
             model.skeleton.load_state_dict(skel_state, strict=False)
-            print(f"Loaded K-STViT skeleton branch from {label}")
+            print(f"Loaded JVC skeleton branch from {label}")
         bb = {
             k.replace("vision_encoder.backbone.", "", 1): v
             for k, v in state.items()
@@ -216,7 +221,7 @@ def load_jvc_no_xattn_partial(
         }
         if bb:
             model.vision_encoder.backbone.load_state_dict(bb, strict=False)
-            print(f"Loaded K-STViT Conv3D backbone from {label} ({len(bb)} tensors)")
+            print(f"Loaded JVC Conv3D backbone from {label} ({len(bb)} tensors)")
         return
     if "model" in ckpt and ckpt.get("architecture") == "conv3d_pose":
         _load_conv3d_into_vision(model, ckpt["model"])
@@ -233,7 +238,7 @@ def load_jvc_no_xattn_partial(
         print(f"Loaded SkateFormer-B skeleton from {label}")
         return
     raise KeyError(
-        f"Expected 'jvc_no_xattn', 'k_st_vit', conv3d_pose 'model', or 'skateformer_b' in {label}, "
+        f"Expected 'jvc_no_xattn', 'jvc', 'k_st_vit', conv3d_pose 'model', or 'skateformer_b' in {label}, "
         f"got {list(ckpt.keys())}"
     )
 

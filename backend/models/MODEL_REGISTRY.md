@@ -24,11 +24,10 @@ These are the **only** valid keys under `models.architectures.`* and for `infere
 | `cnn_lstm`             | cnn               | `pipelines/training/train_full.py`                 | `core/model.py` (`CNN_LSTM_Model`) | ResNet50 frame features + LSTM; pose optional via cache.                                                                            |
 | `conv3d_pose`          | video_cnn         | `pipelines/training/train_conv3d.py`               | `core/conv3d_pose.py`              | Torchvision R(2+1)D / R3D / MC3 + late-fused MediaPipe joints; optional Grad-CAM on `layer4`.                                       |
 | `timesformer`          | video_transformer | `pipelines/training/train_timesformer.py`          | `core/timesformer.py`              | Divided space–time attention + pose tokens; ViT-style stem when `backbone=vit`.                                                     |
-| `k_st_vit`             | graph             | `pipelines/training/train_k_st_vit.py`             | `core/k_st_vit.py`                 | SkateFormer joints + Conv3D/ViT patches, divided ST fusion; default `hit_centered` sampling.                                        |
-| `vit_gcn`              | graph             | `pipelines/training/train_vit_gcn.py`              | `core/vit_gcn.py`                  | Per-frame timm ViT CLS + fixed skeleton GCN on MediaPipe joints.                                                                    |
+| `jvc`                  | graph             | `pipelines/training/train_jvc.py`                  | `core/jvc.py`                      | SkateFormer joints + Conv3D/ViT patches, cross-attn + divided ST; default `hit_centered` sampling.                                  |
+| `jvc_no_xattn`         | graph             | `pipelines/training/train_jvc_no_xattn.py`         | `core/jvc_no_xattn.py`             | JVC ablation: late Conv3D + skeleton fusion without cross-attention.                                                                |
 
-
-**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `timesformer`, `k_st_vit`, `vit_gcn`.
+**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `timesformer`, `jvc`, `jvc_no_xattn`.
 
 ---
 
@@ -136,12 +135,7 @@ python backend/pipelines/training/train_timesformer.py
 # python backend/pipelines/training/train_timesformer.py --backbone vit --vit-model vit_small_patch16_224
 # python backend/pipelines/training/train_timesformer.py --no-pose
 
-# --- vit_gcn (timm ViT CLS + skeleton GCN; default: badminton_model_vit_gcn.pth) ---
-python backend/pipelines/training/train_vit_gcn.py
-# python backend/pipelines/training/train_vit_gcn.py --vit-model vit_small_patch16_224 --no-pose
-```
-
-Heavy scripts (`train_conv3d.py`, `train_timesformer.py`, `train_vit_gcn.py`) accept shared-style flags such as `--epochs`, `--batch-size`, `--lr`, `--pose-cache /path/to.pt`, `--max-train-batches N` (smoke tests), `--aug {strong,medium,mild}`, `--accum-steps`, `--stroke-loss-weight`, `--registry-experiment`, and `--no-pose` where listed. Use each file’s `--help` for the full list.
+Heavy scripts (`train_conv3d.py`, `train_timesformer.py`, `train_jvc.py`) accept shared-style flags such as `--epochs`, `--batch-size`, `--lr`, `--pose-cache /path/to.pt`, `--max-train-batches N` (smoke tests), `--aug {strong,medium,mild}`, `--accum-steps`, `--stroke-loss-weight`, `--registry-experiment`, and `--no-pose` where listed. Use each file’s `--help` for the full list.
 
 ---
 
@@ -153,7 +147,7 @@ From `**backend/**`:
 python3 -m api.inference_model_cli list
 python3 -m api.inference_model_cli show
 python3 -m api.inference_model_cli set timesformer
-python3 -m api.inference_model_cli promote vit_gcn 0
+python3 -m api.inference_model_cli promote jvc 0
 ```
 
 `**set**` also rewrites `**backend/deploy/docker-inference.env**` (used by `**docker compose**` via `docker-compose.yml`) and `**backend/deploy/ci_inference_category**` (one line; the HF deploy workflow loads it into `ISOCOURT_INFERENCE_CATEGORY` before copying the single checkpoint). Commit those files with `models/inference_selection.json` so you are not hand-editing Docker or GitHub YAML.

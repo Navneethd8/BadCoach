@@ -28,29 +28,26 @@ ENV_INFERENCE_CATEGORY = "ISOCOURT_INFERENCE_CATEGORY"
 ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
-    "k_st_vit",
+    "jvc",
     "jvc_no_xattn",
     "timesformer",
-    "vit_gcn",
 )
 
 # Optional grouping for ``list`` output (research families).
 CATEGORY_GROUPS: Dict[str, str] = {
     "cnn_lstm": "cnn",
     "conv3d_pose": "video_cnn",
-    "k_st_vit": "graph",
+    "jvc": "graph",
     "jvc_no_xattn": "graph",
-    "vit_gcn": "graph",
     "timesformer": "video_transformer",
 }
 
 SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_full.py": "cnn_lstm",
     "train_conv3d.py": "conv3d_pose",
-    "train_k_st_vit.py": "k_st_vit",
+    "train_jvc.py": "jvc",
     "train_jvc_no_xattn.py": "jvc_no_xattn",
     "train_timesformer.py": "timesformer",
-    "train_vit_gcn.py": "vit_gcn",
 }
 
 # When nothing is configured, prefer first hit (API-safe order).
@@ -58,7 +55,6 @@ DEFAULT_CATEGORY_FALLBACK_ORDER: Tuple[str, ...] = (
     "timesformer",
     "cnn_lstm",
     "conv3d_pose",
-    "vit_gcn",
 )
 
 
@@ -97,10 +93,10 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
         return "conv3d_pose"
     if "timesformer" in fn:
         return "timesformer"
-    if "vit_gcn" in fn or "vitgcn" in fn:
-        return "vit_gcn"
+    if "jvc" in fn and "no_xattn" not in fn:
+        return "jvc"
     if "k_st_vit" in fn or "kstvit" in fn:
-        return "k_st_vit"
+        return "jvc"
     if "jvc_no_xattn" in fn or "jvc_no_cross" in fn:
         return "jvc_no_xattn"
     return "cnn_lstm"
@@ -327,7 +323,7 @@ def resolve_inference_model_path(models_dir: str, registry: Dict[str, Any]) -> O
 def make_experiment_checkpoint_path(default_path: str) -> str:
     """
     Non-primary checkpoint path: same directory as ``default_path``, UTC timestamp
-    inserted before the file extension (e.g. ``badminton_model_k_st_vit_20260518T120000Z.pth``).
+    inserted before the file extension (e.g. ``badminton_model_jvc_20260518T120000Z.pth``).
     """
     path = os.path.abspath(default_path)
     parent = os.path.dirname(path)

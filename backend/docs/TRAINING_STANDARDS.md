@@ -41,8 +41,8 @@ Primary trainers should match these settings so benchmarks are fair. Constants l
 
 - `train_full.py` (CNN-LSTM)
 - `train_conv3d.py`
-- `train_timesformer.py` / `train_vit_gcn.py`
-- `train_k_st_vit.py` / `train_jvc_no_xattn.py`
+- `train_timesformer.py`
+- `train_jvc.py` / `train_jvc_no_xattn.py`
 
 ## External baselines (different by design)
 
@@ -54,7 +54,7 @@ Primary trainers should match these settings so benchmarks are fair. Constants l
 Use the shared EC2/local launcher (same as other models):
 
 ```bash
-./scripts/ec2/run_train_tmux.sh k_st_vit --epochs 60 --batch-size 4
+./scripts/ec2/run_train_tmux.sh jvc --epochs 60 --batch-size 4
 ```
 
 ## Verify

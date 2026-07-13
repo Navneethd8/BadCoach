@@ -5,7 +5,7 @@ Examples:
   python -m api.inference_model_cli show
   python -m api.inference_model_cli set timesformer
   python -m api.inference_model_cli list
-  python -m api.inference_model_cli promote vit_gcn badminton_model_vit_gcn.pth
+  python -m api.inference_model_cli promote jvc 0
 
 ``set`` writes ``models/inference_selection.json`` plus ``deploy/docker-inference.env``
 and ``deploy/ci_inference_category`` (Docker Compose + GitHub Actions deploy).

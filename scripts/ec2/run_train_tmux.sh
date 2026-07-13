@@ -7,9 +7,9 @@
 #   export ISOCOURT_SHUTDOWN_ON_ERROR=1                 # optional: halt if training fails
 #   ./scripts/ec2/run_train_tmux.sh MODEL [train script args...]
 #
-#   k_st_vit: v2 defaults conv3d vision + hit_centered, no early stopping; pass e.g.
+#   jvc: defaults conv3d vision + hit_centered, no early stopping; pass e.g.
 #     --vision-backbone conv3d --resume-checkpoint backend/models/badminton_model_conv3d_pose.pth
-#     --resume-k-st-vit backend/models/badminton_model_k_st_vit.pth --sampling hit_centered
+#     --resume-jvc backend/models/badminton_model_jvc.pth --sampling hit_centered
 #   (aliases: resnet50, full, conv3d_pose, skate)
 #
 # Env (export before running if you need them inside tmux):
@@ -39,10 +39,10 @@ case "${MODEL}" in
   cnn_lstm|resnet50|full) TRAIN_SCRIPT="backend/pipelines/training/train_full.py" ;;
   conv3d|conv3d_pose) TRAIN_SCRIPT="backend/pipelines/training/train_conv3d.py" ;;
   timesformer) TRAIN_SCRIPT="backend/pipelines/training/train_timesformer.py" ;;
-  k_st_vit|k-st-vit|kstvit|kinematic_st_vit)
-    TRAIN_SCRIPT="backend/pipelines/training/train_k_st_vit.py"
+  jvc|k_st_vit|k-st-vit|kstvit|kinematic_st_vit)
+    TRAIN_SCRIPT="backend/pipelines/training/train_jvc.py"
     ;;
-  jvc_no_xattn|jvc-no-xattn|jvc_no_cross_attn|jvc)
+  jvc_no_xattn|jvc-no-xattn|jvc_no_cross_attn)
     TRAIN_SCRIPT="backend/pipelines/training/train_jvc_no_xattn.py"
     ;;
   bst_prep) TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated.py" ;;

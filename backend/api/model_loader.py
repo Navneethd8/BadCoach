@@ -28,15 +28,15 @@ from core.model_registry import (
 ARCH_CNN_LSTM = "cnn_lstm"
 ARCH_CONV3D_POSE = "conv3d_pose"
 ARCH_TIMESFORMER = "timesformer"
-ARCH_VIT_GCN = "vit_gcn"
-ARCH_K_ST_VIT = "k_st_vit"
+ARCH_JVC = "jvc"
+ARCH_JVC_NO_XATTN = "jvc_no_xattn"
 
 _SCRIPT_TO_ARCH = {
     "train_full.py": ARCH_CNN_LSTM,
     "train_conv3d.py": ARCH_CONV3D_POSE,
     "train_timesformer.py": ARCH_TIMESFORMER,
-    "train_vit_gcn.py": ARCH_VIT_GCN,
-    "train_k_st_vit.py": ARCH_K_ST_VIT,
+    "train_jvc.py": ARCH_JVC,
+    "train_k_st_vit.py": ARCH_JVC,
 }
 
 
@@ -44,6 +44,9 @@ def split_checkpoint(raw: Any) -> Tuple[Dict[str, Any], Dict[str, torch.Tensor]]
     if isinstance(raw, dict) and "model" in raw and isinstance(raw["model"], dict):
         meta = {k: v for k, v in raw.items() if k != "model"}
         return meta, raw["model"]
+    if isinstance(raw, dict) and "jvc" in raw and isinstance(raw["jvc"], dict):
+        meta = {k: v for k, v in raw.items() if k != "jvc"}
+        return meta, raw["jvc"]
     if isinstance(raw, dict) and "k_st_vit" in raw and isinstance(raw["k_st_vit"], dict):
         meta = {k: v for k, v in raw.items() if k != "k_st_vit"}
         return meta, raw["k_st_vit"]
@@ -79,10 +82,10 @@ def resolve_architecture(
         return ARCH_CONV3D_POSE
     if "timesformer" in fn:
         return ARCH_TIMESFORMER
-    if "vit_gcn" in fn or "vitgcn" in fn:
-        return ARCH_VIT_GCN
-    if "k_st_vit" in fn or "kstvit" in fn:
-        return ARCH_K_ST_VIT
+    if "jvc_no_xattn" in fn or "jvc_no_cross" in fn:
+        return ARCH_JVC_NO_XATTN
+    if "jvc" in fn or "k_st_vit" in fn or "kstvit" in fn:
+        return ARCH_JVC
     return ARCH_CNN_LSTM
 
 
@@ -143,27 +146,16 @@ def build_model(
             use_pose=bool(_i("use_pose", True)),
         )
 
-    if arch == ARCH_VIT_GCN:
-        from core.vit_gcn import ViTGCNMultitaskModel
-
-        return ViTGCNMultitaskModel(
-            task_classes=task_classes,
-            img_size=int(_i("img_size", 224)),
-            patch_size=int(_i("patch_size", 16)),
-            num_frames=int(_i("num_frames", 16)),
-            embed_dim=int(_i("embed_dim", 128)),
-            gcn_layers=int(_i("gcn_layers", 2)),
-            dropout=float(_i("dropout", 0.1)),
-            vit_model_name=str(_i("vit_model_name", "vit_tiny_patch16_224")),
-            vit_unfreeze_last_n=int(_i("vit_unfreeze_last_n", 0)),
-            pretrained=bool(_i("pretrained", False)),
-            use_pose=bool(_i("use_pose", True)),
+    if arch == "vit_gcn":
+        raise RuntimeError(
+            "ViT-GCN checkpoints are no longer supported in this repository. "
+            "Use `python -m api.inference_model_cli set <category>` with jvc, conv3d_pose, or timesformer."
         )
 
-    if arch == ARCH_K_ST_VIT:
-        from core.k_st_vit import build_k_st_vit
+    if arch in (ARCH_JVC, "k_st_vit"):
+        from core.jvc import build_jvc
 
-        return build_k_st_vit(
+        return build_jvc(
             task_classes,
             window_size=int(_i("num_frames", 16)),
             embed_dim=int(_i("embed_dim", 128)),

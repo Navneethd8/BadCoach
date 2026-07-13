@@ -17,7 +17,7 @@ DEFAULT_16FRAME_INSTRUCTION = (
     "court area, quality out of 5, and tactical intent. Answer in concise English."
 )
 
-# Research benchmark: 9-class stroke_type only (matches native Conv3D / K-STViT metric).
+# Research benchmark: 9-class stroke_type only (matches native Conv3D / JVC metric).
 DEFAULT_16FRAME_STROKE_CLASSIFY_INSTRUCTION = (
     "You are a badminton stroke classifier. You are shown 16 frames uniformly sampled "
     "across a hitting motion (not a single contact frame), plus optional pose landmarks. "

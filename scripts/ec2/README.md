@@ -117,7 +117,7 @@ Same as the **Pull** row in [Rsync quick reference](#rsync-quick-reference) abov
 | `cnn_lstm`    | `train_full.py`          |
 | `conv3d`      | `train_conv3d.py`        |
 | `timesformer` | `train_timesformer.py`   |
-| `k_st_vit`    | `train_k_st_vit.py`      |
+| `jvc`         | `train_jvc.py`           |
 | `jvc_no_xattn`| `train_jvc_no_xattn.py`  |
 | `bst_prep`    | `prepare_bst_finebadminton_collated.py` — BST tensor collate (COCO-17 + bones) |
 | `bst_baseline`| `train_bst_baseline.py`  |

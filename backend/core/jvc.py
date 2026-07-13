@@ -1,11 +1,11 @@
 """
-K-STViT: Kinematic-guided spatiotemporal fusion for badminton stroke recognition.
+JVC: Joint–Vision Cross-attention for badminton stroke recognition.
 
 SkateFormer joint tokens cross-attend to vision patch tokens (Conv3D or ViT),
 then a divided space-time transformer mixes joints + patches over the clip.
 Contact-weighted temporal readout for hit-span clips.
 
-v2 default: R(2+1)D Conv3D vision encoder (warm-start from conv3d_pose checkpoint).
+Default vision: R(2+1)D Conv3D (warm-start from conv3d_pose checkpoint).
 """
 
 from __future__ import annotations
@@ -34,11 +34,11 @@ from core.training_standards import MEDIAPIPE_NUM_FRAMES, MEDIAPIPE_NUM_JOINTS
 VisionBackbone = Literal["conv3d", "vit"]
 
 
-def default_k_st_vit_checkpoint_path(backend_root: str) -> str:
-    return os.path.join(os.path.abspath(backend_root), "models", "badminton_model_k_st_vit.pth")
+def default_jvc_checkpoint_path(backend_root: str) -> str:
+    return os.path.join(os.path.abspath(backend_root), "models", "badminton_model_jvc.pth")
 
 
-class KinematicSpatiotemporalViT(nn.Module):
+class JVCModel(nn.Module):
     """
     SkateFormer joint queries + vision patches -> cross-attn -> divided ST -> multitask heads.
     """
@@ -127,7 +127,7 @@ class KinematicSpatiotemporalViT(nn.Module):
             try:
                 import timm
             except ImportError as e:
-                raise ImportError("K-STViT vit backbone requires timm") from e
+                raise ImportError("JVC vit backbone requires timm") from e
 
             self.vit = timm.create_model(vit_model_name, pretrained=vit_pretrained, num_classes=0)
             self.vit_dim = int(self.vit.embed_dim)
@@ -272,11 +272,11 @@ class KinematicSpatiotemporalViT(nn.Module):
         return {task: head(feat) for task, head in self.heads.items()}
 
 
-def build_k_st_vit(task_classes: Dict[str, int], **kwargs: Any) -> KinematicSpatiotemporalViT:
-    return KinematicSpatiotemporalViT(task_classes, **kwargs)
+def build_jvc(task_classes: Dict[str, int], **kwargs: Any) -> JVCModel:
+    return JVCModel(task_classes, **kwargs)
 
 
-def _load_conv3d_into_vision(model: KinematicSpatiotemporalViT, state: Dict[str, Any]) -> None:
+def _load_conv3d_into_vision(model: JVCModel, state: Dict[str, Any]) -> None:
     if model.vision_encoder is None:
         print("Skipping Conv3D load: model vision_backbone is not conv3d")
         return
@@ -292,8 +292,8 @@ def _load_conv3d_into_vision(model: KinematicSpatiotemporalViT, state: Dict[str,
     # pose_proj not used in vision encoder — ignore
 
 
-def load_k_st_vit_partial(
-    model: KinematicSpatiotemporalViT,
+def load_jvc_partial(
+    model: JVCModel,
     checkpoint: str | Dict[str, Any],
     *,
     device: torch.device | str = "cpu",
@@ -304,9 +304,10 @@ def load_k_st_vit_partial(
         if isinstance(checkpoint, str)
         else checkpoint
     )
-    if "k_st_vit" in ckpt:
-        model.load_state_dict(ckpt["k_st_vit"], strict=False)
-        print(f"Loaded K-STViT from {label}")
+    state_key = "jvc" if "jvc" in ckpt else "k_st_vit" if "k_st_vit" in ckpt else None
+    if state_key is not None:
+        model.load_state_dict(ckpt[state_key], strict=False)
+        print(f"Loaded JVC from {label} (key={state_key})")
         return
     if "model" in ckpt and ckpt.get("architecture") == "conv3d_pose":
         _load_conv3d_into_vision(model, ckpt["model"])
@@ -333,29 +334,14 @@ def load_k_st_vit_partial(
                 model.feat_proj.load_state_dict(proj_state, strict=False)
         print(f"Loaded SkateFormer-B skeleton from {label}")
         return
-    if "gv_xattn" in ckpt and model.vit is not None:
-        state = ckpt["gv_xattn"]
-        vit_state = {
-            k.replace("vit_encoder.", "", 1): v
-            for k, v in state.items()
-            if k.startswith("vit_encoder.")
-        }
-        model.vit.load_state_dict(
-            {k: v for k, v in vit_state.items() if k.startswith("vit.")}, strict=False
-        )
-        proj_state = {k: v for k, v in vit_state.items() if k.startswith("proj.")}
-        if model.feat_proj is not None and proj_state:
-            model.feat_proj.load_state_dict(proj_state, strict=False)
-        print(f"Loaded ViT branch from GV-XAttn: {label}")
-        return
     raise KeyError(
-        f"Expected 'k_st_vit', conv3d_pose 'model', 'skateformer_b', or 'gv_xattn' in {label}, "
+        f"Expected 'jvc', 'k_st_vit', conv3d_pose 'model', or 'skateformer_b' in {label}, "
         f"got {list(ckpt.keys())}"
     )
 
 
-def load_k_st_vit_skeleton_branch(
-    model: KinematicSpatiotemporalViT,
+def load_jvc_skeleton_branch(
+    model: JVCModel,
     checkpoint_path: str,
     *,
     device: torch.device | str = "cpu",

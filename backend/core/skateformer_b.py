@@ -1,7 +1,7 @@
 """
 SkateFormer skeleton encoder for IsoCourt (four-stream MediaPipe-33, T=16).
 
-Shared backbone used by K-STViT and JVC no-xattn. Vendored implementation:
+Shared backbone used by JVC and JVC no-xattn. Vendored implementation:
 ``core.skateformer.official`` (KAIST-VICLab/SkateFormer, ECCV 2024).
 """
 

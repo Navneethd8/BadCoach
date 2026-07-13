@@ -2,7 +2,7 @@
 
 IsoCourt research plan — **badminton SOTA on FineBadminton-20K**, not general NTU action recognition.
 
-**Status:** K-STViT and JVC no-xattn are the active graph–vision models; GV-XAttn is the next architecture to implement.
+**Status:** JVC and JVC no-xattn are the active graph–vision models.
 
 ---
 
@@ -14,7 +14,7 @@ Build and evaluate **GV-XAttn** (Graph–Vision Cross-Attention): graph joint to
 
 - Same protocol as other IsoCourt primary trainers: **16 frames**, `frame_interval=2`, MediaPipe **33** joints, `video_level_split` seed **42**, batch **4**.
 - Reuse `pose_cache_mediapipe.pt` and RGB clips — **no shuttle track / court homography** in v1.
-- Compare fairly against **BST / TemPose baselines** and **late-fusion RGB+pose** (ViT-GCN, Conv3D+pose, K-STViT).
+- Compare fairly against **BST / TemPose baselines** and **late-fusion RGB+pose** (Conv3D+pose, JVC).
 
 ---
 
@@ -44,12 +44,12 @@ flowchart TB
   end
 
   subgraph active [Active RGB plus skeleton]
-    KSTViT[K-STViT cross-attn]
-    JVC[JVC no-xattn late fusion]
+    JVCmain[JVC cross-attn]
+    JVCabl[JVC no-xattn late fusion]
   end
 
   subgraph lateFusion [Other late fusion]
-    ViTGCN[ViT-GCN]
+    Conv3Dpose[Conv3D plus pose]
   end
 
   subgraph proposed [Proposed interaction fusion]
@@ -75,8 +75,8 @@ flowchart TB
 
 | Model | Skeleton | Vision | Fusion |
 |-------|----------|--------|--------|
-| ViT-GCN | GCN per frame, pool | ViT CLS, pool | Concat |
-| K-STViT | SkateFormer joint tokens | Conv3D/ViT patches | Cross-attn + divided ST |
+| Conv3D+pose | 3D CNN pool | Pose late fuse | Late concat |
+| JVC | SkateFormer joint tokens | Conv3D/ViT patches | Cross-attn + divided ST |
 | JVC no-xattn | SkateFormer pool | Conv3D pool | Late concat + MLP |
 | **GV-XAttn** | Graph node tokens `(B,T,33,D)` | ViT **patch** tokens `(B,T,P,D)` | **Cross-attn per frame**, then temporal pool |
 | BST (baseline) | J+B, COCO-17 | — | Shuttle + court (structured) |
@@ -115,7 +115,7 @@ flowchart TB
 | # | Module | Source / new | Output |
 |---|--------|--------------|--------|
 | 1 | Four-stream pose | `backend/core/skeleton_streams.py` | `(B, T, 33, 12)` |
-| 2 | Graph token encoder | **New** in `gv_xattn.py`; reuse `FixedGCNStack` from `vit_gcn.py` | `(B, T, 33, D)` |
+| 2 | Graph token encoder | SkateFormer four-stream encoder (`skateformer_b.py`) | `(B, T, V, D)` |
 | 3 | ViT patch encoder | `ViTClipEncoder` in `vit_clip_encoder.py` (`forward_patch_tokens`) | `(B, T, P, D)` |
 | 4 | Cross-attention fusion | **New**; `L = 2–4` blocks, same-frame Q=graph, K,V=patches | Updated graph tokens |
 | 5 | Temporal aggregation | **New**; contact weights from wrist speed / bone motion | `(B, D)` clip vector |
@@ -194,8 +194,8 @@ Recreate **`docs/paper_eval_tables.md`** (badminton-centric).
 | CNN-LSTM | ✓ | opt | — | (fill) |
 | Conv3D+pose | ✓ | ✓ | — | ~71% |
 | TimeSformer+pose | ✓ | ✓ | — | ~53% |
-| ViT-GCN | ✓ | ✓ | — | (fill) |
-| K-STViT | ✓ | ✓ | — | ~81% |
+| Conv3D+pose | ✓ | ✓ | — | ~71% |
+| JVC | ✓ | ✓ | — | ~81% |
 | JVC no-xattn | ✓ | ✓ | — | (fill) |
 | **GV-XAttn** | ✓ | ✓ | — | TBD |
 | BST baseline | — | ✓ | partial† | (fill) |
@@ -235,13 +235,13 @@ Published BST / TemPose on ShuttleSet, BadmintonDB — footnote protocol mismatc
 | Path | Action |
 |------|--------|
 | `backend/core/skeleton_streams.py` | Reuse four-stream builder |
-| `backend/core/vit_gcn.py` | Reuse `FixedGCNStack`, `MEDIAPIPE_BODY_EDGES` |
+| `backend/core/jvc.py` | JVC cross-attention model |
 | `backend/core/vit_clip_encoder.py` | Shared per-frame ViT clip encoder (patch tokens + CLS pool) |
 | `backend/core/gv_xattn.py` | **New** model |
 | `backend/pipelines/training/train_gv_xattn.py` | **New** trainer |
 | `backend/core/model_registry.py` | Add `gv_xattn` category |
 | `scripts/ec2/run_train_tmux.sh` | Add `gv_xattn` model alias |
-| `backend/core/skateformer_b.py` | Shared SkateFormer skeleton encoder (K-STViT / JVC) |
+| `backend/core/skateformer_b.py` | Shared SkateFormer skeleton encoder (JVC) |
 
 ---
 

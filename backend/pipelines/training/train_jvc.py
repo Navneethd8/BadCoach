@@ -1,14 +1,14 @@
 """
-K-STViT v2: SkateFormer joint tokens + Conv3D (or ViT) patches in divided ST.
+JVC: SkateFormer joint tokens + Conv3D (or ViT) patches with cross-attention.
 
 Same FineBadminton protocol (16 frames, MediaPipe pose cache).
 
-Example (EC2 v2):
+Example:
 
-  python backend/pipelines/training/train_k_st_vit.py \\
+  python backend/pipelines/training/train_jvc.py \\
     --vision-backbone conv3d \\
     --resume-checkpoint backend/models/badminton_model_conv3d_pose.pth \\
-    --resume-k-st-vit backend/models/badminton_model_k_st_vit.pth \\
+    --resume-jvc backend/models/badminton_model_jvc.pth \\
     --sampling hit_centered --stroke-only-epochs 4
 """
 from __future__ import annotations
@@ -35,11 +35,11 @@ from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 
 from core.dataset import FineBadmintonDataset
-from core.k_st_vit import (
-    build_k_st_vit,
-    default_k_st_vit_checkpoint_path,
-    load_k_st_vit_partial,
-    load_k_st_vit_skeleton_branch,
+from core.jvc import (
+    build_jvc,
+    default_jvc_checkpoint_path,
+    load_jvc_partial,
+    load_jvc_skeleton_branch,
 )
 from core.model_registry import make_experiment_checkpoint_path, register_training_checkpoint
 from core.pose_cache_build import (
@@ -223,7 +223,7 @@ def _set_vision_trainable(model, vision_backbone: str, unfreeze_last_n: int, unf
                     p.requires_grad = True
 
 
-def train_k_st_vit(
+def train_jvc(
     data_root,
     list_file,
     epochs=60,
@@ -234,7 +234,7 @@ def train_k_st_vit(
     pose_cache_path=None,
     shuttle_cache_path=None,
     resume_checkpoint=None,
-    resume_k_st_vit=None,
+    resume_jvc=None,
     resume_skeleton=None,
     start_epoch=0,
     seed=42,
@@ -278,22 +278,22 @@ def train_k_st_vit(
 
     backend_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if save_path is None:
-        save_path = default_k_st_vit_checkpoint_path(backend_root)
+        save_path = default_jvc_checkpoint_path(backend_root)
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
     if registry_experiment:
         save_path = make_experiment_checkpoint_path(save_path)
 
     loss_weights = _task_loss_weights(stroke_loss_weight, aux_loss_weight)
-    with mlflow_training_context("IsoCourt_Training_K_STViT_v2", backend_root):
+    with mlflow_training_context("IsoCourt_Training_JVC", backend_root):
         mlflow_log_params(
             {
                 "epochs": epochs,
                 "batch_size": batch_size,
                 "lr": lr,
                 "seed": seed,
-                "script": "train_k_st_vit.py",
-                "architecture": "k_st_vit",
+                "script": "train_jvc.py",
+                "architecture": "jvc",
                 "vision_backbone": vision_backbone,
                 "sampling_mode": sampling_mode,
                 "embed_dim": embed_dim,
@@ -355,7 +355,7 @@ def train_k_st_vit(
         wrapper_train = FramePoseDataset(dataset, pose_cache, shuttle_cache)
         wrapper_val = FramePoseDataset(val_dataset, pose_cache, shuttle_cache)
 
-        train_indices, val_indices = video_level_split(dataset.samples)
+        train_indices, val_indices, _test_indices = video_level_split(dataset.samples)
         train_subset = Subset(wrapper_train, train_indices)
         val_subset = Subset(wrapper_val, val_indices)
 
@@ -382,7 +382,7 @@ def train_k_st_vit(
         val_loader = DataLoader(val_subset, shuffle=False, **loader_kw)
 
         T = int(dataset.sequence_length)
-        model = build_k_st_vit(
+        model = build_jvc(
             task_classes,
             window_size=T,
             embed_dim=embed_dim,
@@ -407,19 +407,19 @@ def train_k_st_vit(
 
         best_acc = 0.0
         if resume_skeleton and os.path.exists(resume_skeleton):
-            load_k_st_vit_skeleton_branch(model, resume_skeleton, device=device)
-        if resume_k_st_vit and os.path.exists(resume_k_st_vit):
-            ckpt = torch.load(resume_k_st_vit, map_location=device, weights_only=False)
-            load_k_st_vit_partial(model, ckpt)
+            load_jvc_skeleton_branch(model, resume_skeleton, device=device)
+        if resume_jvc and os.path.exists(resume_jvc):
+            ckpt = torch.load(resume_jvc, map_location=device, weights_only=False)
+            load_jvc_partial(model, ckpt)
             best_acc = float(ckpt.get("best_acc", 0.0))
             print(
-                f"Loaded K-STViT weights from {resume_k_st_vit} "
+                f"Loaded JVC weights from {resume_jvc} "
                 f"(prior best val stroke {best_acc:.1f}%)"
             )
         if resume_checkpoint and os.path.exists(resume_checkpoint):
             ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=False)
-            load_k_st_vit_partial(model, ckpt)
-            if "k_st_vit" in ckpt:
+            load_jvc_partial(model, ckpt)
+            if "jvc" in ckpt:
                 best_acc = max(best_acc, float(ckpt.get("best_acc", 0.0)))
             print(f"Warm-started from {resume_checkpoint}")
 
@@ -462,7 +462,7 @@ def train_k_st_vit(
 
         trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(
-            f"\nK-STViT v2 | vision={vision_backbone} | T={T} sampling={sampling_mode} | "
+            f"\nJVC | vision={vision_backbone} | T={T} sampling={sampling_mode} | "
             f"st_depth={st_depth} cross={num_cross_layers} | trainable: {trainable:,}"
         )
         print(
@@ -607,7 +607,7 @@ def train_k_st_vit(
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 torch.save(
                     {
-                        "k_st_vit": model.state_dict(),
+                        "jvc": model.state_dict(),
                         "task_classes": task_classes,
                         "embed_dim": embed_dim,
                         "st_depth": st_depth,
@@ -627,14 +627,14 @@ def train_k_st_vit(
                 print(f"  -> Saved best ({best_acc:.1f}%)")
                 register_training_checkpoint(
                     os.path.dirname(save_path),
-                    category="k_st_vit",
+                    category="jvc",
                     file_basename=os.path.basename(save_path),
                     meta={
                         "accuracy": round(best_acc, 2),
                         "epoch": epoch + 1,
                         "timestamp": datetime.datetime.now().isoformat(),
-                        "script": "train_k_st_vit.py",
-                        "architecture": "k_st_vit",
+                        "script": "train_jvc.py",
+                        "architecture": "jvc",
                         "vision_backbone": vision_backbone,
                         "sampling_mode": sampling_mode,
                         "video_backbone": video_backbone,
@@ -658,7 +658,7 @@ def train_k_st_vit(
 
 def main() -> None:
     p = argparse.ArgumentParser(
-        description="Train K-STViT v2 (SkateFormer + Conv3D/ViT spatiotemporal fusion)."
+        description="Train JVC (SkateFormer + Conv3D/ViT cross-attention fusion)."
     )
     p.add_argument("--epochs", type=int, default=60)
     p.add_argument("--batch-size", type=int, default=4)
@@ -719,16 +719,22 @@ def main() -> None:
         help="Pose-only SkateFormer / SkateFormer-B .pth for skeleton trunk.",
     )
     p.add_argument(
+        "--resume-jvc",
+        type=str,
+        default=None,
+        help="Prior JVC .pth (skeleton + fusion); vision may be overwritten.",
+    )
+    p.add_argument(
         "--resume-k-st-vit",
         type=str,
         default=None,
-        help="Prior K-STViT .pth (skeleton + fusion); vision may be overwritten.",
+        help=argparse.SUPPRESS,
     )
     p.add_argument(
         "--resume-checkpoint",
         type=str,
         default=None,
-        help="Conv3D pose .pth (vision) or full K-STViT .pth.",
+        help="Conv3D pose .pth (vision) or full JVC .pth.",
     )
     p.add_argument("--start-epoch", type=int, default=0)
     p.add_argument("--registry-experiment", action="store_true")
@@ -739,6 +745,8 @@ def main() -> None:
         help="MediaPipe pose cache .pt (default: backend/models/pose_cache_mediapipe.pt).",
     )
     args = p.parse_args()
+    if args.resume_jvc is None and args.resume_k_st_vit is not None:
+        args.resume_jvc = args.resume_k_st_vit
 
     vision_lr = args.vision_lr_mult
     if args.vit_lr_mult is not None:
@@ -759,7 +767,7 @@ def main() -> None:
         else ("mps" if torch.backends.mps.is_available() else "cpu")
     )
     print(f"Using device: {device}")
-    train_k_st_vit(
+    train_jvc(
         data_root=data_root,
         list_file=list_file,
         epochs=args.epochs,
@@ -803,7 +811,7 @@ def main() -> None:
         freeze_skeleton_epochs=args.freeze_skeleton_epochs,
         early_stop_patience=args.early_stop_patience,
         resume_skeleton=args.resume_skeleton,
-        resume_k_st_vit=args.resume_k_st_vit,
+        resume_jvc=args.resume_jvc,
         resume_checkpoint=args.resume_checkpoint,
         start_epoch=args.start_epoch,
         pose_cache_path=args.pose_cache,

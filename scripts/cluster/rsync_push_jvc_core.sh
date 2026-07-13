@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Push only K-STViT core modules to the cluster (not the full repo).
+# Push only JVC core modules to the cluster (not the full repo).
 #
 # Usage (repo root):
-#   ./scripts/cluster/rsync_push_k_st_vit_core.sh
-#   ./scripts/cluster/rsync_push_k_st_vit_core.sh user@host:~/IsoCourt
+#   ./scripts/cluster/rsync_push_jvc_core.sh
+#   ./scripts/cluster/rsync_push_jvc_core.sh user@host:~/IsoCourt
 #
 # Loads scripts/cluster.env for CLUSTER_HOST / KEY_FILE / REMOTE_REPO.
 set -euo pipefail
@@ -37,6 +37,7 @@ if [[ -z "${DEST}" ]]; then
 fi
 
 CORE_FILES=(
+  backend/core/jvc.py
   backend/core/gv_xattn.py
   backend/core/conv3d_pose.py
   backend/core/skateformer_b.py
@@ -50,11 +51,11 @@ for f in "${CORE_FILES[@]}"; do
   fi
 done
 
-echo "rsync_push_k_st_vit_core → ${DEST%/}/backend/core/" >&2
+echo "rsync_push_jvc_core → ${DEST%/}/backend/core/" >&2
 # shellcheck disable=SC2086
 rsync "${RSYNC_OPTS[@]}" \
   "${CORE_FILES[@]/#/${REPO_ROOT}/}" \
   "${DEST%/}/backend/core/"
 
-echo "Done. On nd17, verify:" >&2
-echo "  python -c \"from core.k_st_vit import build_k_st_vit; print('import ok')\"" >&2
+echo "Done. On cluster, verify:" >&2
+echo "  python -c \"from core.jvc import build_jvc; print('import ok')\"" >&2

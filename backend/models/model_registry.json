@@ -125,13 +125,13 @@
         },
         "registrations": []
       },
-      "k_st_vit": {
+      "jvc": {
         "primary": {
           "accuracy": 80.61,
           "epoch": 18,
           "timestamp": "2026-06-25T09:23:09.784183",
-          "script": "train_k_st_vit.py",
-          "architecture": "k_st_vit",
+          "script": "train_jvc.py",
+          "architecture": "jvc",
           "vision_backbone": "conv3d",
           "sampling_mode": "span_linspace",
           "video_backbone": "r2plus1d_18",
@@ -217,10 +217,6 @@
           },
           "experiment": false
         },
-        "registrations": []
-      },
-      "vit_gcn": {
-        "primary": null,
         "registrations": []
       }
     }
