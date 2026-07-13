@@ -40,7 +40,7 @@ CORE_FILES=(
   backend/core/gv_xattn.py
   backend/core/conv3d_pose.py
   backend/core/skateformer_b.py
-  backend/core/st_tr_vit_fusion.py
+  backend/core/vit_clip_encoder.py
 )
 
 for f in "${CORE_FILES[@]}"; do

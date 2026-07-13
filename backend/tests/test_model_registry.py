@@ -18,10 +18,10 @@ from core.model_registry import (
 
 
 def test_make_experiment_checkpoint_path_adds_timestamp_suffix():
-    out = make_experiment_checkpoint_path("/tmp/models/badminton_model_gcn_st_tr.pth")
-    assert out.startswith("/tmp/models/badminton_model_gcn_st_tr_")
+    out = make_experiment_checkpoint_path("/tmp/models/badminton_model_k_st_vit.pth")
+    assert out.startswith("/tmp/models/badminton_model_k_st_vit_")
     assert out.endswith(".pth")
-    assert out != "/tmp/models/badminton_model_gcn_st_tr.pth"
+    assert out != "/tmp/models/badminton_model_k_st_vit.pth"
 
 
 def test_migrate_v1_active_becomes_primary_for_category():

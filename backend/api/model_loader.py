@@ -28,7 +28,6 @@ from core.model_registry import (
 ARCH_CNN_LSTM = "cnn_lstm"
 ARCH_CONV3D_POSE = "conv3d_pose"
 ARCH_TIMESFORMER = "timesformer"
-ARCH_ST_TR = "st_tr"
 ARCH_VIT_GCN = "vit_gcn"
 ARCH_K_ST_VIT = "k_st_vit"
 
@@ -36,7 +35,6 @@ _SCRIPT_TO_ARCH = {
     "train_full.py": ARCH_CNN_LSTM,
     "train_conv3d.py": ARCH_CONV3D_POSE,
     "train_timesformer.py": ARCH_TIMESFORMER,
-    "train_st_tr.py": ARCH_ST_TR,
     "train_vit_gcn.py": ARCH_VIT_GCN,
     "train_k_st_vit.py": ARCH_K_ST_VIT,
 }
@@ -79,8 +77,6 @@ def resolve_architecture(
         return ARCH_CNN_LSTM
     if "conv3d" in fn:
         return ARCH_CONV3D_POSE
-    if "st_tr" in fn or "sttr" in fn:
-        return ARCH_ST_TR
     if "timesformer" in fn:
         return ARCH_TIMESFORMER
     if "vit_gcn" in fn or "vitgcn" in fn:
@@ -109,12 +105,6 @@ def build_model(
         raise RuntimeError(
             "VideoMAE stroke checkpoints are no longer supported in this repository. "
             "Use `python -m api.inference_model_cli set <category>` with timesformer, conv3d_pose, or cnn_lstm."
-        )
-
-    if arch == ARCH_ST_TR:
-        raise RuntimeError(
-            "ST-TR checkpoints are not supported by the /analyze API (pose-only model). "
-            "Use `python -m api.inference_model_cli set <category>` with a supported category."
         )
 
     if arch == ARCH_CNN_LSTM:

@@ -75,8 +75,6 @@ backend/models/feature_cache_mtl.pt
 backend/models/badminton_model_fast.pth
 
 # Third-party vendored weights & readme assets (download locally)
-backend/third_party/ST-TR/checkpoint_ST-TR/
-backend/third_party/ST-TR/additional_files/
 
 # Temp / build artifacts
 .tmp_mpl/

@@ -28,9 +28,6 @@ ENV_INFERENCE_CATEGORY = "ISOCOURT_INFERENCE_CATEGORY"
 ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
-    "st_tr",
-    "gcn_st_tr",
-    "st_tr_vit",
     "skateformer",
     "skateformer_b",
     "k_st_vit",
@@ -43,9 +40,6 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
 CATEGORY_GROUPS: Dict[str, str] = {
     "cnn_lstm": "cnn",
     "conv3d_pose": "video_cnn",
-    "st_tr": "graph",
-    "gcn_st_tr": "graph",
-    "st_tr_vit": "graph",
     "skateformer": "graph",
     "skateformer_b": "graph",
     "k_st_vit": "graph",
@@ -57,9 +51,6 @@ CATEGORY_GROUPS: Dict[str, str] = {
 SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_full.py": "cnn_lstm",
     "train_conv3d.py": "conv3d_pose",
-    "train_st_tr.py": "st_tr",
-    "train_gcn_st_tr.py": "gcn_st_tr",
-    "train_st_tr_vit.py": "st_tr_vit",
     "train_skateformer.py": "skateformer",
     "train_skateformer_b.py": "skateformer_b",
     "train_k_st_vit.py": "k_st_vit",
@@ -74,7 +65,6 @@ DEFAULT_CATEGORY_FALLBACK_ORDER: Tuple[str, ...] = (
     "cnn_lstm",
     "conv3d_pose",
     "vit_gcn",
-    "st_tr",
 )
 
 
@@ -115,8 +105,6 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
         return "timesformer"
     if "vit_gcn" in fn or "vitgcn" in fn:
         return "vit_gcn"
-    if "st_tr" in fn or "sttr" in fn:
-        return "st_tr"
     if "k_st_vit" in fn or "kstvit" in fn:
         return "k_st_vit"
     if "jvc_no_xattn" in fn or "jvc_no_cross" in fn:
@@ -345,7 +333,7 @@ def resolve_inference_model_path(models_dir: str, registry: Dict[str, Any]) -> O
 def make_experiment_checkpoint_path(default_path: str) -> str:
     """
     Non-primary checkpoint path: same directory as ``default_path``, UTC timestamp
-    inserted before the file extension (e.g. ``badminton_model_gcn_st_tr_20260518T120000Z.pth``).
+    inserted before the file extension (e.g. ``badminton_model_k_st_vit_20260518T120000Z.pth``).
     """
     path = os.path.abspath(default_path)
     parent = os.path.dirname(path)

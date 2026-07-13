@@ -8,7 +8,7 @@
 #   k_st_vit: v2 defaults conv3d vision + hit_centered, no early stopping; pass e.g.
 #     --vision-backbone conv3d --resume-checkpoint backend/models/badminton_model_conv3d_pose.pth
 #     --resume-k-st-vit backend/models/badminton_model_k_st_vit.pth --sampling hit_centered
-#   (aliases: resnet50, full, conv3d_pose, sttr, official_st_tr, st_tr_official, st_tr_collate, skate)
+#   (aliases: resnet50, full, conv3d_pose, skate)
 #
 # Env (export before running if you need them inside tmux):
 #   ISOCOURT_TMUX_SESSION   tmux session name (default: isocourt-train)
@@ -39,13 +39,6 @@ case "${MODEL}" in
   cnn_lstm|resnet50|full) TRAIN_SCRIPT="backend/pipelines/training/train_full.py" ;;
   conv3d|conv3d_pose) TRAIN_SCRIPT="backend/pipelines/training/train_conv3d.py" ;;
   timesformer) TRAIN_SCRIPT="backend/pipelines/training/train_timesformer.py" ;;
-  st_tr|sttr) TRAIN_SCRIPT="backend/pipelines/training/train_st_tr.py" ;;
-  gcn_st_tr|official_st_tr|st_tr_official)
-    TRAIN_SCRIPT="backend/pipelines/training/train_gcn_st_tr.py"
-    ;;
-  st_tr_vit|st_tr_vit_fusion)
-    TRAIN_SCRIPT="backend/pipelines/training/train_st_tr_vit.py"
-    ;;
   skateformer|skate|skate_former)
     TRAIN_SCRIPT="backend/pipelines/training/train_skateformer.py"
     ;;
@@ -63,9 +56,6 @@ case "${MODEL}" in
     ;;
   qwen3_vl_8b|qwen3-vl-8b|qwen_vl_8b|qwen8b_vlm)
     TRAIN_SCRIPT="backend/pipelines/vlm/qwen-8b/train_qwen3_vl_8b.py"
-    ;;
-  st_tr_prep|st_tr_collate|st_tr_collated)
-    TRAIN_SCRIPT="backend/pipelines/training/prepare_st_tr_collated.py"
     ;;
   bst_prep) TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated.py" ;;
   bst_baseline|bst) TRAIN_SCRIPT="backend/pipelines/training/train_bst_baseline.py" ;;

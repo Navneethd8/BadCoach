@@ -15,7 +15,7 @@ Primary trainers should match these settings so benchmarks are fair. Constants l
 
 | Setting | Value |
 |--------|-------|
-| Split | `video_level_split` (80/20 by video) |
+| Split | `video_level_split` (benchmark 20 test holdout; 80/20 train/val on remaining 50 videos) |
 | Split seed | **42** (`core/split.py`) |
 | Train sampler | `WeightedRandomSampler` on `stroke_type` (pose/video multitask trainers) |
 
@@ -42,9 +42,6 @@ Primary trainers should match these settings so benchmarks are fair. Constants l
 - `train_full.py` (CNN-LSTM)
 - `train_conv3d.py`
 - `train_timesformer.py` / `train_vit_gcn.py`
-- `train_st_tr.py`
-- `train_gcn_st_tr.py`
-- `train_st_tr_vit.py`
 - `train_skateformer.py`
 
 ## External baselines (different by design)

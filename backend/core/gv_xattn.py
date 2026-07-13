@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from core.skeleton_streams import NUM_SKELETON_STREAMS, STREAMS_PER_COORD, build_four_stream_pose
-from core.st_tr_vit_fusion import ViTClipEncoder
+from core.vit_clip_encoder import ViTClipEncoder
 from core.training_standards import MEDIAPIPE_NUM_FRAMES, MEDIAPIPE_NUM_JOINTS
 from core.vit_gcn import MEDIAPIPE_BODY_EDGES, FixedGCNStack
 

@@ -16,18 +16,12 @@ from core.training_progress import tqdm_pose_cache_build
 
 # Default on-disk name (shared across trainers).
 DEFAULT_POSE_CACHE_FILENAME = "pose_cache_mediapipe.pt"
-ST_TR_POSE_CACHE_FILENAME = "pose_cache_st_tr_collated.pt"
 # Older repos used this filename; still loaded if mediapipe cache is missing.
 LEGACY_POSE_CACHE_FILENAME = "pose_cache_staeformer.pt"
 
 
 def default_pose_cache_path(backend_root: str) -> str:
     return os.path.join(os.path.abspath(backend_root), "models", DEFAULT_POSE_CACHE_FILENAME)
-
-
-def default_st_tr_pose_cache_path(backend_root: str) -> str:
-    """Pose cache built for upstream ST-TR (native-res MediaPipe, primary-player pick)."""
-    return os.path.join(os.path.abspath(backend_root), "models", ST_TR_POSE_CACHE_FILENAME)
 
 
 def _pose_cache_load_candidates(cache_path: str) -> List[str]:

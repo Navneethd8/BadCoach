@@ -1,7 +1,7 @@
 """
 SkateFormer-B: badminton-oriented skeletal–temporal model + optional ViT fusion.
 
-Novelty (vs generic SkateFormer / ST-TR on the same data):
+Novelty (vs generic SkateFormer on the same data):
   - Four-stream skeleton input (joint, bone, joint-motion, bone-motion) from MediaPipe-33.
   - Skate-MSA partitions tuned for T=16, V=33 (broadcast badminton clips).
   - Late fusion with per-frame ViT image context (skeleton embedding + visual embedding).
@@ -25,7 +25,7 @@ from core.skeleton_streams import (
     four_stream_to_skateformer_input,
 )
 from core.skateformer_model import DEFAULT_PARTITION_SIZES
-from core.st_tr_vit_fusion import ViTClipEncoder
+from core.vit_clip_encoder import ViTClipEncoder
 from core.training_standards import MEDIAPIPE_NUM_FRAMES, MEDIAPIPE_NUM_JOINTS, SEQUENCE_LENGTH
 
 IN_CHANNELS_FOUR_STREAM = NUM_SKELETON_STREAMS * STREAMS_PER_COORD  # 12

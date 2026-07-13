@@ -40,14 +40,11 @@ Build and evaluate **GV-XAttn** (Graph–Vision Cross-Attention): graph joint to
 ```mermaid
 flowchart TB
   subgraph poseOnly [Skeleton-only - insufficient alone]
-    STTR[ST-TR]
     Skate[SkateFormer]
-    GCN[GCN-ST-TR]
   end
 
   subgraph lateFusion [Late fusion RGB plus skeleton]
     ViTGCN[ViT-GCN]
-    STTRViT[ST-TR plus ViT]
     SkateB[SkateFormer-B plus ViT]
   end
 
@@ -75,7 +72,6 @@ flowchart TB
 | Model | Skeleton | Vision | Fusion |
 |-------|----------|--------|--------|
 | ViT-GCN | GCN per frame, pool | ViT CLS, pool | Concat |
-| ST-TR+ViT | ST-TR pool | ViT mean+max | Concat + MLP |
 | SkateFormer-B | SkateFormer 4-stream pool | ViT mean+max | Concat + MLP |
 | **GV-XAttn** | Graph node tokens `(B,T,33,D)` | ViT **patch** tokens `(B,T,P,D)` | **Cross-attn per frame**, then temporal pool |
 | BST (baseline) | J+B, COCO-17 | — | Shuttle + court (structured) |
@@ -115,7 +111,7 @@ flowchart TB
 |---|--------|--------------|--------|
 | 1 | Four-stream pose | `backend/core/skeleton_streams.py` | `(B, T, 33, 12)` |
 | 2 | Graph token encoder | **New** in `gv_xattn.py`; reuse `FixedGCNStack` from `vit_gcn.py` | `(B, T, 33, D)` |
-| 3 | ViT patch encoder | Extend `ViTClipEncoder` in `st_tr_vit_fusion.py` with `forward_tokens()` | `(B, T, P, D)` |
+| 3 | ViT patch encoder | `ViTClipEncoder` in `vit_clip_encoder.py` (`forward_patch_tokens`) | `(B, T, P, D)` |
 | 4 | Cross-attention fusion | **New**; `L = 2–4` blocks, same-frame Q=graph, K,V=patches | Updated graph tokens |
 | 5 | Temporal aggregation | **New**; contact weights from wrist speed / bone motion | `(B, D)` clip vector |
 | 6 | Multitask heads | Same task schema as `FineBadmintonDataset` | Logits per task |
@@ -194,9 +190,7 @@ Recreate **`docs/paper_eval_tables.md`** (badminton-centric).
 | Conv3D+pose | ✓ | ✓ | — | ~71% |
 | TimeSformer+pose | ✓ | ✓ | — | ~53% |
 | ViT-GCN | ✓ | ✓ | — | (fill) |
-| ST-TR | — | ✓ | — | ~11% |
 | SkateFormer | — | ✓ | — | (fill) |
-| ST-TR+ViT | ✓ | ✓ | — | (fill) |
 | SkateFormer-B | ✓ | ✓ | — | (training) |
 | **GV-XAttn** | ✓ | ✓ | — | TBD |
 | BST baseline | — | ✓ | partial† | (fill) |
@@ -237,7 +231,7 @@ Published BST / TemPose on ShuttleSet, BadmintonDB — footnote protocol mismatc
 |------|--------|
 | `backend/core/skeleton_streams.py` | Reuse four-stream builder |
 | `backend/core/vit_gcn.py` | Reuse `FixedGCNStack`, `MEDIAPIPE_BODY_EDGES` |
-| `backend/core/st_tr_vit_fusion.py` | Add patch-token forward |
+| `backend/core/vit_clip_encoder.py` | Shared per-frame ViT clip encoder (patch tokens + CLS pool) |
 | `backend/core/gv_xattn.py` | **New** model |
 | `backend/pipelines/training/train_gv_xattn.py` | **New** trainer |
 | `backend/core/model_registry.py` | Add `gv_xattn` category |

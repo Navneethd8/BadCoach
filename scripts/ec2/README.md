@@ -117,12 +117,8 @@ Same as the **Pull** row in [Rsync quick reference](#rsync-quick-reference) abov
 | `cnn_lstm`    | `train_full.py`          |
 | `conv3d`      | `train_conv3d.py`        |
 | `timesformer` | `train_timesformer.py`   |
-| `st_tr`       | `train_st_tr.py` (legacy dual-transformer) |
-| `gcn_st_tr`   | `train_gcn_st_tr.py` — upstream ST-TR; prefers `pose_cache_st_tr_collated.pt` if present |
-| `st_tr_vit`   | `train_st_tr_vit.py` — ST-TR + ViT fusion |
 | `skateformer` | `train_skateformer.py` — MediaPipe 16 frames, batch 4 (aliases: `skate`) |
-| `st_tr_prep`  | `prepare_st_tr_collated.py` — MediaPipe → `(N,T,33,3)` for official ST-TR (native res, dual-pose pick) |
-| `bst_prep`    | `prepare_bst_finebadminton_collated.py` — BST tensor collate (COCO-17 + bones), not ST-TR |
+| `bst_prep`    | `prepare_bst_finebadminton_collated.py` — BST tensor collate (COCO-17 + bones) |
 | `bst_baseline`| `train_bst_baseline.py`  |
 
 Extra CLI flags are passed through to the trainer (see each script’s `--help`).
@@ -138,24 +134,6 @@ tmux attach -t isocourt-train
 ```
 
 MLflow experiment: `IsoCourt_Training_SkateFormer` under `backend/mlruns/`.
-
-### Official ST-TR (collate then train)
-
-```bash
-# Step 1: ST-TR pose cache (CPU-heavy; resumable)
-./scripts/ec2/run_train_tmux.sh st_tr_prep \
-  --data-root backend/data \
-  --list-file backend/data/transformed_combined_rounds_output_en_evals_translated.json \
-  --sequence-length 16
-
-# Step 2: train upstream ST-TR (GPU)
-export ISOCOURT_TMUX_REPLACE=1
-./scripts/ec2/run_train_tmux.sh gcn_st_tr \
-  --pose-cache backend/models/pose_cache_st_tr_collated.pt \
-  --epochs 60 --batch-size 4 --lr 1e-4 \
-  --stroke-only-epochs 12 --stroke-loss-weight 5.0 --aux-loss-weight 0.1 \
-  --registry-experiment
-```
 
 ### BST baseline (two-step)
 
