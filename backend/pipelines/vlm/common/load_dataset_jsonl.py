@@ -279,8 +279,8 @@ def load_jsonl_conversations_train_val(
     split_ratio: float = SPLIT_RATIO,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Same video-level 80/20 policy as ``core.split.video_level_split`` (see
-    ``vlm_jsonl_video_level_split``).
+    Same video-level 70/20/10 policy as ``core.split.video_level_split`` (see
+    ``vlm_jsonl_video_level_split``). Test rows are held out and not returned.
     """
     path = Path(jsonl_path).expanduser().resolve()
     if not path.is_file():
@@ -291,7 +291,7 @@ def load_jsonl_conversations_train_val(
         raise ValueError(f"No samples in {path}")
 
     split_key = "images" if rows and "images" in rows[0] else image_key
-    train_idx, val_idx = vlm_jsonl_video_level_split(
+    train_idx, val_idx, _test_idx = vlm_jsonl_video_level_split(
         rows,
         image_key=split_key,
         seed=split_seed,

@@ -130,7 +130,7 @@ def train_conv3d(
         for sample in dataset.samples:
             labels = dataset._map_labels(sample)
             st_labels.append(labels["stroke_type"])
-        train_indices, val_indices = video_level_split(dataset.samples)
+        train_indices, val_indices, _test_indices = video_level_split(dataset.samples)
         train_subset = Subset(wrapper, train_indices)
         val_subset = Subset(wrapper, val_indices)
 

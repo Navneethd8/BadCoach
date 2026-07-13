@@ -218,7 +218,7 @@ def train_full(
             st_labels.append(labels['stroke_type'])
 
         # --- Video-Level Train/Val Split ---
-        train_indices, val_indices = video_level_split(dataset.samples)
+        train_indices, val_indices, _test_indices = video_level_split(dataset.samples)
         
         train_subset = Subset(wrapper, train_indices)
         val_subset = Subset(wrapper, val_indices)

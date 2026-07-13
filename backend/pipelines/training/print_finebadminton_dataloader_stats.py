@@ -55,12 +55,12 @@ def main() -> None:
     if n == 0:
         raise SystemExit(f"Dataset empty: data_root={args.data_root!r} list_file={args.list_file!r}")
 
-    train_idx, val_idx = video_level_split(ds.samples)
-    n_train, n_val = len(train_idx), len(val_idx)
+    train_idx, val_idx, test_idx = video_level_split(ds.samples)
+    n_train, n_val, n_test = len(train_idx), len(val_idx), len(test_idx)
 
     print(f"annotations list_file: {args.list_file}")
     print(f"dataset samples (strokes with start/end): {n}")
-    print(f"train samples: {n_train}  val samples: {n_val}")
+    print(f"train samples: {n_train}  val samples: {n_val}  test samples: {n_test}")
 
     bss = [int(x.strip()) for x in args.batch_sizes.split(",") if x.strip()]
     for bs in bss:

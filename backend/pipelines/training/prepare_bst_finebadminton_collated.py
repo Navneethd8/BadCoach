@@ -33,7 +33,7 @@ if _backend_root not in sys.path:
 from core.bst_finebadminton_data import PoseStyle, frames_to_bst_arrays
 from core.dataset import FineBadmintonDataset
 from core.pose_utils import PoseEstimator
-from core.split import video_level_split
+from core.split import SPLIT_TRAIN_RATIO, video_level_split
 
 
 def _collect_split(
@@ -87,7 +87,7 @@ def main() -> None:
         help="MediaPipe .task path (default: lite under backend/models).",
     )
     ap.add_argument("--split-seed", type=int, default=42)
-    ap.add_argument("--split-ratio", type=float, default=0.8)
+    ap.add_argument("--split-ratio", type=float, default=SPLIT_TRAIN_RATIO)
     args = ap.parse_args()
 
     pose_style: PoseStyle = args.pose_style
@@ -106,14 +106,14 @@ def main() -> None:
         raise SystemExit("No samples loaded — check data-root and list-file.")
 
     all_idx = list(range(n))
-    train_idx, val_idx = video_level_split(dataset.samples, seed=args.split_seed, ratio=args.split_ratio)
+    train_idx, val_idx, test_idx = video_level_split(dataset.samples, seed=args.split_seed, ratio=args.split_ratio)
 
     pose_estimator = PoseEstimator(model_path=model_path, num_poses=2)
 
     out_root = os.path.abspath(args.output_dir)
     os.makedirs(out_root, exist_ok=True)
 
-    for name, idx_list in (("train", train_idx), ("val", val_idx)):
+    for name, idx_list in (("train", train_idx), ("val", val_idx), ("test", test_idx)):
         sub = os.path.join(out_root, name)
         os.makedirs(sub, exist_ok=True)
         bundle = _collect_split(dataset, idx_list, pose_estimator, pose_style)
@@ -129,8 +129,8 @@ def main() -> None:
         f.write(f"list_file={os.path.abspath(args.list_file)}\n")
         f.write(f"sequence_length={args.sequence_length}\n")
         f.write(f"pose_style={pose_style}\n")
-        f.write(f"split_seed={args.split_seed} ratio={args.split_ratio}\n")
-        f.write(f"train={len(train_idx)} val={len(val_idx)}\n")
+        f.write(f"split_seed={args.split_seed} train_ratio={args.split_ratio}\n")
+        f.write(f"train={len(train_idx)} val={len(val_idx)} test={len(test_idx)}\n")
     print(f"Wrote {meta_path}")
 
 

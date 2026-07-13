@@ -54,7 +54,7 @@ def load_val_rows(
     if not rows:
         raise ValueError(f"Empty JSONL: {path}")
     split_key = "images" if "images" in rows[0] else "image"
-    _, val_idx = vlm_jsonl_video_level_split(
+    _, val_idx, _test_idx = vlm_jsonl_video_level_split(
         rows, image_key=split_key, seed=split_seed, ratio=split_ratio
     )
     val_rows = [rows[i] for i in val_idx]
