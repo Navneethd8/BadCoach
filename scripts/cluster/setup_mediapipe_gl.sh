@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 # Make MediaPipe PoseLandmarker work on headless cluster nodes (no sudo).
 #
+# Needed for live per-frame pose in qualitative figures (not for model inference,
+# which only reads pose_cache_span_linspace.pt).
+#
 # Usage (on nd17, after conda activate isocourt):
 #   cd ~/IsoCourt
 #   ./scripts/cluster/setup_mediapipe_gl.sh
 #   source scripts/cluster/mediapipe_gl.env
 #   python -c "from core.pose_utils import PoseEstimator; PoseEstimator(); print('MediaPipe OK')"
 #
-# Then build pose cache on-cluster:
-#   python backend/pipelines/training/build_full_pose_cache.py \
-#     --data-root backend/data \
-#     --list-file backend/data/transformed_combined_rounds_output_en_evals_translated.json \
-#     --output backend/models/pose_cache_span_linspace.pt \
-#     --sampling span_linspace \
-#     --checkpoint-every 500
+# Then render figures with live pose:
+#   ./scripts/cluster/run_qualitative_render_only.sh
 
 set -euo pipefail
 
@@ -31,17 +29,19 @@ mkdir -p "${CONDA_PREFIX}/lib"
 find_system_lib() {
   local name="$1"
   local hit=""
-  if [[ -n "${CONDA_PREFIX:-}" && -e "${CONDA_PREFIX}/lib/${name}" ]]; then
-    printf '%s' "${CONDA_PREFIX}/lib/${name}"
-    return
-  fi
   if command -v ldconfig &>/dev/null; then
     hit="$(ldconfig -p 2>/dev/null | awk -v n="${name}" '$1 == n { print $NF; exit }')"
+    if [[ -n "${hit}" && -e "${hit}" ]]; then
+      printf '%s' "${hit}"
+      return
+    fi
   fi
-  if [[ -z "${hit}" ]]; then
-    hit="$(find /usr/lib /usr/lib64 /lib /lib64 "${CONDA_PREFIX:-/nonexistent}/lib" -name "${name}" 2>/dev/null | head -1 || true)"
+  hit="$(find /usr/lib /usr/lib64 /lib /lib64 -name "${name}" 2>/dev/null | head -1 || true)"
+  if [[ -n "${hit}" && -e "${hit}" ]]; then
+    printf '%s' "${hit}"
+    return
   fi
-  printf '%s' "${hit}"
+  printf ''
 }
 
 link_into_conda() {
@@ -49,43 +49,90 @@ link_into_conda() {
   local src="$2"
   local dest="${CONDA_PREFIX}/lib/${soname}"
   if [[ -z "${src}" || ! -e "${src}" ]]; then
-    echo "  missing ${soname} on system" >&2
+    echo "  missing ${soname}" >&2
     return 1
   fi
+  if [[ "$(readlink -f "${src}" 2>/dev/null || echo "${src}")" == "$(readlink -f "${dest}" 2>/dev/null || echo "__none__")" ]]; then
+    echo "  ok ${dest}" >&2
+    return 0
+  fi
   ln -sfn "${src}" "${dest}"
-  echo "  linked ${dest} -> ${src}"
+  echo "  linked ${dest} -> ${src}" >&2
+}
+
+ensure_soname() {
+  local soname="$1"
+  local dest="${CONDA_PREFIX}/lib/${soname}"
+  if [[ -e "${dest}" ]]; then
+    return 0
+  fi
+  local hit
+  hit="$(find "${CONDA_PREFIX}/lib" -maxdepth 1 -name "${soname}" 2>/dev/null | head -1 || true)"
+  if [[ -n "${hit}" && "${hit}" != "${dest}" ]]; then
+    ln -sfn "$(basename "${hit}")" "${dest}" 2>/dev/null || ln -sfn "${hit}" "${dest}"
+    echo "  linked ${dest} -> ${hit}" >&2
+    return 0
+  fi
+  local base="${soname%%.so*}"
+  hit="$(find "${CONDA_PREFIX}/lib" -maxdepth 1 -name "${base}.so*" 2>/dev/null | sort -V | tail -1 || true)"
+  if [[ -n "${hit}" ]]; then
+    ln -sfn "$(basename "${hit}")" "${dest}" 2>/dev/null || ln -sfn "${hit}" "${dest}"
+    echo "  linked ${dest} -> ${hit}" >&2
+    return 0
+  fi
+  return 1
+}
+
+install_conda_gl() {
+  echo "Installing conda-forge GL stack (mesa software rendering)..." >&2
+  conda install -y -c conda-forge mesalib libegl libgl libgles libglvnd libglu || return 1
+}
+
+export_ld_path() {
+  export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+}
+
+can_load_lib() {
+  local name="$1"
+  export_ld_path
+  python -c "import ctypes; ctypes.CDLL('${name}')" 2>/dev/null
+}
+
+wire_all_gl_libs() {
+  ensure_soname "libGLESv2.so.2" || true
+  ensure_soname "libGLESv2.so" || true
+  ensure_soname "libEGL.so.1" || true
+  ensure_soname "libGL.so.1" || true
+  ensure_soname "libGLdispatch.so.0" || true
+  ensure_soname "libOpenGL.so.0" || true
+}
+
+gl_stack_ok() {
+  can_load_lib "libGL.so.1" && can_load_lib "libGLESv2.so.2"
 }
 
 echo "CONDA_PREFIX=${CONDA_PREFIX}" >&2
-echo "Linking system GLES/EGL into conda lib (no sudo)..." >&2
+echo "Step 1: link system GL/GLES if present..." >&2
 
-LIBS_OK=0
-link_into_conda "libGLESv2.so.2" "$(find_system_lib libGLESv2.so.2)" && LIBS_OK=1 || true
-link_into_conda "libGLESv2.so" "$(find_system_lib libGLESv2.so)" || true
+link_into_conda "libGLESv2.so.2" "$(find_system_lib libGLESv2.so.2)" || true
 link_into_conda "libEGL.so.1" "$(find_system_lib libEGL.so.1)" || true
 link_into_conda "libGL.so.1" "$(find_system_lib libGL.so.1)" || true
 
-if [[ "${LIBS_OK}" -eq 0 ]]; then
-  echo "Installing conda-forge GL packages into ${CONDA_PREFIX}..." >&2
-  conda install -y -c conda-forge libglvnd libglvnd-gles mesalib libegl libgl || true
-  LIBS_OK=0
-  link_into_conda "libGLESv2.so.2" "$(find_system_lib libGLESv2.so.2)" && LIBS_OK=1 || true
-  link_into_conda "libEGL.so.1" "$(find_system_lib libEGL.so.1)" || true
-  link_into_conda "libGL.so.1" "$(find_system_lib libGL.so.1)" || true
+if ! gl_stack_ok; then
+  echo "Step 2: conda-forge mesa/libgl..." >&2
+  install_conda_gl || true
+  wire_all_gl_libs
 fi
 
-if [[ "${LIBS_OK}" -eq 0 ]]; then
+if ! gl_stack_ok; then
   echo >&2
-  echo "Could not find libGLESv2.so.2 on system or via conda." >&2
-  echo "This node cannot run MediaPipe without admin-installed mesa/GLES libs." >&2
-  echo "Build pose cache on your Mac and rsync backend/models/pose_cache_span_linspace.pt" >&2
+  echo "Could not load libGL.so.1 and libGLESv2.so.2." >&2
+  echo "Debug:" >&2
+  ls -la "${CONDA_PREFIX}/lib"/libGL* "${CONDA_PREFIX}/lib"/libGLES* 2>/dev/null || true
+  echo "Options:" >&2
+  echo "  1. Ask admins: apt install libegl1-mesa libgl1-mesa-glx libgles2-mesa" >&2
+  echo "  2. Render figures on your Mac, rsync PNG/PDF back" >&2
   exit 1
-fi
-
-# Optional: pull more GLVND pieces from conda-forge if still broken
-if ! python -c "import ctypes; ctypes.CDLL('libGLESv2.so.2')" 2>/dev/null; then
-  echo "Installing conda-forge libglvnd packages..." >&2
-  conda install -y -c conda-forge libglvnd libglvnd-gles mesalib || true
 fi
 
 {
@@ -93,16 +140,19 @@ fi
   echo "export LD_LIBRARY_PATH=\"${CONDA_PREFIX}/lib:\${LD_LIBRARY_PATH:-}\""
   echo "export EGL_PLATFORM=surfaceless"
   echo "export LIBGL_ALWAYS_SOFTWARE=1"
+  echo "export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe"
+  echo "export GALLIUM_DRIVER=llvmpipe"
 } > "${OUT_ENV}"
 
 # shellcheck disable=SC1090
 source "${OUT_ENV}"
 
 echo "Wrote ${OUT_ENV}" >&2
-echo "Testing MediaPipe..." >&2
+echo "Testing OpenCV + MediaPipe..." >&2
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/backend:${PYTHONPATH:-}"
-python -c "from core.pose_utils import PoseEstimator; PoseEstimator(); print('MediaPipe OK')"
+python -c "import cv2; from core.pose_utils import PoseEstimator; PoseEstimator(); print('MediaPipe OK')"
 
-echo "Success. Before pose-cache build or training with MediaPipe, run:" >&2
+echo "Success. Before live-pose figure render, run:" >&2
 echo "  source scripts/cluster/mediapipe_gl.env" >&2
+echo "  ./scripts/cluster/run_qualitative_render_only.sh" >&2

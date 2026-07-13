@@ -250,8 +250,15 @@ def load_jvc_no_xattn_skeleton_branch(
     proxy = SkateFormerBFusion(
         model.task_classes,
         window_size=model.window_size,
-        four_stream=True,
+        four_stream=model.skeleton.four_stream,
     )
     load_skateformer_b_skeleton_branch(proxy, checkpoint_path, device=device)
-    model.skeleton.load_state_dict(proxy.skeleton.state_dict(), strict=False)
-    print(f"Loaded JVC no-xattn skeleton from {checkpoint_path}")
+    tgt = model.skeleton.state_dict()
+    src = proxy.skeleton.state_dict()
+    filtered = {k: v for k, v in src.items() if k in tgt and v.shape == tgt[k].shape}
+    tgt.update(filtered)
+    model.skeleton.load_state_dict(tgt, strict=False)
+    print(
+        f"Loaded JVC no-xattn skeleton from {checkpoint_path} "
+        f"({len(filtered)}/{len(src)} tensors)"
+    )

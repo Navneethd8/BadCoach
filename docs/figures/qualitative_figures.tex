@@ -1,0 +1,23 @@
+% Auto-generated qualitative figure. Requires: graphicx, xcolor
+\providecolor{qualOk}{RGB}{43,138,62}
+\providecolor{qualErr}{RGB}{201,42,42}
+\begin{figure*}[t]
+  \centering
+  {\normalsize\textbf{JVC (K-STViT, 80.6\%)}}\par
+  \input{figures/qualitative_jvc_val_rows.tex}
+
+  {\normalsize\textbf{JVC no-xattn four-stream (79.9\%)}}\par
+  \input{figures/qualitative_jvc_no_xattn_4stream_rows.tex}
+
+  {\normalsize\textbf{JVC no-xattn single-stream (80.5\%)}}\par
+  \input{figures/qualitative_jvc_no_xattn_1stream_rows.tex}
+
+  \caption{%
+    Qualitative stroke-type predictions on validation clips.
+    Each row shows every fourth frame of the 16-frame \texttt{span\_linspace} input
+    (224$\times$224 RGB seen by the vision encoder); gold border marks contact.
+    Top two rows: correct high-confidence predictions; bottom two rows: representative
+    confusions (distinct error pairs).
+  }
+  \label{fig:qualitative_predictions}
+\end{figure*}

@@ -1,0 +1,80 @@
+{
+  "model_label": "JVC no-xattn four-stream (79.9%)",
+  "render_mode": "faithful",
+  "frame_source": "cache224",
+  "pose_overlay": false,
+  "clip_frames": 16,
+  "frame_stride": 4,
+  "display_frames": 4,
+  "cell_size": 220,
+  "rows": [
+    {
+      "row": 0,
+      "dataset_idx": 13717,
+      "gt": "Serve",
+      "pred": "Serve",
+      "conf": 0.8061432242393494,
+      "correct": true,
+      "contact_col": 0,
+      "timesteps": [
+        0,
+        4,
+        8,
+        12
+      ],
+      "stroke_subtype": "High_Serve",
+      "technique": "Forehand"
+    },
+    {
+      "row": 1,
+      "dataset_idx": 13474,
+      "gt": "Clear",
+      "pred": "Clear",
+      "conf": 0.5942553281784058,
+      "correct": true,
+      "contact_col": 0,
+      "timesteps": [
+        0,
+        4,
+        8,
+        12
+      ],
+      "stroke_subtype": "None",
+      "technique": "Forehand"
+    },
+    {
+      "row": 2,
+      "dataset_idx": 986,
+      "gt": "Smash",
+      "pred": "Drop",
+      "conf": 0.9439271688461304,
+      "correct": false,
+      "contact_col": 0,
+      "timesteps": [
+        0,
+        4,
+        8,
+        12
+      ],
+      "stroke_subtype": "Common_Smash",
+      "technique": "Backhand"
+    },
+    {
+      "row": 3,
+      "dataset_idx": 12085,
+      "gt": "Drop",
+      "pred": "Drop",
+      "conf": 0.7639222145080566,
+      "correct": true,
+      "contact_col": 0,
+      "timesteps": [
+        0,
+        4,
+        8,
+        12
+      ],
+      "stroke_subtype": "Stop_Drop",
+      "technique": "Forehand"
+    }
+  ]
+}

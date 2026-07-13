@@ -1,0 +1,3 @@
+Suggested figure caption (paste into paper; not part of the image):
+
+Top row (Smash (Jump Smash, Forehand); 0006.mp4 frames 87813--87823, hit @ 87813). Bottom row (Drop (Reverse Slice Drop, Forehand); 0006.mp4 frames 63707--63717, hit @ 63707). Each row shows 16 uniformly sampled RGB frames from the annotated hit span; gold border marks the frame nearest contact. Visually similar overhead contacts carry different fine-grained stroke labels.
