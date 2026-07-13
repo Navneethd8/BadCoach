@@ -47,6 +47,8 @@ case "${MODEL}" in
     ;;
   bst_prep) TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated.py" ;;
   bst_baseline|bst) TRAIN_SCRIPT="backend/pipelines/training/train_bst_baseline.py" ;;
+  tempose_baseline|tempose) TRAIN_SCRIPT="backend/pipelines/training/train_tempose_baseline.py" ;;
+  stgcn_baseline|stgcn) TRAIN_SCRIPT="backend/pipelines/training/train_stgcn_baseline.py" ;;
   *) echo "Unknown MODEL=${MODEL_RAW}" >&2; exit 2 ;;
 esac
 

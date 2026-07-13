@@ -18,6 +18,7 @@ Example:
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import sys
 
@@ -40,11 +41,20 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+import mlflow
+
 from core.bst_finebadminton_data import get_bone_pairs_coco
 from core.bst_finebadminton_loader import FineBadmintonBSTCollatedDataset
+from core.model_registry import (
+    default_registry_checkpoint_path,
+    make_experiment_checkpoint_path,
+    register_training_checkpoint,
+)
 from core.seed_utils import set_seed
 
 from model.bst import BST, BST_AP, BST_CG, BST_CG_AP
+
+REGISTRY_CATEGORY = "bst"
 
 
 def _infer_in_dim(pose_style: str, in_channels: int = 2) -> int:
@@ -146,14 +156,23 @@ def main() -> None:
     p.add_argument(
         "--save-path",
         default=None,
-        help="Checkpoint .pth (default: backend/models/badminton_model_bst_baseline.pth)",
+        help=f"Checkpoint .pth (default: backend/models/badminton_model_{REGISTRY_CATEGORY}.pth)",
+    )
+    p.add_argument(
+        "--registry-experiment",
+        action="store_true",
+        help=f"Append to registry experiments instead of overwriting {REGISTRY_CATEGORY} primary; "
+        "weights use a timestamped filename next to the default checkpoint.",
     )
     p.add_argument("--num-classes", type=int, default=9)
     args = p.parse_args()
 
     set_seed(args.seed)
 
-    save_path = args.save_path or os.path.join(_backend_root, "models", "badminton_model_bst_baseline.pth")
+    save_path = args.save_path or default_registry_checkpoint_path(_backend_root, REGISTRY_CATEGORY)
+    if args.registry_experiment:
+        save_path = make_experiment_checkpoint_path(save_path)
+    models_dir = os.path.dirname(save_path) or os.path.join(_backend_root, "models")
 
     train_ds = FineBadmintonBSTCollatedDataset(args.collated_root, "train", args.pose_style)
     val_ds = FineBadmintonBSTCollatedDataset(args.collated_root, "val", args.pose_style)
@@ -180,29 +199,80 @@ def main() -> None:
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     criterion = nn.CrossEntropyLoss()
 
+    _coll = os.path.normpath(os.path.abspath(args.collated_root))
+    _coll_tag = "mmpose" if "mmpose" in _coll.lower() else "other"
+
     print(f"device={device} model={args.model_name} in_dim={in_dim} train={len(train_ds)} val={len(val_ds)}")
 
-    best_acc = 0.0
-    for epoch in range(1, args.epochs + 1):
-        tr_loss, tr_acc = train_one_epoch(model, train_loader, opt, device, criterion)
-        va_loss, va_acc = evaluate(model, val_loader, device, criterion)
-        print(f"epoch {epoch:03d}  train loss={tr_loss:.4f} acc={tr_acc:.4f}  val loss={va_loss:.4f} acc={va_acc:.4f}")
-        if va_acc >= best_acc:
-            best_acc = va_acc
-            os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "val_acc": va_acc,
-                    "args": vars(args),
-                    "in_dim": in_dim,
-                },
-                save_path,
-            )
-            print(f"  saved {save_path} (best val acc={best_acc:.4f})")
+    mlflow.set_experiment("IsoCourt_Training_BST_Baseline")
+    with mlflow.start_run():
+        mlflow.set_tag("collated_data", _coll_tag)
+        mlflow.log_params({
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "lr": args.lr,
+            "weight_decay": args.weight_decay,
+            "seed": args.seed,
+            "pose_style": args.pose_style,
+            "sequence_length": args.sequence_length,
+            "model_name": args.model_name,
+            "num_classes": args.num_classes,
+            "in_dim": in_dim,
+            "collated_root": _coll,
+            "script": "train_bst_baseline.py",
+        })
 
-    print(f"Done. Best val acc={best_acc:.4f}")
+        best_acc = 0.0
+        for epoch in range(1, args.epochs + 1):
+            tr_loss, tr_acc = train_one_epoch(model, train_loader, opt, device, criterion)
+            va_loss, va_acc = evaluate(model, val_loader, device, criterion)
+
+            mlflow.log_metrics({
+                "train_loss": tr_loss,
+                "train_acc": tr_acc * 100,
+                "val_loss": va_loss,
+                "val_acc": va_acc * 100,
+            }, step=epoch)
+
+            print(f"epoch {epoch:03d}  train loss={tr_loss:.4f} acc={tr_acc:.4f}  val loss={va_loss:.4f} acc={va_acc:.4f}")
+            if va_acc >= best_acc:
+                best_acc = va_acc
+                os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+                torch.save(
+                    {
+                        REGISTRY_CATEGORY: model.state_dict(),
+                        "best_acc": va_acc,
+                        "epoch": epoch,
+                        "args": vars(args),
+                        "in_dim": in_dim,
+                    },
+                    save_path,
+                )
+                print(f"  saved {save_path} (best val acc={best_acc:.4f})")
+
+                register_training_checkpoint(
+                    models_dir,
+                    category=REGISTRY_CATEGORY,
+                    file_basename=os.path.basename(save_path),
+                    meta={
+                        "accuracy": round(best_acc * 100, 2),
+                        "epoch": epoch,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "script": "train_bst_baseline.py",
+                        "architecture": REGISTRY_CATEGORY,
+                        "inference": {
+                            "variant": args.model_name,
+                            "pose_style": args.pose_style,
+                            "sequence_length": args.sequence_length,
+                            "in_dim": in_dim,
+                            "num_classes": args.num_classes,
+                            "collated_root": _coll,
+                        },
+                    },
+                    experiment=args.registry_experiment,
+                )
+
+        print(f"Done. Best val acc={best_acc:.4f} ({best_acc * 100:.2f}%)")
 
 
 if __name__ == "__main__":

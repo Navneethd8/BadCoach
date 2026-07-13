@@ -26,8 +26,11 @@ These are the **only** valid keys under `models.architectures.`* and for `infere
 | `timesformer`          | video_transformer | `pipelines/training/train_timesformer.py`          | `core/timesformer.py`              | Divided space–time attention + pose tokens; ViT-style stem when `backbone=vit`.                                                     |
 | `jvc`                  | graph             | `pipelines/training/train_jvc.py`                  | `core/jvc.py`                      | SkateFormer joints + Conv3D/ViT patches, cross-attn + divided ST; default `hit_centered` sampling.                                  |
 | `jvc_no_xattn`         | graph             | `pipelines/training/train_jvc_no_xattn.py`         | `core/jvc_no_xattn.py`             | JVC ablation: late Conv3D + skeleton fusion without cross-attention.                                                                |
+| `bst`                  | skeleton_external | `pipelines/training/train_bst_baseline.py`         | BST third-party (`model/bst.py`)   | Default checkpoint: `badminton_model_bst.pth`. Catalog only (not API inference).                                                  |
+| `tempose`              | skeleton_external | `pipelines/training/train_tempose_baseline.py`     | BST third-party (`model/tempose.py`)| Default checkpoint: `badminton_model_tempose.pth`.                                                                                  |
+| `stgcn`                | skeleton_external | `pipelines/training/train_stgcn_baseline.py`       | `core/stgcn_compat.py`           | Default checkpoint: `badminton_model_stgcn.pth`.                                                                                    |
 
-**Loader architecture strings** (checkpoint + registry; used by `api/model_loader.py`): `cnn_lstm`, `conv3d_pose`, `timesformer`, `jvc`, `jvc_no_xattn`.
+**Loader architecture strings** (API inference): `cnn_lstm`, `conv3d_pose`, `timesformer`, `jvc`, `jvc_no_xattn`. External skeleton baselines are tracked in the registry but are not loadable by `api/model_loader.py`.
 
 ---
 

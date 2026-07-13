@@ -31,6 +31,18 @@ ARCHITECTURE_CATEGORIES: Tuple[str, ...] = (
     "jvc",
     "jvc_no_xattn",
     "timesformer",
+    "bst",
+    "tempose",
+    "stgcn",
+)
+
+# Native stroke models loadable by the API / inference CLI.
+INFERENCE_CATEGORIES: Tuple[str, ...] = (
+    "cnn_lstm",
+    "conv3d_pose",
+    "jvc",
+    "jvc_no_xattn",
+    "timesformer",
 )
 
 # Optional grouping for ``list`` output (research families).
@@ -40,6 +52,9 @@ CATEGORY_GROUPS: Dict[str, str] = {
     "jvc": "graph",
     "jvc_no_xattn": "graph",
     "timesformer": "video_transformer",
+    "bst": "skeleton_external",
+    "tempose": "skeleton_external",
+    "stgcn": "skeleton_external",
 }
 
 SCRIPT_TO_CATEGORY: Dict[str, str] = {
@@ -48,6 +63,9 @@ SCRIPT_TO_CATEGORY: Dict[str, str] = {
     "train_jvc.py": "jvc",
     "train_jvc_no_xattn.py": "jvc_no_xattn",
     "train_timesformer.py": "timesformer",
+    "train_bst_baseline.py": "bst",
+    "train_tempose_baseline.py": "tempose",
+    "train_stgcn_baseline.py": "stgcn",
 }
 
 # When nothing is configured, prefer first hit (API-safe order).
@@ -67,6 +85,13 @@ def default_registry_v2() -> Dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "models": {"architectures": {k: _empty_slot() for k in ARCHITECTURE_CATEGORIES}},
     }
+
+
+def default_registry_checkpoint_path(backend_root: str, category: str) -> str:
+    """Default ``backend/models/badminton_model_{category}.pth`` for a registry category."""
+    if category not in ARCHITECTURE_CATEGORIES:
+        raise ValueError(f"Unknown category {category!r}")
+    return os.path.join(os.path.abspath(backend_root), "models", f"badminton_model_{category}.pth")
 
 
 def _is_v2_layout(data: Dict[str, Any]) -> bool:
@@ -99,6 +124,12 @@ def infer_category_from_meta(filename: str, meta: Dict[str, Any]) -> str:
         return "jvc"
     if "jvc_no_xattn" in fn or "jvc_no_cross" in fn:
         return "jvc_no_xattn"
+    if "tempose" in fn:
+        return "tempose"
+    if "stgcn" in fn:
+        return "stgcn"
+    if "bst" in fn:
+        return "bst"
     return "cnn_lstm"
 
 
@@ -241,8 +272,8 @@ def load_inference_selection(models_dir: str) -> Dict[str, Any]:
 
 
 def save_inference_selection(models_dir: str, category: str) -> None:
-    if category not in ARCHITECTURE_CATEGORIES:
-        raise ValueError(f"Unknown category {category!r}. Expected one of: {ARCHITECTURE_CATEGORIES}")
+    if category not in INFERENCE_CATEGORIES:
+        raise ValueError(f"Unknown category {category!r}. Expected one of: {INFERENCE_CATEGORIES}")
     p = inference_selection_path(models_dir)
     os.makedirs(models_dir, exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
@@ -252,19 +283,19 @@ def save_inference_selection(models_dir: str, category: str) -> None:
 def resolve_inference_category(models_dir: str, registry: Dict[str, Any]) -> Optional[str]:
     env = (os.environ.get(ENV_INFERENCE_CATEGORY) or "").strip()
     if env:
-        if env not in ARCHITECTURE_CATEGORIES:
+        if env not in INFERENCE_CATEGORIES:
             raise ValueError(
                 f"{ENV_INFERENCE_CATEGORY}={env!r} is not a valid category. "
-                f"Choose one of: {', '.join(ARCHITECTURE_CATEGORIES)}"
+                f"Choose one of: {', '.join(INFERENCE_CATEGORIES)}"
             )
         return env
     sel = load_inference_selection(models_dir)
     cat = (sel.get("category") or "").strip()
     if cat:
-        if cat not in ARCHITECTURE_CATEGORIES:
+        if cat not in INFERENCE_CATEGORIES:
             raise ValueError(
                 f"inference_selection.json category {cat!r} invalid. "
-                f"Expected one of: {', '.join(ARCHITECTURE_CATEGORIES)}"
+                f"Expected one of: {', '.join(INFERENCE_CATEGORIES)}"
             )
         return cat
     # Legacy: v1 active_model basename -> infer category
@@ -282,7 +313,7 @@ def resolve_inference_category(models_dir: str, registry: Dict[str, Any]) -> Opt
         prim = slot.get("primary")
         if isinstance(prim, dict) and prim.get("file"):
             return c
-    for c in ARCHITECTURE_CATEGORIES:
+    for c in INFERENCE_CATEGORIES:
         slot = arch.get(c) or {}
         prim = slot.get("primary")
         if isinstance(prim, dict) and prim.get("file"):

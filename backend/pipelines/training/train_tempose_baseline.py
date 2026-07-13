@@ -44,10 +44,16 @@ import mlflow
 
 from core.bst_finebadminton_data import get_bone_pairs_coco
 from core.bst_finebadminton_loader import FineBadmintonBSTCollatedDataset
-from core.model_registry import make_experiment_checkpoint_path, register_training_checkpoint
+from core.model_registry import (
+    default_registry_checkpoint_path,
+    make_experiment_checkpoint_path,
+    register_training_checkpoint,
+)
 from core.seed_utils import set_seed
 
 from model.tempose import TemPose_V
+
+REGISTRY_CATEGORY = "tempose"
 
 
 def _infer_in_dim(pose_style: str, in_channels: int = 2) -> int:
@@ -107,16 +113,16 @@ def main() -> None:
     p.add_argument("--weight-decay", type=float, default=1e-4)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-path", default=None,
-                   help="Checkpoint .pth (default: backend/models/badminton_model_tempose_baseline.pth)")
+                   help=f"Checkpoint .pth (default: backend/models/badminton_model_{REGISTRY_CATEGORY}.pth)")
     p.add_argument("--num-classes", type=int, default=9)
     p.add_argument("--registry-experiment", action="store_true",
-                   help="Append to registry experiments instead of overwriting tempose_baseline primary; "
+                   help=f"Append to registry experiments instead of overwriting {REGISTRY_CATEGORY} primary; "
                    "weights use a timestamped filename next to the default checkpoint.")
     args = p.parse_args()
 
     set_seed(args.seed)
 
-    save_path = args.save_path or os.path.join(_backend_root, "models", "badminton_model_tempose_baseline.pth")
+    save_path = args.save_path or default_registry_checkpoint_path(_backend_root, REGISTRY_CATEGORY)
     if args.registry_experiment:
         save_path = make_experiment_checkpoint_path(save_path)
     models_dir = os.path.dirname(save_path) or os.path.join(_backend_root, "models")
@@ -196,9 +202,9 @@ def main() -> None:
                 best_acc = va_acc
                 os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
                 torch.save({
+                    REGISTRY_CATEGORY: model.state_dict(),
+                    "best_acc": va_acc,
                     "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "val_acc": va_acc,
                     "args": vars(args),
                     "in_dim": in_dim,
                 }, save_path)
@@ -206,14 +212,14 @@ def main() -> None:
 
                 register_training_checkpoint(
                     models_dir,
-                    category="tempose_baseline",
+                    category=REGISTRY_CATEGORY,
                     file_basename=os.path.basename(save_path),
                     meta={
                         "accuracy": round(best_acc * 100, 2),
                         "epoch": epoch,
                         "timestamp": datetime.datetime.now().isoformat(),
                         "script": "train_tempose_baseline.py",
-                        "architecture": "tempose_baseline",
+                        "architecture": REGISTRY_CATEGORY,
                         "inference": {
                             "variant": "TemPose_V",
                             "pose_style": args.pose_style,

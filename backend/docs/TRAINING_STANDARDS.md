@@ -46,8 +46,8 @@ Primary trainers should match these settings so benchmarks are fair. Constants l
 
 ## External baselines (different by design)
 
-- `train_bst_baseline.py` — BST paper (e.g. T=30, batch 64)
-- `train_tempose_baseline.py` / `train_stgcn_baseline.py` — collated tensors, batch 64
+- `train_bst_baseline.py` / `train_tempose_baseline.py` / `train_stgcn_baseline.py` — collated tensors, batch 64
+- Each writes to its own registry category: `bst`, `tempose`, `stgcn` (default checkpoints `badminton_model_{category}.pth`; catalog only; not API inference)
 
 ## Train (tmux)
 

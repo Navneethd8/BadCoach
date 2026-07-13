@@ -218,6 +218,18 @@
           "experiment": false
         },
         "registrations": []
+      },
+      "bst": {
+        "primary": null,
+        "registrations": []
+      },
+      "tempose": {
+        "primary": null,
+        "registrations": []
+      },
+      "stgcn": {
+        "primary": null,
+        "registrations": []
       }
     }
   }

@@ -27,6 +27,7 @@ from core.model_registry import (  # noqa: E402
     ARCHITECTURE_CATEGORIES,
     CATEGORY_GROUPS,
     ENV_INFERENCE_CATEGORY,
+    INFERENCE_CATEGORIES,
     inference_selection_path,
     load_inference_selection,
     load_registry_file,
@@ -122,10 +123,10 @@ def main() -> int:
         "set",
         help=(
             f"Write inference_selection.json, deploy/docker-inference.env, and deploy/ci_inference_category "
-            f"(categories: {', '.join(ARCHITECTURE_CATEGORIES)})."
+            f"(categories: {', '.join(INFERENCE_CATEGORIES)})."
         ),
     )
-    sp_set.add_argument("category", choices=ARCHITECTURE_CATEGORIES)
+    sp_set.add_argument("category", choices=INFERENCE_CATEGORIES)
 
     sp_pr = sub.add_parser("promote", help="Move an experiment registration to primary for a category.")
     sp_pr.add_argument("category", choices=ARCHITECTURE_CATEGORIES)

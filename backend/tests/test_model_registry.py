@@ -7,6 +7,7 @@ import pytest
 from core.model_registry import (
     ARCHITECTURE_CATEGORIES,
     ENV_INFERENCE_CATEGORY,
+    default_registry_checkpoint_path,
     make_experiment_checkpoint_path,
     migrate_v1_to_v2,
     normalize_registry,
@@ -94,6 +95,32 @@ def test_register_experiment_vs_primary(tmp_path):
     assert slot["primary"]["file"] == "p1.pth"
     assert len(slot["registrations"]) == 1
     assert slot["registrations"][0]["file"] == "e1.pth"
+
+
+def test_default_registry_checkpoint_path_matches_category():
+    path = default_registry_checkpoint_path("/tmp/backend", "bst")
+    assert path == os.path.join("/tmp/backend", "models", "badminton_model_bst.pth")
+
+
+def test_register_external_baseline_categories(tmp_path):
+    models_dir = str(tmp_path / "m")
+    os.makedirs(models_dir, exist_ok=True)
+    for cat, script in (
+        ("bst", "train_bst_baseline.py"),
+        ("tempose", "train_tempose_baseline.py"),
+        ("stgcn", "train_stgcn_baseline.py"),
+    ):
+        register_training_checkpoint(
+            models_dir,
+            category=cat,
+            file_basename=f"badminton_model_{cat}.pth",
+            meta={"accuracy": 1.0, "script": script, "architecture": cat},
+            experiment=False,
+        )
+    with open(os.path.join(models_dir, "model_registry.json"), encoding="utf-8") as f:
+        reg = normalize_registry(json.load(f))
+    for cat in ("bst", "tempose", "stgcn"):
+        assert reg["models"]["architectures"][cat]["primary"]["file"] == f"badminton_model_{cat}.pth"
 
 
 def test_normalize_registry_fills_missing_architecture_slots():
