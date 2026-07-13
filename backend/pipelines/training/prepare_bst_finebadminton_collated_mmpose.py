@@ -49,7 +49,7 @@ from core.bst_finebadminton_data import (
     stack_pose_style,
 )
 from core.dataset import FineBadmintonDataset
-from core.split import SPLIT_TRAIN_RATIO, video_level_split
+from core.split import video_level_split
 
 
 def _hip_mx(c: np.ndarray) -> float:
@@ -243,7 +243,12 @@ def main() -> None:
         help="Paper uses J+B (JnB_bone); J_only is lighter.",
     )
     ap.add_argument("--split-seed", type=int, default=42)
-    ap.add_argument("--split-ratio", type=float, default=SPLIT_TRAIN_RATIO)
+    ap.add_argument(
+        "--split-ratio",
+        type=float,
+        default=None,
+        help="Optional override: train fraction on non-test videos (default: 70/10/20 policy).",
+    )
     ap.add_argument(
         "--pose2d", default="human",
         help="MMPoseInferencer model alias (default: 'human' = RTMPose).",
@@ -264,9 +269,10 @@ def main() -> None:
     if n == 0:
         raise SystemExit("No samples loaded — check data-root and list-file.")
 
-    train_idx, val_idx, test_idx = video_level_split(
-        dataset.samples, seed=args.split_seed, ratio=args.split_ratio
-    )
+    split_kw = {"seed": args.split_seed}
+    if args.split_ratio is not None:
+        split_kw["ratio"] = args.split_ratio
+    train_idx, val_idx, test_idx = video_level_split(dataset.samples, **split_kw)
     print(f"Split: {len(train_idx)} train / {len(val_idx)} val / {len(test_idx)} test (seed={args.split_seed})")
 
     print(f"Initializing MMPoseInferencer('{args.pose2d}')...")

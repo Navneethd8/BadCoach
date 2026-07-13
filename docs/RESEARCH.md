@@ -38,8 +38,8 @@ Every **native** video/pose trainer in `backend/pipelines/training/` is written 
 
 ### 2.1 Split & leakage control
 
-- **`video_level_split`** (`backend/core/split.py`): **80% / 20% by video**, `seed=42`. No clip from a validation video appears in training.
-- Same split logic is reused for BST collate prep (`prepare_bst_finebadminton_collated*.py`) and VLM JSONL splits.
+- **`video_level_split`** (`backend/core/split.py`): **20 benchmark videos → test** (~20%); **10% val** of all videos; **train = rest** of non-benchmark pool (~43/70); `seed=42`. No clip from a validation or test video appears in training.
+- Same policy is reused for BST collate prep (`prepare_bst_finebadminton_collated*.py`) and VLM JSONL splits.
 
 ### 2.2 Optimization & sampling
 

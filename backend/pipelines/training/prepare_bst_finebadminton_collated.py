@@ -33,7 +33,7 @@ if _backend_root not in sys.path:
 from core.bst_finebadminton_data import PoseStyle, frames_to_bst_arrays
 from core.dataset import FineBadmintonDataset
 from core.pose_utils import PoseEstimator
-from core.split import SPLIT_TRAIN_RATIO, video_level_split
+from core.split import video_level_split
 
 
 def _collect_split(
@@ -87,7 +87,12 @@ def main() -> None:
         help="MediaPipe .task path (default: lite under backend/models).",
     )
     ap.add_argument("--split-seed", type=int, default=42)
-    ap.add_argument("--split-ratio", type=float, default=SPLIT_TRAIN_RATIO)
+    ap.add_argument(
+        "--split-ratio",
+        type=float,
+        default=None,
+        help="Optional override: train fraction on non-test videos (default: 70/10/20 policy).",
+    )
     args = ap.parse_args()
 
     pose_style: PoseStyle = args.pose_style
@@ -106,7 +111,10 @@ def main() -> None:
         raise SystemExit("No samples loaded — check data-root and list-file.")
 
     all_idx = list(range(n))
-    train_idx, val_idx, test_idx = video_level_split(dataset.samples, seed=args.split_seed, ratio=args.split_ratio)
+    split_kw = {"seed": args.split_seed}
+    if args.split_ratio is not None:
+        split_kw["ratio"] = args.split_ratio
+    train_idx, val_idx, test_idx = video_level_split(dataset.samples, **split_kw)
 
     pose_estimator = PoseEstimator(model_path=model_path, num_poses=2)
 

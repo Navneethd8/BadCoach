@@ -15,7 +15,7 @@ Primary trainers should match these settings so benchmarks are fair. Constants l
 
 | Setting | Value |
 |--------|-------|
-| Split | `video_level_split` (benchmark 20 test holdout; 80/20 train/val on remaining 50 videos) |
+| Split | `video_level_split` (benchmark ~20 test; 10% val; remainder train — 70/10/20) |
 | Split seed | **42** (`core/split.py`) |
 | Train sampler | `WeightedRandomSampler` on `stroke_type` (pose/video multitask trainers) |
 
