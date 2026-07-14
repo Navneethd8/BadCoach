@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Evaluate Qwen3-VL-8B stroke_type accuracy on the val split (16-frame JSONL).
+Evaluate Qwen3-VL stroke_type accuracy on the benchmark test split (16-frame JSONL).
 
   cd backend/pipelines/vlm/qwen-8b
   pip install -r ../common/requirements-unsloth-vlm.txt
   python backend/scripts/eval_vlm_stroke_checkpoint.py \\
     --jsonl ../../../data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \\
     --pose_mode cache_text \\
-    --max_samples 200
+    --prompt_mode classify
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ for p in (_backend, _vlm_common, _qwen8b):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from core.split import SPLIT_RATIO, SPLIT_SEED
+from core.split import SPLIT_SEED
 from qwen3_vl_config import DEFAULT_MODEL_ID_8B
 from vlm_eval_common import (
     build_instruction_with_pose,
     ground_truth_stroke_index,
     load_row_images,
-    load_val_rows,
+    load_split_rows,
     prediction_stroke_index,
     print_eval_report,
     score_predictions,
@@ -42,10 +42,27 @@ from vlm_stroke_protocol import SEQUENCE_LENGTH
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Eval Qwen3-VL stroke_type on val JSONL")
+    p = argparse.ArgumentParser(description="Eval Qwen3-VL stroke_type on JSONL split")
     p.add_argument("--jsonl", type=str, required=True)
+    p.add_argument(
+        "--split",
+        choices=("test", "val", "train"),
+        default="test",
+        help="Split to score (default: benchmark test holdout).",
+    )
     p.add_argument("--model_name", type=str, default=DEFAULT_MODEL_ID_8B)
-    p.add_argument("--lora_path", type=str, default=None)
+    p.add_argument(
+        "--model_path",
+        type=str,
+        default=None,
+        help="Saved Unsloth model directory (full FT or adapter folder).",
+    )
+    p.add_argument(
+        "--lora_path",
+        type=str,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
     p.add_argument("--load_in_4bit", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--num_frames", type=int, default=SEQUENCE_LENGTH)
     p.add_argument("--frame_size", type=int, default=224)
@@ -56,7 +73,6 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--pose_cache_path", type=str, default=None)
     p.add_argument("--split_seed", type=int, default=SPLIT_SEED)
-    p.add_argument("--split_ratio", type=float, default=SPLIT_RATIO)
     p.add_argument("--max_samples", type=int, default=None)
     p.add_argument("--max_new_tokens", type=int, default=256)
     p.add_argument("--max_pixels_per_image", type=int, default=DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE)
@@ -83,30 +99,33 @@ def main() -> None:
     if not torch.cuda.is_available():
         print("CUDA recommended for eval.", file=sys.stderr)
 
-    val_rows, base_dir = load_val_rows(
-        args.jsonl, split_seed=args.split_seed, split_ratio=args.split_ratio
+    eval_rows, base_dir = load_split_rows(
+        args.jsonl, split=args.split, split_seed=args.split_seed
     )
     if args.max_samples is not None:
-        val_rows = val_rows[: args.max_samples]
+        eval_rows = eval_rows[: args.max_samples]
 
     pose_cache = None
     if args.pose_mode == "cache_text":
         pose_cache = load_pose_cache_tensor(resolve_pose_cache_path(args.pose_cache_path))
 
-    if args.lora_path:
+    model_path = args.model_path or args.lora_path
+    if model_path:
         model, tokenizer = FastVisionModel.from_pretrained(
-            args.lora_path, load_in_4bit=args.load_in_4bit
+            model_path, load_in_4bit=args.load_in_4bit
         )
+        model_tag = f"checkpoint {model_path}"
     else:
         model, tokenizer = FastVisionModel.from_pretrained(
             args.model_name, load_in_4bit=args.load_in_4bit
         )
+        model_tag = f"base {args.model_name}"
     apply_vision_processor_limits(tokenizer, max_pixels=args.max_pixels_per_image)
     FastVisionModel.for_inference(model)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     predictions: list[str] = []
-    for i, row in enumerate(val_rows):
+    for i, row in enumerate(eval_rows):
         images = load_row_images(row, base_dir, frame_size=args.frame_size)
         if len(images) != args.num_frames:
             raise ValueError(f"Row {i}: expected {args.num_frames} images, got {len(images)}")
@@ -152,11 +171,13 @@ def main() -> None:
                 flush=True,
             )
         if (i + 1) % 10 == 0:
-            print(f"Evaluated {i + 1}/{len(val_rows)}", flush=True)
+            print(f"Evaluated {i + 1}/{len(eval_rows)}", flush=True)
 
-    metrics = score_predictions(val_rows, predictions)
-    tag = "LoRA" if args.lora_path else "zero-shot"
-    print_eval_report(metrics, title=f"Qwen3-VL-8B {tag} stroke_type")
+    metrics = score_predictions(eval_rows, predictions)
+    print_eval_report(
+        metrics,
+        title=f"Qwen3-VL {model_tag} stroke_type ({args.split} split)",
+    )
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Zero-shot GPT stroke_type eval on the val split (16-frame JSONL).
+Zero-shot GPT stroke_type eval on the benchmark test split (16-frame JSONL).
 
   export OPENAI_API_KEY=...
   python backend/pipelines/vlm/openai/eval_openai_stroke.py \\
     --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \\
-    --cache_path outputs/openai_gpt55_val_cache.jsonl
+    --cache_path outputs/openai_gpt55_test_cache.jsonl
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ for p in (_BACKEND, _COMMON, _SCRIPT):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+from core.split import SPLIT_SEED
 from openai import OpenAI
 from openai_vlm_config import DEFAULT_MAX_COMPLETION_TOKENS, DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
 from openai_stroke_client import generate_stroke_caption
@@ -29,7 +30,7 @@ from vlm_eval_common import (
     build_instruction_with_pose,
     ground_truth_stroke_index,
     load_row_images,
-    load_val_rows,
+    load_split_rows,
     prediction_stroke_index,
     print_eval_report,
     score_predictions,
@@ -42,6 +43,13 @@ from vlm_stroke_protocol import SEQUENCE_LENGTH
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="OpenAI VLM stroke_type eval")
     p.add_argument("--jsonl", type=str, required=True)
+    p.add_argument(
+        "--split",
+        choices=("test", "val", "train"),
+        default="test",
+        help="Split to score (default: benchmark test holdout).",
+    )
+    p.add_argument("--split_seed", type=int, default=SPLIT_SEED)
     p.add_argument("--model", type=str, default=DEFAULT_MODEL)
     p.add_argument("--pose_mode", choices=("none", "cache_text"), default="cache_text")
     p.add_argument("--pose_cache_path", type=str, default=None)
@@ -98,9 +106,11 @@ def main() -> None:
     args = _parse_args()
     client = OpenAI()
 
-    val_rows, base_dir = load_val_rows(args.jsonl)
+    eval_rows, base_dir = load_split_rows(
+        args.jsonl, split=args.split, split_seed=args.split_seed
+    )
     if args.max_samples is not None:
-        val_rows = val_rows[: args.max_samples]
+        eval_rows = eval_rows[: args.max_samples]
 
     pose_cache = None
     if args.pose_mode == "cache_text":
@@ -116,7 +126,7 @@ def main() -> None:
         cache_f = cache_path.open("a", encoding="utf-8")
 
     try:
-        for i, row in enumerate(val_rows):
+        for i, row in enumerate(eval_rows):
             rid = _row_id(row, i)
             if rid in cached:
                 predictions.append(cached[rid])
@@ -153,13 +163,16 @@ def main() -> None:
                 )
                 cache_f.flush()
             if (i + 1) % 10 == 0:
-                print(f"OpenAI eval {i + 1}/{len(val_rows)}", flush=True)
+                print(f"OpenAI eval {i + 1}/{len(eval_rows)}", flush=True)
     finally:
         if cache_f:
             cache_f.close()
 
-    metrics = score_predictions(val_rows, predictions)
-    print_eval_report(metrics, title=f"OpenAI {args.model} zero-shot stroke_type")
+    metrics = score_predictions(eval_rows, predictions)
+    print_eval_report(
+        metrics,
+        title=f"OpenAI {args.model} zero-shot stroke_type ({args.split} split)",
+    )
 
 
 if __name__ == "__main__":

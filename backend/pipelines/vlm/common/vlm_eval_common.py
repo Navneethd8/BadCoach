@@ -1,4 +1,4 @@
-"""Shared val-split loading and stroke_type scoring for VLM eval."""
+"""Shared split loading and stroke_type scoring for VLM eval."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from core.label_maps import (
     map_hit_type_to_stroke_index,
     stroke_class_to_index,
 )
-from core.split import SPLIT_RATIO, SPLIT_SEED, vlm_jsonl_video_level_split
+from core.split import SPLIT_SEED, vlm_jsonl_video_level_split
 from load_dataset_jsonl import _image_paths_from_row, _load_image
 from vlm_pose_cache import load_pose_cache_tensor, pose_text_for_dataset_index
 from vlm_stroke_protocol import (
@@ -43,22 +43,41 @@ def read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def load_val_rows(
+def load_split_rows(
     jsonl_path: str,
     *,
+    split: str = "test",
     split_seed: int = SPLIT_SEED,
-    split_ratio: float = SPLIT_RATIO,
 ) -> tuple[list[dict[str, Any]], Path]:
+    """Load JSONL rows for ``train``, ``val``, or ``test`` (default: benchmark test)."""
+    if split not in ("train", "val", "test"):
+        raise ValueError(f"split must be train|val|test, got {split!r}")
     path = Path(jsonl_path).expanduser().resolve()
     rows = read_jsonl_rows(path)
     if not rows:
         raise ValueError(f"Empty JSONL: {path}")
     split_key = "images" if "images" in rows[0] else "image"
-    _, val_idx, _test_idx = vlm_jsonl_video_level_split(
-        rows, image_key=split_key, seed=split_seed, ratio=split_ratio
+    train_idx, val_idx, test_idx = vlm_jsonl_video_level_split(
+        rows, image_key=split_key, seed=split_seed
     )
-    val_rows = [rows[i] for i in val_idx]
-    return val_rows, path.parent
+    indices = {"train": train_idx, "val": val_idx, "test": test_idx}[split]
+    return [rows[i] for i in indices], path.parent
+
+
+def load_test_rows(
+    jsonl_path: str,
+    *,
+    split_seed: int = SPLIT_SEED,
+) -> tuple[list[dict[str, Any]], Path]:
+    return load_split_rows(jsonl_path, split="test", split_seed=split_seed)
+
+
+def load_val_rows(
+    jsonl_path: str,
+    *,
+    split_seed: int = SPLIT_SEED,
+) -> tuple[list[dict[str, Any]], Path]:
+    return load_split_rows(jsonl_path, split="val", split_seed=split_seed)
 
 
 def ground_truth_stroke_index(row: dict[str, Any]) -> int:

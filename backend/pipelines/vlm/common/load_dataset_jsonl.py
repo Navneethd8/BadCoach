@@ -27,7 +27,7 @@ from vlm_pose_cache import load_pose_cache_tensor, pose_text_for_dataset_index
 from vlm_qwen3_defaults import DEFAULT_MAX_SEQ_LENGTH
 from vlm_stroke_protocol import FRAME_SIZE, SEQUENCE_LENGTH, build_user_instruction
 
-from core.split import SPLIT_RATIO, SPLIT_SEED, vlm_jsonl_video_level_split
+from core.split import SPLIT_SEED, vlm_jsonl_video_level_split
 
 PoseModeExtended = Literal["none", "overlay", "text", "both", "cache_text"]
 
@@ -276,7 +276,6 @@ def load_jsonl_conversations_train_val(
     pose_cache_path: str | None = None,
     include_format_hint: bool = True,
     split_seed: int = SPLIT_SEED,
-    split_ratio: float = SPLIT_RATIO,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Same video-level 70/10/20 split as ``core.split.video_level_split`` (benchmark test
@@ -295,7 +294,6 @@ def load_jsonl_conversations_train_val(
         rows,
         image_key=split_key,
         seed=split_seed,
-        ratio=split_ratio,
     )
     kw = _loader_kwargs(
         image_key=image_key,

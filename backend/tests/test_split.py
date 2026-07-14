@@ -85,6 +85,28 @@ def test_video_level_split_is_deterministic():
     assert a == b
 
 
+def test_vlm_jsonl_matches_native_video_counts():
+    """70 videos, 20 benchmark → same ~43 train / 7 val / 20 test as native split."""
+    benchmark = {f"{i:04d}.mp4" for i in range(1, 21)}
+    with tempfile.TemporaryDirectory() as tmp:
+        bench_file = Path(tmp) / "benchmark.txt"
+        bench_file.write_text("\n".join(sorted(benchmark)) + "\n", encoding="utf-8")
+
+        rows = [{"video_stem": f"{i:04d}", "images": [f"img/{i:04d}_000.jpg"]} for i in range(1, 71)]
+        train, val, test = vlm_jsonl_video_level_split(
+            rows,
+            seed=42,
+            benchmark_list_path=bench_file,
+        )
+        train_vids = {rows[i]["video_stem"] for i in train}
+        val_vids = {rows[i]["video_stem"] for i in val}
+        test_vids = {rows[i]["video_stem"] for i in test}
+        assert len(test_vids) == 20
+        assert len(val_vids) == 7
+        assert len(train_vids) == 43
+        assert test_vids == {f"{i:04d}" for i in range(1, 21)}
+
+
 def test_vlm_jsonl_uses_video_stem_for_benchmark_test():
     rows = [
         {"video_stem": "0001", "images": ["img/a.jpg"]},

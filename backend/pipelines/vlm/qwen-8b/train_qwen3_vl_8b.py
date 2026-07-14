@@ -36,7 +36,7 @@ from load_dataset_jsonl import (
     load_jsonl_conversations_train_val,
     trainer_vision_kwargs,
 )
-from core.split import SPLIT_RATIO, SPLIT_SEED
+from core.split import SPLIT_SEED
 from qwen3_vl_config import DEFAULT_MAX_SEQ_LENGTH, DEFAULT_MODEL_ID_8B
 from vlm_processor_utils import apply_vision_processor_limits
 from vlm_qwen3_defaults import DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE
@@ -84,7 +84,6 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--max_pixels_per_image", type=int, default=DEFAULT_TRAIN_MAX_PIXELS_PER_IMAGE)
     p.add_argument("--no_val_split", action="store_true")
     p.add_argument("--split_seed", type=int, default=SPLIT_SEED)
-    p.add_argument("--split_ratio", type=float, default=SPLIT_RATIO)
     p.add_argument("--per_device_eval_batch_size", type=int, default=1)
     p.add_argument("--max_eval_samples", type=int, default=500)
     p.add_argument("--dataloader_num_workers", type=int, default=0)
@@ -145,7 +144,6 @@ def main() -> None:
         train_dataset, eval_dataset = load_jsonl_conversations_train_val(
             args.jsonl,
             split_seed=args.split_seed,
-            split_ratio=args.split_ratio,
             **loader_kw,
         )
         if args.max_eval_samples is not None and len(eval_dataset) > args.max_eval_samples:

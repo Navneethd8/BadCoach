@@ -19,8 +19,7 @@ See also: [`README.md`](README.md) (bootstrap, rsync), [`RETRAIN_TMUX_LOG.md`](R
 | ---- | ---- |
 | Data root | `backend/data` |
 | Labels JSON | `backend/data/transformed_combined_rounds_output_en_evals_translated.json` |
-| Pose cache (native / JVC) | `backend/models/pose_cache_mediapipe.pt` |
-| Pose cache (JVC no-xattn / Qwen pose) | `backend/models/pose_cache_span_linspace.pt` |
+| Pose cache (all trainers + VLM pose) | `backend/models/pose_cache_mediapipe.pt` |
 | BST collate (T=16) | `backend/data/bst_finebadminton_collated_16` |
 | VLM JSONL | `backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl` |
 
@@ -91,7 +90,7 @@ tmux attach -t "${ISOCOURT_TMUX_SESSION}"
 
 ```bash
 ./scripts/cluster/prepare_vlm_16frame.sh
-# Qwen pose mode needs backend/models/pose_cache_span_linspace.pt
+# Qwen/OpenAI pose mode uses backend/models/pose_cache_mediapipe.pt
 ```
 
 ### BST collate (CPU-heavy; run once at T=16)
@@ -240,7 +239,7 @@ export ISOCOURT_TMUX_REPLACE=1
 
 ## 5. JVC no-cross-attn ablations
 
-Uses `span_linspace` pose cache (not mediapipe hit-span cache).
+Uses the shared MediaPipe pose cache (`pose_cache_mediapipe.pt`).
 
 ### 4-stream (default)
 
@@ -248,7 +247,7 @@ Uses `span_linspace` pose cache (not mediapipe hit-span cache).
 export ISOCOURT_TMUX_SESSION=isocourt-jvc-noxattn-4s
 export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh jvc_no_xattn \
-  --pose-cache backend/models/pose_cache_span_linspace.pt \
+  --pose-cache backend/models/pose_cache_mediapipe.pt \
   --epochs 60 \
   --batch-size 4
 ```
@@ -259,7 +258,7 @@ export ISOCOURT_TMUX_REPLACE=1
 export ISOCOURT_TMUX_SESSION=isocourt-jvc-noxattn-1s
 export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh jvc_no_xattn \
-  --pose-cache backend/models/pose_cache_span_linspace.pt \
+  --pose-cache backend/models/pose_cache_mediapipe.pt \
   --no-four-stream \
   --epochs 60 \
   --batch-size 4
@@ -290,7 +289,7 @@ pip install -r backend/pipelines/vlm/common/requirements-unsloth-vlm.txt
 | `--model_name` | Qwen3-VL-8B-Instruct | HF model id |
 | `--output_dir` | `outputs/qwen3_vl_8b_lora` | LoRA + tokenizer saved here |
 | `--pose_mode` | `cache_text` | **`none`** = no-pose ablation; also `overlay`, `text`, `both` |
-| `--pose_cache_path` | auto | `backend/models/pose_cache_span_linspace.pt` for `cache_text` |
+| `--pose_cache_path` | auto | `backend/models/pose_cache_mediapipe.pt` for `cache_text` |
 | `--pose_model_path` | auto | Live MediaPipe (if not using cache) |
 | `--pose_min_short_edge` | `960` | Set `0` to disable upscale before pose |
 | `--num_frames` | `16` | |
@@ -326,7 +325,7 @@ export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh qwen3_vl_8b \
   --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
   --pose_mode cache_text \
-  --pose_cache_path backend/models/pose_cache_span_linspace.pt \
+  --pose_cache_path backend/models/pose_cache_mediapipe.pt \
   --num_frames 16 \
   --frame_size 224 \
   --num_train_epochs 5 \
@@ -363,7 +362,7 @@ After LoRA train finishes:
   --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
   --lora_path backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_pose_lora/lora_adapter \
   --pose_mode cache_text \
-  --pose_cache_path backend/models/pose_cache_span_linspace.pt \
+  --pose_cache_path backend/models/pose_cache_mediapipe.pt \
   --num_frames 16 \
   --frame_size 224 \
   --prompt_mode classify \
@@ -385,7 +384,7 @@ There is **no** `--no-reasoning` flag. Reasoning is controlled by **`--reasoning
 | `--jsonl` | *(required)* | |
 | `--model` | `gpt-5.5` | Override via `OPENAI_VLM_MODEL` |
 | `--pose_mode` | `cache_text` | **`none`** = no-pose ablation |
-| `--pose_cache_path` | auto | `backend/models/pose_cache_span_linspace.pt` when `cache_text` |
+| `--pose_cache_path` | auto | `backend/models/pose_cache_mediapipe.pt` when `cache_text` |
 | `--num_frames` | `16` | |
 | `--frame_size` | `224` | |
 | `--prompt_mode` | `classify` | `jsonl` = legacy open caption in JSONL |
@@ -412,7 +411,7 @@ export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
   --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
   --model gpt-5.5 \
   --pose_mode cache_text \
-  --pose_cache_path backend/models/pose_cache_span_linspace.pt \
+  --pose_cache_path backend/models/pose_cache_mediapipe.pt \
   --num_frames 16 \
   --frame_size 224 \
   --prompt_mode classify \
@@ -451,7 +450,7 @@ tmux new-session -ds "${ISOCOURT_TMUX_SESSION}" \
      --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
      --model gpt-5.5 \
      --pose_mode cache_text \
-     --pose_cache_path backend/models/pose_cache_span_linspace.pt \
+     --pose_cache_path backend/models/pose_cache_mediapipe.pt \
      --prompt_mode classify \
      --reasoning_effort none \
      --max_completion_tokens 4096 \

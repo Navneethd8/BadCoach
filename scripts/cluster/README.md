@@ -127,7 +127,7 @@ chmod +x scripts/cluster/prepare_vlm_16frame.sh
   --output_dir backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_lora
 ```
 
-Ensure `backend/models/pose_cache_span_linspace.pt` exists before training with `--pose_mode cache_text` (build via `build_full_pose_cache.py --sampling span_linspace`).
+Ensure `backend/models/pose_cache_mediapipe.pt` exists before Qwen/OpenAI training with `--pose_mode cache_text`.
 
 Optional: after success, push checkpoints to your laptop (set before invoking `run_train_tmux.sh`):
 
