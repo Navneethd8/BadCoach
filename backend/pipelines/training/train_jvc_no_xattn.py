@@ -6,7 +6,6 @@ Training loop matches JVC (losses, LR groups, scheduler) except architecture and
 Example (cluster):
 
   ./scripts/cluster/run_train_tmux.sh jvc_no_xattn \\
-    --registry-experiment \\
     --pose-cache backend/models/pose_cache_span_linspace.pt \\
     --resume-skeleton backend/models/badminton_model_skateformer_b.pth \\
     --resume-checkpoint backend/models/badminton_model_conv3d_pose.pth
@@ -43,7 +42,7 @@ from core.jvc_no_xattn import (
     load_jvc_no_xattn_skeleton_branch,
 )
 from core.skateformer_b import default_skateformer_b_kwargs
-from core.model_registry import make_experiment_checkpoint_path, register_training_checkpoint
+from core.model_registry import register_training_checkpoint, resolve_training_save_path
 from core.pose_cache_build import load_pose_cache_bundle, media_pipe_fill_pose_cache
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
@@ -222,7 +221,7 @@ def train_jvc_no_xattn(
     resume_skeleton=None,
     start_epoch=0,
     seed=42,
-    registry_experiment=False,
+    registry_experiment=True,
     balanced_sampler=False,
     stroke_loss_weight=5.0,
     aux_loss_weight=0.15,
@@ -254,8 +253,7 @@ def train_jvc_no_xattn(
         save_path = default_jvc_no_xattn_checkpoint_path(backend_root)
     if pose_cache_path is None:
         pose_cache_path = default_jvc_no_xattn_pose_cache_path(backend_root)
-    if registry_experiment:
-        save_path = make_experiment_checkpoint_path(save_path)
+    save_path = resolve_training_save_path(save_path, registry_experiment)
 
     skate_kw = default_skateformer_b_kwargs(
         embed_dim=embed_dim,
@@ -643,7 +641,13 @@ def main() -> None:
         help="Conv3D pose .pth (vision), JVC no-xattn, or JVC .pth.",
     )
     p.add_argument("--start-epoch", type=int, default=0)
-    p.add_argument("--registry-experiment", action="store_true")
+    p.add_argument(
+        "--registry-experiment",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save to a timestamped .pth and append to registry registrations (default). "
+        "Use --no-registry-experiment to overwrite jvc_no_xattn primary instead.",
+    )
     p.add_argument(
         "--pose-cache",
         type=str,

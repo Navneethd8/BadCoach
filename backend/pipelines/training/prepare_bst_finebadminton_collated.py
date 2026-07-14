@@ -69,10 +69,28 @@ def _collect_split(
 
 
 def main() -> None:
+    default_data_root = os.path.join(_backend_root, "data")
+    default_list_file = os.path.join(
+        _backend_root, "data", "transformed_combined_rounds_output_en_evals_translated.json"
+    )
+    default_output_dir = os.path.join(_backend_root, "data", "bst_finebadminton_collated")
+
     ap = argparse.ArgumentParser(description="Prepare BST collated npy for FineBadminton-20K.")
-    ap.add_argument("--data-root", required=True)
-    ap.add_argument("--list-file", required=True)
-    ap.add_argument("--output-dir", required=True, help="e.g. backend/data/bst_finebadminton_collated")
+    ap.add_argument(
+        "--data-root",
+        default=default_data_root,
+        help=f"Dataset root (default: {default_data_root})",
+    )
+    ap.add_argument(
+        "--list-file",
+        default=default_list_file,
+        help=f"Annotations JSON (default: {default_list_file})",
+    )
+    ap.add_argument(
+        "--output-dir",
+        default=default_output_dir,
+        help=f"Output directory (default: {default_output_dir})",
+    )
     ap.add_argument("--sequence-length", type=int, default=30)
     ap.add_argument("--frame-interval", type=int, default=2)
     ap.add_argument(
@@ -95,14 +113,24 @@ def main() -> None:
     )
     args = ap.parse_args()
 
+    data_root = os.path.abspath(args.data_root)
+    list_file = os.path.abspath(args.list_file)
+    if not list_file or not os.path.isfile(list_file):
+        raise SystemExit(
+            f"Annotations not found: {list_file!r}\n"
+            f"  data-root={data_root!r}\n"
+            "Pass --list-file backend/data/transformed_combined_rounds_output_en_evals_translated.json "
+            "and ensure backend/data is symlinked to the shared dataset (setup_data_symlink.sh)."
+        )
+
     pose_style: PoseStyle = args.pose_style
     model_path = args.model
     if model_path is None:
         model_path = os.path.join(_backend_root, "models", "pose_landmarker_lite.task")
 
     dataset = FineBadmintonDataset(
-        args.data_root,
-        args.list_file,
+        data_root,
+        list_file,
         sequence_length=args.sequence_length,
         frame_interval=args.frame_interval,
     )

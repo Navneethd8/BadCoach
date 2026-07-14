@@ -14,6 +14,7 @@ from core.model_registry import (
     register_training_checkpoint,
     resolve_inference_category,
     resolve_inference_model_path,
+    resolve_training_save_path,
     save_inference_selection,
 )
 
@@ -23,6 +24,15 @@ def test_make_experiment_checkpoint_path_adds_timestamp_suffix():
     assert out.startswith("/tmp/models/badminton_model_jvc_")
     assert out.endswith(".pth")
     assert out != "/tmp/models/badminton_model_jvc.pth"
+
+
+def test_resolve_training_save_path():
+    default = "/tmp/models/badminton_model_jvc.pth"
+    assert resolve_training_save_path(default, False) == os.path.abspath(default)
+    stamped = resolve_training_save_path(default, True)
+    assert stamped.startswith("/tmp/models/badminton_model_jvc_")
+    assert stamped.endswith(".pth")
+    assert stamped != os.path.abspath(default)
 
 
 def test_migrate_v1_active_becomes_primary_for_category():

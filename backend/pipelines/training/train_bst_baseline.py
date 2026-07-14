@@ -47,8 +47,8 @@ from core.bst_finebadminton_data import get_bone_pairs_coco
 from core.bst_finebadminton_loader import FineBadmintonBSTCollatedDataset
 from core.model_registry import (
     default_registry_checkpoint_path,
-    make_experiment_checkpoint_path,
     register_training_checkpoint,
+    resolve_training_save_path,
 )
 from core.seed_utils import set_seed
 
@@ -160,18 +160,20 @@ def main() -> None:
     )
     p.add_argument(
         "--registry-experiment",
-        action="store_true",
-        help=f"Append to registry experiments instead of overwriting {REGISTRY_CATEGORY} primary; "
-        "weights use a timestamped filename next to the default checkpoint.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=f"Save to a timestamped .pth and append to registry registrations (default). "
+        f"Use --no-registry-experiment to overwrite {REGISTRY_CATEGORY} primary instead.",
     )
     p.add_argument("--num-classes", type=int, default=9)
     args = p.parse_args()
 
     set_seed(args.seed)
 
-    save_path = args.save_path or default_registry_checkpoint_path(_backend_root, REGISTRY_CATEGORY)
-    if args.registry_experiment:
-        save_path = make_experiment_checkpoint_path(save_path)
+    save_path = resolve_training_save_path(
+        args.save_path or default_registry_checkpoint_path(_backend_root, REGISTRY_CATEGORY),
+        args.registry_experiment,
+    )
     models_dir = os.path.dirname(save_path) or os.path.join(_backend_root, "models")
 
     train_ds = FineBadmintonBSTCollatedDataset(args.collated_root, "train", args.pose_style)

@@ -365,6 +365,19 @@ def make_experiment_checkpoint_path(default_path: str) -> str:
     return os.path.join(parent, f"{stem}_{stamp}{ext}")
 
 
+def resolve_training_save_path(default_path: str, registry_experiment: bool) -> str:
+    """
+    Resolve the on-disk checkpoint path for a training run.
+
+    Registry experiments use a UTC timestamped filename next to the category default
+    (e.g. ``badminton_model_jvc_20260518T120000Z.pth``). Primary training overwrites
+    the default path (e.g. ``badminton_model_jvc.pth``).
+    """
+    if registry_experiment:
+        return make_experiment_checkpoint_path(default_path)
+    return os.path.abspath(default_path)
+
+
 def register_training_checkpoint(
     models_dir: str,
     *,

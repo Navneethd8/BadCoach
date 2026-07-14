@@ -41,7 +41,7 @@ from core.jvc import (
     load_jvc_partial,
     load_jvc_skeleton_branch,
 )
-from core.model_registry import make_experiment_checkpoint_path, register_training_checkpoint
+from core.model_registry import register_training_checkpoint, resolve_training_save_path
 from core.pose_cache_build import (
     default_pose_cache_path,
     load_pose_cache_bundle,
@@ -238,7 +238,7 @@ def train_jvc(
     resume_skeleton=None,
     start_epoch=0,
     seed=42,
-    registry_experiment=False,
+    registry_experiment=True,
     balanced_sampler=False,
     stroke_loss_weight=5.0,
     aux_loss_weight=0.15,
@@ -281,8 +281,7 @@ def train_jvc(
         save_path = default_jvc_checkpoint_path(backend_root)
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
-    if registry_experiment:
-        save_path = make_experiment_checkpoint_path(save_path)
+    save_path = resolve_training_save_path(save_path, registry_experiment)
 
     loss_weights = _task_loss_weights(stroke_loss_weight, aux_loss_weight)
     with mlflow_training_context("IsoCourt_Training_JVC", backend_root):
@@ -737,7 +736,13 @@ def main() -> None:
         help="Conv3D pose .pth (vision) or full JVC .pth.",
     )
     p.add_argument("--start-epoch", type=int, default=0)
-    p.add_argument("--registry-experiment", action="store_true")
+    p.add_argument(
+        "--registry-experiment",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save to a timestamped .pth and append to registry registrations (default). "
+        "Use --no-registry-experiment to overwrite jvc primary instead.",
+    )
     p.add_argument(
         "--pose-cache",
         type=str,

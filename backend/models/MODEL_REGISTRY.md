@@ -104,8 +104,8 @@ Legacy **v1** flat `models: { "file.pth": { ... } }` plus `active_model` is stil
 
 | Action                                    | Effect on `model_registry.json`                                                                                | Effect on `inference_selection.json`    |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Normal training best save                 | Overwrites `**primary`** for that script’s category (unless `--registry-experiment`).                          | None.                                   |
-| Training with `**--registry-experiment`** | Appends to `**registrations`** only.                                                                           | None.                                   |
+| Default training best save                | Appends to `**registrations**` with a **timestamped** `.pth` filename (e.g. `badminton_model_jvc_20260518T120000Z.pth`). | None.                                   |
+| Training with `**--no-registry-experiment**` | Overwrites `**primary**` for that script’s category using the default checkpoint name.                          | None.                                   |
 | You want API on another lane              | Optionally update `**primary**` for that category (e.g. after promote), then point inference at that category. | `**set**` CLI or edit JSON (see below). |
 
 
@@ -117,7 +117,7 @@ Run these from the **repository root** (the folder that contains `backend/`). Ea
 
 Device is picked automatically (`cuda` → `mps` → `cpu`).
 
-**Optional:** append `--registry-experiment` to any command so the best checkpoint is recorded under `registrations` instead of overwriting that architecture’s `primary`.
+**Default:** every trainer saves the best weights to a **timestamped** filename and records it under `registrations`. Pass `--no-registry-experiment` to overwrite that architecture’s `primary` checkpoint instead (e.g. `badminton_model_jvc.pth`).
 
 ```bash
 # --- Optional: labels + Hub snapshot + contact JPEGs (once per machine) ---
@@ -138,7 +138,7 @@ python backend/pipelines/training/train_timesformer.py
 # python backend/pipelines/training/train_timesformer.py --backbone vit --vit-model vit_small_patch16_224
 # python backend/pipelines/training/train_timesformer.py --no-pose
 
-Heavy scripts (`train_conv3d.py`, `train_timesformer.py`, `train_jvc.py`) accept shared-style flags such as `--epochs`, `--batch-size`, `--lr`, `--pose-cache /path/to.pt`, `--max-train-batches N` (smoke tests), `--aug {strong,medium,mild}`, `--accum-steps`, `--stroke-loss-weight`, `--registry-experiment`, and `--no-pose` where listed. Use each file’s `--help` for the full list.
+Heavy scripts (`train_conv3d.py`, `train_timesformer.py`, `train_jvc.py`) accept shared-style flags such as `--epochs`, `--batch-size`, `--lr`, `--pose-cache /path/to.pt`, `--max-train-batches N` (smoke tests), `--aug {strong,medium,mild}`, `--accum-steps`, `--stroke-loss-weight`, `--no-registry-experiment`, and `--no-pose` where listed. Use each file’s `--help` for the full list.
 
 ---
 

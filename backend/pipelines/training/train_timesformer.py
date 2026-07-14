@@ -35,7 +35,7 @@ from core.seed_utils import set_seed
 from core.split import video_level_split
 from core.timesformer import TimeSformerPoseModel
 from core.training_progress import DEFAULT_TRAIN_BATCH_SIZE, tqdm_train_batches
-from core.model_registry import register_training_checkpoint
+from core.model_registry import register_training_checkpoint, resolve_training_save_path
 
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
@@ -177,7 +177,7 @@ def train_timesformer(
     accumulation_steps=4,
     stroke_loss_weight=2.0,
     aug_strength="strong",
-    registry_experiment=False,
+    registry_experiment=True,
     use_pose=True,
 ):
     set_seed(seed)
@@ -186,6 +186,7 @@ def train_timesformer(
     backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
         save_path = os.path.join(backend_root, "models", "badminton_model_timesformer.pth")
+    save_path = resolve_training_save_path(save_path, registry_experiment)
     if pose_cache_path is None:
         # Shared default pose cache path (legacy filename still supported)
         pose_cache_path = default_pose_cache_path(backend_root)
@@ -624,8 +625,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--registry-experiment",
-        action="store_true",
-        help="Append best checkpoint to registry experiments instead of overwriting timesformer primary.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save to a timestamped .pth and append to registry registrations (default). "
+        "Use --no-registry-experiment to overwrite timesformer primary instead.",
     )
     parser.add_argument(
         "--no-pose",

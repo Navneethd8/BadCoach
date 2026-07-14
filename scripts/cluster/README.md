@@ -102,6 +102,8 @@ ls -la backend/data/FineBadminton-20K/videos/
 
 ## 3. Start training (detached; safe to close SSH)
 
+Full retrain matrix (all models + ablations): **[`RETRAIN_TMUX.md`](RETRAIN_TMUX.md)**. Log what you actually ran (§2–§3): **[`RETRAIN_TMUX_LOG.md`](RETRAIN_TMUX_LOG.md)**.
+
 ```bash
 export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh timesformer --epochs 5 --batch-size 2

@@ -24,7 +24,7 @@ from core.model import CNN_LSTM_Model
 from core.pose_utils import PoseEstimator
 from core.seed_utils import set_seed
 from core.split import video_level_split
-from core.model_registry import register_training_checkpoint
+from core.model_registry import register_training_checkpoint, resolve_training_save_path
 
 
 def _resample_pose_cache_time(pose_cache: torch.Tensor, t_new: int) -> torch.Tensor:
@@ -118,7 +118,7 @@ def train_full(
     resume_checkpoint=None,
     start_epoch=0,
     seed=42,
-    registry_experiment=False,
+    registry_experiment=True,
     use_pose=True,
     pretrained=True,
     training_jpeg_dir=None,
@@ -134,6 +134,7 @@ def train_full(
     _backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
         save_path = os.path.join(_backend_root, "models", "badminton_model.pth")
+    save_path = resolve_training_save_path(save_path, registry_experiment)
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(_backend_root)
 
@@ -468,8 +469,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--registry-experiment",
-        action="store_true",
-        help="Append best checkpoint to registry experiments instead of overwriting cnn_lstm primary.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save to a timestamped .pth and append to registry registrations (default). "
+        "Use --no-registry-experiment to overwrite cnn_lstm primary instead.",
     )
     parser.add_argument(
         "--no-pose",
@@ -512,8 +515,9 @@ if __name__ == "__main__":
     if args.sequence_length < 1 or args.sequence_length > 64:
         raise SystemExit("--sequence-length must be between 1 and 64")
 
-    data_root = args.data_root if args.data_root is not None else default_data_root
-    list_file = args.list_file if args.list_file is not None else default_list_file
+    data_root = args.data_root or default_data_root
+    list_file = args.list_file or default_list_file
+    pose_cache_path = args.pose_cache_path or None
 
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")

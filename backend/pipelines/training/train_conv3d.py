@@ -31,7 +31,7 @@ from core.training_standards import (
     mlflow_log_params,
     mlflow_training_context,
 )
-from core.model_registry import register_training_checkpoint
+from core.model_registry import register_training_checkpoint, resolve_training_save_path
 
 _tf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_timesformer.py")
 _spec = importlib.util.spec_from_file_location("train_timesformer", _tf_path)
@@ -73,7 +73,7 @@ def train_conv3d(
     accumulation_steps=4,
     stroke_loss_weight=2.0,
     aug_strength="strong",
-    registry_experiment=False,
+    registry_experiment=True,
     use_pose=True,
 ):
     set_seed(seed)
@@ -82,6 +82,7 @@ def train_conv3d(
     backend_root = os.path.dirname(os.path.dirname(_dir))
     if save_path is None:
         save_path = os.path.join(backend_root, "models", "badminton_model_conv3d_pose.pth")
+    save_path = resolve_training_save_path(save_path, registry_experiment)
     if pose_cache_path is None:
         pose_cache_path = default_pose_cache_path(backend_root)
 
@@ -432,8 +433,10 @@ if __name__ == "__main__":
     parser.add_argument("--aug", type=str, choices=("strong", "medium", "mild"), default="strong")
     parser.add_argument(
         "--registry-experiment",
-        action="store_true",
-        help="Append best checkpoint to registry experiments instead of overwriting conv3d_pose primary.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save to a timestamped .pth and append to registry registrations (default). "
+        "Use --no-registry-experiment to overwrite conv3d_pose primary instead.",
     )
     parser.add_argument(
         "--no-pose",
