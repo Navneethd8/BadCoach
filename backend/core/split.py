@@ -6,14 +6,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 SPLIT_SEED = 42
 
-# FineBadminton-20K target: 70% train / 10% val / 20% test (by video count).
-# With benchmark_source_videos.txt: test = fixed 20 benchmark matches (~20/70);
-# val = 10% of all videos; train = remaining non-benchmark videos.
+# Video-level 70% train / 10% val / 20% test (by video count; deterministic seed).
 SPLIT_TRAIN_RATIO = 0.70
 SPLIT_VAL_RATIO = 0.10
 SPLIT_TEST_RATIO = 0.20
 
-# Back-compat alias for scripts that pass ``ratio=`` (train fraction on non-test videos).
+# Back-compat alias for scripts that pass ``ratio=`` (ignored by default split).
 SPLIT_RATIO = SPLIT_TRAIN_RATIO
 
 _DEFAULT_BENCHMARK_LIST = (
@@ -105,6 +103,23 @@ def _split_remainder_by_train_ratio(
     return train_vids, val_vids
 
 
+def _split_videos_random_ratio(
+    unique_videos: List[str],
+    *,
+    seed: int,
+    train_ratio: float,
+    val_ratio: float,
+) -> Tuple[List[str], List[str], List[str]]:
+    """Shuffle videos and partition into train / val / test by ratio."""
+    g = torch.Generator().manual_seed(seed)
+    perm = torch.randperm(len(unique_videos), generator=g).tolist()
+    n_train, n_val, n_test = _split_counts(len(unique_videos), train_ratio, val_ratio)
+    train_vids = [unique_videos[i] for i in perm[:n_train]]
+    val_vids = [unique_videos[i] for i in perm[n_train : n_train + n_val]]
+    test_vids = [unique_videos[i] for i in perm[n_train + n_val :]]
+    return train_vids, val_vids, test_vids
+
+
 def split_video_groups(
     video_to_indices: Dict[str, List[int]],
     *,
@@ -112,21 +127,18 @@ def split_video_groups(
     train_ratio: float = SPLIT_TRAIN_RATIO,
     val_ratio: float = SPLIT_VAL_RATIO,
     remainder_train_ratio: float | None = None,
-    use_benchmark_test: bool = True,
+    use_benchmark_test: bool = False,
     benchmark_list_path: Optional[os.PathLike[str]] = None,
 ) -> Tuple[List[int], List[int], List[int]]:
     """
     Core video-level split used by native trainers, BST collate, and VLM JSONL.
 
-    Default (FineBadminton-20K + ``benchmark_source_videos.txt``):
-      - **Test:** fixed benchmark source matches (~20/70)
-      - **Val:** ``round(val_ratio * n_videos)`` from non-benchmark pool (10% → 7/70)
-      - **Train:** remaining non-benchmark videos (~43/70)
+    Default: deterministic **70% / 10% / 20%** partition of **all** videos (seed 42).
+    For 70 FineBadminton-20K matches this is typically **49 train / 7 val / 14 test**
+    videos; clip counts vary by match.
 
-    Fallback (missing benchmark list or no overlap): random 70/10/20 on all videos.
-
-    Pass ``remainder_train_ratio`` (or ``video_level_split(ratio=…)``) to override with a
-    train-fraction split on non-test videos instead of the fixed 10% val target.
+    Pass ``use_benchmark_test=True`` to hold out fixed benchmark source videos for
+    test instead (legacy; not the default).
     """
     unique_videos = sorted(video_to_indices.keys())
     n_total = len(unique_videos)
@@ -143,50 +155,47 @@ def split_video_groups(
         test_indices = indices[n_train + n_val :]
         return train_indices, val_indices, test_indices
 
-    benchmark_names = load_benchmark_test_videos(benchmark_list_path) if use_benchmark_test else set()
-    test_vids = sorted(v for v in unique_videos if v in benchmark_names)
-    remain_videos = sorted(v for v in unique_videos if v not in benchmark_names)
+    if use_benchmark_test:
+        benchmark_names = load_benchmark_test_videos(benchmark_list_path)
+        test_vids = sorted(v for v in unique_videos if v in benchmark_names)
+        remain_videos = sorted(v for v in unique_videos if v not in benchmark_names)
 
-    if test_vids and remain_videos:
-        if remainder_train_ratio is not None:
-            train_vids, val_vids = _split_remainder_by_train_ratio(
-                remain_videos, seed=seed, train_ratio=remainder_train_ratio
+        if test_vids and remain_videos:
+            if remainder_train_ratio is not None:
+                train_vids, val_vids = _split_remainder_by_train_ratio(
+                    remain_videos, seed=seed, train_ratio=remainder_train_ratio
+                )
+            else:
+                n_val = max(1, round(val_ratio * n_total)) if n_total >= 3 else 1
+                train_vids, val_vids = _split_remainder_by_val_count(
+                    remain_videos, seed=seed, n_val=n_val
+                )
+            train_indices = _indices_for_videos(video_to_indices, train_vids)
+            val_indices = _indices_for_videos(video_to_indices, val_vids)
+            test_indices = _indices_for_videos(video_to_indices, test_vids)
+            print(
+                f"Split (benchmark test holdout): {len(train_vids)} train vids ({len(train_indices)} samples) / "
+                f"{len(val_vids)} val vids ({len(val_indices)} samples) / "
+                f"{len(test_vids)} test vids ({len(test_indices)} samples)"
             )
-        else:
-            n_val = max(1, round(val_ratio * n_total)) if n_total >= 3 else 1
-            train_vids, val_vids = _split_remainder_by_val_count(
-                remain_videos, seed=seed, n_val=n_val
+            return train_indices, val_indices, test_indices
+
+        if benchmark_names and not test_vids:
+            print(
+                "Warning: benchmark test list found but no matching videos in samples; "
+                "falling back to random 70/10/20 split.",
+                flush=True,
             )
-        train_indices = _indices_for_videos(video_to_indices, train_vids)
-        val_indices = _indices_for_videos(video_to_indices, val_vids)
-        test_indices = _indices_for_videos(video_to_indices, test_vids)
-        print(
-            f"Split (benchmark test holdout): {len(train_vids)} train vids ({len(train_indices)} samples) / "
-            f"{len(val_vids)} val vids ({len(val_indices)} samples) / "
-            f"{len(test_vids)} test vids ({len(test_indices)} samples)"
-        )
-        return train_indices, val_indices, test_indices
 
-    if use_benchmark_test and benchmark_names and not test_vids:
-        print(
-            "Warning: benchmark test list found but no matching videos in samples; "
-            "falling back to random 70/10/20 split.",
-            flush=True,
-        )
-
-    g = torch.Generator().manual_seed(seed)
-    perm = torch.randperm(n_total, generator=g).tolist()
-    n_train, n_val, n_test = _split_counts(n_total, train_ratio, val_ratio)
-    train_vids = [unique_videos[i] for i in perm[:n_train]]
-    val_vids = [unique_videos[i] for i in perm[n_train : n_train + n_val]]
-    test_vids = [unique_videos[i] for i in perm[n_train + n_val :]]
-
+    train_vids, val_vids, test_vids = _split_videos_random_ratio(
+        unique_videos, seed=seed, train_ratio=train_ratio, val_ratio=val_ratio
+    )
     train_indices = _indices_for_videos(video_to_indices, train_vids)
     val_indices = _indices_for_videos(video_to_indices, val_vids)
     test_indices = _indices_for_videos(video_to_indices, test_vids)
 
     print(
-        f"Split (random 70/10/20 fallback): {len(train_vids)} train vids ({len(train_indices)} samples) / "
+        f"Split (video-level 70/10/20): {len(train_vids)} train vids ({len(train_indices)} samples) / "
         f"{len(val_vids)} val vids ({len(val_indices)} samples) / "
         f"{len(test_vids)} test vids ({len(test_indices)} samples)"
     )
@@ -200,7 +209,7 @@ def video_level_split(
     val_ratio: float = SPLIT_VAL_RATIO,
     *,
     ratio: float | None = None,
-    use_benchmark_test: bool = True,
+    use_benchmark_test: bool = False,
     benchmark_list_path: Optional[os.PathLike[str]] = None,
 ) -> Tuple[List[int], List[int], List[int]]:
     """
@@ -210,7 +219,7 @@ def video_level_split(
     Returns:
         (train_indices, val_indices, test_indices)
     """
-    remainder_train_ratio = ratio
+    remainder_train_ratio = ratio if use_benchmark_test else None
 
     video_to_indices: Dict[str, List[int]] = {}
     for i, sample in enumerate(samples):
@@ -258,15 +267,12 @@ def vlm_jsonl_video_level_split(
     train_ratio: float = SPLIT_TRAIN_RATIO,
     val_ratio: float = SPLIT_VAL_RATIO,
     ratio: float | None = None,
-    use_benchmark_test: bool = True,
+    use_benchmark_test: bool = False,
     benchmark_list_path: Optional[os.PathLike[str]] = None,
     video_basename_fn: Callable[[Dict[str, Any]], str] | None = None,
 ) -> Tuple[List[int], List[int], List[int]]:
     """
     Same policy as ``video_level_split``, grouping JSONL rows by full-match video.
-
-    Rows from ``build_finebadminton_jsonl.py`` include ``video_stem`` (e.g. ``0001`` from
-    ``0001.mp4``). Legacy contact JSONL falls back to the match prefix in the image filename.
     """
     basename_fn = video_basename_fn or (lambda row: _match_video_basename_from_row(row, image_key))
 
@@ -275,12 +281,13 @@ def vlm_jsonl_video_level_split(
         v_name = basename_fn(row)
         video_to_indices.setdefault(v_name, []).append(i)
 
+    remainder_train_ratio = ratio if use_benchmark_test else None
     train_indices, val_indices, test_indices = split_video_groups(
         video_to_indices,
         seed=seed,
         train_ratio=train_ratio,
         val_ratio=val_ratio,
-        remainder_train_ratio=ratio,
+        remainder_train_ratio=remainder_train_ratio,
         use_benchmark_test=use_benchmark_test,
         benchmark_list_path=benchmark_list_path,
     )

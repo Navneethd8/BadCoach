@@ -10,7 +10,7 @@ Example:
   python backend/pipelines/training/train_stgcn_baseline.py \\
     --collated-root backend/data/bst_finebadminton_collated \\
     --sequence-length 16 \\
-    --epochs 80 \\
+    --epochs 60 \\
     --batch-size 64
 """
 from __future__ import annotations
@@ -109,7 +109,7 @@ def main() -> None:
     p.add_argument("--sequence-length", type=int, default=16)
     p.add_argument("--pose-style", choices=["J_only", "JnB_bone"], default="JnB_bone",
                    help="Which collated file to load (joints-only slice is used regardless).")
-    p.add_argument("--epochs", type=int, default=80)
+    p.add_argument("--epochs", type=int, default=60)
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=1e-4)

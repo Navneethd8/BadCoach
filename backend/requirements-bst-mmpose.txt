@@ -1,0 +1,12 @@
+# Optional: BST / TemPose / ST-GCN collate via prepare_bst_finebadminton_collated_mmpose.py
+# Install after torch (see scripts/cluster/bootstrap_cluster.sh).
+#
+#   pip install -r backend/requirements-bst-mmpose.txt
+#   mim install mmcv
+
+numpy<2.0
+xtcocotools>=1.14
+openmim
+mmengine
+mmdet
+mmpose

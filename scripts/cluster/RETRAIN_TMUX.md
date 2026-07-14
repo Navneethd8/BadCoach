@@ -20,7 +20,8 @@ See also: [`README.md`](README.md) (bootstrap, rsync), [`RETRAIN_TMUX_LOG.md`](R
 | Data root | `backend/data` |
 | Labels JSON | `backend/data/transformed_combined_rounds_output_en_evals_translated.json` |
 | Pose cache (all trainers + VLM pose) | `backend/models/pose_cache_mediapipe.pt` |
-| BST collate (T=16) | `backend/data/bst_finebadminton_collated_16` |
+| BST collate MMPose (T=16, **use for §4**) | `backend/data/bst_finebadminton_collated_mmpose_16` |
+| BST collate MediaPipe (legacy; sparse pose) | `backend/data/bst_finebadminton_collated_16` |
 | VLM JSONL | `backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl` |
 
 ---
@@ -93,9 +94,23 @@ tmux attach -t "${ISOCOURT_TMUX_SESSION}"
 # Qwen/OpenAI pose mode uses backend/models/pose_cache_mediapipe.pt
 ```
 
-### BST collate (CPU-heavy; run once at T=16)
+### BST collate — MMPose (recommended; GPU; run once at T=16)
 
-Shared by **BST**, **TemPose-V**, and **ST-GCN** (16 frames for all three).
+Use for **TemPose-V**, **ST-GCN**, and skeleton features in §4. Matches the BST paper pose pipeline (RTMPose at native resolution). Output layout is identical to MediaPipe collate.
+
+Requires MMPose in the `isocourt` env. One-time install (if `python -c "from mmpose.apis import MMPoseInferencer"` fails):
+
+```bash
+pip install 'numpy<2.0'
+pip install --no-cache-dir --force-reinstall xtcocotools
+pip install -r backend/requirements-bst-mmpose.txt
+mim install mmcv
+python -c "from mmpose.apis import MMPoseInferencer; print('mmpose OK')"
+```
+
+(`Skipping import of cpp extensions due to incompatible torch version` is a harmless mmcv warning if the import succeeds.)
+
+**Use a GPU** — much faster than CPU (~1–2 h vs many hours on a T4-class card).
 
 **While collate runs:** you can start §3 native trainers (and VLM prep) in other tmux sessions—they do not need the collated `.npy`. Wait for collate before §4 (BST / TemPose / ST-GCN).
 
@@ -104,7 +119,24 @@ Quick sanity check on cluster:
 ```bash
 ls -la backend/data
 test -f backend/data/transformed_combined_rounds_output_en_evals_translated.json && echo "labels OK"
+python -c "from mmpose.apis import MMPoseInferencer; print('mmpose OK')"
 ```
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export ISOCOURT_TMUX_SESSION=isocourt-bst-prep-mmpose-16
+export ISOCOURT_TMUX_REPLACE=1
+./scripts/cluster/run_train_tmux.sh bst_prep_mmpose \
+  --data-root backend/data \
+  --list-file backend/data/transformed_combined_rounds_output_en_evals_translated.json \
+  --output-dir backend/data/bst_finebadminton_collated_mmpose_16 \
+  --sequence-length 16 \
+  --pose-style JnB_bone
+```
+
+### BST collate — MediaPipe Lite (legacy; not for skeleton baselines)
+
+MediaPipe at 224×224 produces sparse dual-player pose; TemPose/ST-GCN tend to stick at ~majority-class val acc. Keep only for debugging or comparison.
 
 ```bash
 export ISOCOURT_TMUX_SESSION=isocourt-bst-prep-16
@@ -193,7 +225,7 @@ Optional warm-start (if prior checkpoints exist on cluster):
 
 ## 4. External skeleton baselines
 
-Requires collate from §2.
+Requires **MMPose collate** from §2 (`bst_finebadminton_collated_mmpose_16`).
 
 ### BST
 
@@ -201,11 +233,11 @@ Requires collate from §2.
 export ISOCOURT_TMUX_SESSION=isocourt-bst
 export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh bst \
-  --collated-root backend/data/bst_finebadminton_collated_16 \
+  --collated-root backend/data/bst_finebadminton_collated_mmpose_16 \
   --sequence-length 16 \
   --pose-style JnB_bone \
   --model-name BST_CG_AP \
-  --epochs 80 \
+  --epochs 60 \
   --batch-size 64
 ```
 
@@ -215,10 +247,10 @@ export ISOCOURT_TMUX_REPLACE=1
 export ISOCOURT_TMUX_SESSION=isocourt-tempose
 export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh tempose \
-  --collated-root backend/data/bst_finebadminton_collated_16 \
+  --collated-root backend/data/bst_finebadminton_collated_mmpose_16 \
   --sequence-length 16 \
   --pose-style JnB_bone \
-  --epochs 80 \
+  --epochs 60 \
   --batch-size 64
 ```
 
@@ -228,10 +260,10 @@ export ISOCOURT_TMUX_REPLACE=1
 export ISOCOURT_TMUX_SESSION=isocourt-stgcn
 export ISOCOURT_TMUX_REPLACE=1
 ./scripts/cluster/run_train_tmux.sh stgcn \
-  --collated-root backend/data/bst_finebadminton_collated_16 \
+  --collated-root backend/data/bst_finebadminton_collated_mmpose_16 \
   --sequence-length 16 \
   --pose-style JnB_bone \
-  --epochs 80 \
+  --epochs 60 \
   --batch-size 64
 ```
 
@@ -308,7 +340,7 @@ pip install -r backend/pipelines/vlm/common/requirements-unsloth-vlm.txt
 | `--finetune_language` / `--no-finetune_language` | `True` | |
 | `--r`, `--lora_alpha` | `16`, `16` | LoRA rank |
 | `--gradient_checkpointing` | `unsloth` | |
-| `--split_seed` | `42` | Native 43/7/20 video split (benchmark test holdout) |
+| `--split_seed` | `42` | Video-level **70/10/20** split (49/7/14 videos on 70-match corpus) |
 | `--no_val_split` | off | Train on all rows (no eval) |
 | `--max_eval_samples` | `500` | Cap val eval size |
 | `--dataloader_num_workers` | `0` | |
@@ -354,7 +386,7 @@ export ISOCOURT_TMUX_REPLACE=1
 
 ### Qwen post-train test eval (optional)
 
-After train finishes (6557 benchmark test hits):
+After train finishes (test split — run sanity check in §7 for clip count):
 
 ```bash
 "${ISOCOURT_PYTHON}" backend/scripts/eval_vlm_stroke_checkpoint.py \
@@ -372,7 +404,7 @@ After train finishes (6557 benchmark test hits):
 
 ## 7. OpenAI (eval only — not tmux training)
 
-Zero-shot API eval on the **benchmark test split** (6557 hits / 20 videos). Requires `OPENAI_API_KEY` and prepared JSONL (§2). **No gradient training.**
+Zero-shot API eval on the **test split** (video-level 70/10/20). Requires `OPENAI_API_KEY` and prepared JSONL (§2). **No gradient training.**
 
 There is **no** `--no-reasoning` flag. Reasoning is controlled by **`--reasoning_effort`** (or env `OPENAI_VLM_REASONING_EFFORT`). For one-line stroke classification on gpt-5.x, use **`none`** (already the default).
 
@@ -391,7 +423,7 @@ export OPENAI_VLM_REASONING_EFFORT="none"
 export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
 ```
 
-### Sanity check (optional — expect test **6557**)
+### Sanity check (optional — expect **49 / 7 / 14 videos** on FineBadminton-20K)
 
 ```bash
 "${ISOCOURT_PYTHON}" -c "
@@ -404,7 +436,7 @@ print('train', len(t), 'val', len(v), 'test', len(te))
 "
 ```
 
-Expected: `train 11844 val 2355 test 6557` (43/7/20 videos).
+Expected video counts: **49 train / 7 val / 14 test** (70 matches total). Clip counts vary — note the printed `test` row count for OpenAI/Qwen eval.
 
 ### All `eval_openai_stroke.py` flags
 
@@ -435,7 +467,7 @@ export OPENAI_VLM_REASONING_EFFORT="none"      # same as --reasoning_effort none
 export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
 ```
 
-### OpenAI + pose — benchmark test (foreground)
+### OpenAI + pose — test split (foreground)
 
 **First run:** omit `--resume`. **After interrupt:** add `--resume`.
 
@@ -553,7 +585,7 @@ tmux new-session -ds "${ISOCOURT_TMUX_SESSION}" \
    2>&1 | tee logs/openai-eval-test-nopose.log"
 ```
 
-Final report should read: `stroke_type accuracy: …/6557 (…%) (test split)`.
+Final report should read: `stroke_type accuracy: …/N (…%) (test split)` where **N** is your sanity-check test row count.
 
 If you get **empty responses** from gpt-5.x: keep `--reasoning_effort none`, raise `--max_completion_tokens`, or switch `--model gpt-4o`.
 
@@ -591,7 +623,8 @@ Or set `ISOCOURT_RSYNC_DEST` before training (§1) for automatic push on success
 | `timesformer` | `train_timesformer.py` |
 | `jvc`, `k_st_vit` | `train_jvc.py` |
 | `jvc_no_xattn`, `jvc_no_cross_attn` | `train_jvc_no_xattn.py` |
-| `bst_prep` | `prepare_bst_finebadminton_collated.py` |
+| `bst_prep` | `prepare_bst_finebadminton_collated.py` (MediaPipe; legacy) |
+| `bst_prep_mmpose` | `prepare_bst_finebadminton_collated_mmpose.py` |
 | `bst`, `bst_baseline` | `train_bst_baseline.py` |
 | `tempose`, `tempose_baseline` | `train_tempose_baseline.py` |
 | `stgcn`, `stgcn_baseline` | `train_stgcn_baseline.py` |
@@ -627,3 +660,4 @@ Logs: `logs/train-UTC.log` (or `ISOCOURT_TRAIN_LOG` if set).
 | `No samples loaded` | Wrong `--data-root` / labels missing on volume | `ls backend/data/*.json`; rerun `setup_data_symlink.sh` if needed |
 | tmux session already exists | Same `ISOCOURT_TMUX_SESSION` | `export ISOCOURT_TMUX_REPLACE=1` or pick a new session name |
 | OpenAI empty responses | gpt-5.x reasoning ate token budget | `--reasoning_effort none --max_completion_tokens 4096` or `--model gpt-4o` |
+| `numpy.dtype size changed` / `xtcocotools._mask` on mmpose import | `xtcocotools` built against a different NumPy than runtime | `pip install 'numpy<2.0' && pip install --no-cache-dir --force-reinstall xtcocotools` then re-test import |

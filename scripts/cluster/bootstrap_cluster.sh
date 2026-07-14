@@ -96,4 +96,15 @@ import mediapipe  # noqa: F401
 print("opencv + mediapipe import OK")
 PY
 
+if [[ "${INSTALL_BST_MMPOSE:-1}" == "1" && -f "${REPO_ROOT}/backend/requirements-bst-mmpose.txt" ]]; then
+  echo "Installing BST MMPose stack (requirements-bst-mmpose.txt + mmcv via mim) ..."
+  python -m pip install --no-cache-dir -r "${REPO_ROOT}/backend/requirements-bst-mmpose.txt"
+  python -m pip install --no-cache-dir --force-reinstall xtcocotools
+  mim install mmcv
+  python <<'PY'
+from mmpose.apis import MMPoseInferencer  # noqa: F401
+print("mmpose OK")
+PY
+fi
+
 echo "Done. Activate with: source ${VENV_DIR}/bin/activate"

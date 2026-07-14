@@ -141,7 +141,7 @@ export ISOCOURT_TMUX_REPLACE=1
 ./scripts/ec2/run_train_tmux.sh bst_baseline \
   --collated-root backend/data/bst_finebadminton_collated \
   --sequence-length 30 --pose-style JnB_bone \
-  --model-name BST_CG_AP --epochs 80 --batch-size 64
+  --model-name BST_CG_AP --epochs 60 --batch-size 64
 ```
 
 ## Troubleshooting

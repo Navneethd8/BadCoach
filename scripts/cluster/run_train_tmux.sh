@@ -49,6 +49,9 @@ case "${MODEL}" in
     TRAIN_SCRIPT="backend/pipelines/vlm/qwen-8b/train_qwen3_vl_8b.py"
     ;;
   bst_prep) TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated.py" ;;
+  bst_prep_mmpose|bst_mmpose_prep)
+    TRAIN_SCRIPT="backend/pipelines/training/prepare_bst_finebadminton_collated_mmpose.py"
+    ;;
   bst_baseline|bst) TRAIN_SCRIPT="backend/pipelines/training/train_bst_baseline.py" ;;
   tempose_baseline|tempose) TRAIN_SCRIPT="backend/pipelines/training/train_tempose_baseline.py" ;;
   stgcn_baseline|stgcn) TRAIN_SCRIPT="backend/pipelines/training/train_stgcn_baseline.py" ;;

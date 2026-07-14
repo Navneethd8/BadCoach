@@ -278,8 +278,8 @@ def load_jsonl_conversations_train_val(
     split_seed: int = SPLIT_SEED,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Same video-level 70/10/20 split as ``core.split.video_level_split`` (benchmark test
-    holdout; 10% val on remaining videos). Test rows are held out and not returned.
+    Same video-level 70/10/20 split as ``core.split.video_level_split``.
+    Test rows are held out and not returned.
     """
     path = Path(jsonl_path).expanduser().resolve()
     if not path.is_file():

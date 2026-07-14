@@ -12,7 +12,7 @@ Example:
     --sequence-length 30 \\
     --pose-style JnB_bone \\
     --model-name BST_CG_AP \\
-    --epochs 80 \\
+    --epochs 60 \\
     --batch-size 64
 """
 from __future__ import annotations
@@ -148,7 +148,7 @@ def main() -> None:
     p.add_argument("--sequence-length", type=int, default=30)
     p.add_argument("--pose-style", choices=["J_only", "JnB_bone"], default="JnB_bone")
     p.add_argument("--model-name", default="BST_CG_AP", help="BST | BST_CG | BST_AP | BST_CG_AP")
-    p.add_argument("--epochs", type=int, default=80)
+    p.add_argument("--epochs", type=int, default=60)
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=1e-4)

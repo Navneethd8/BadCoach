@@ -32,6 +32,21 @@ def test_single_split_policy_constants():
     assert SPLIT_RATIO == SPLIT_TRAIN_RATIO
 
 
+def test_default_70_10_20_video_counts():
+    """70 videos → 49 train / 7 val / 14 test (literal video-level 70/10/20)."""
+    video_to_indices = {f"{i:04d}.mp4": [i] for i in range(1, 71)}
+    train, val, test = split_video_groups(video_to_indices, seed=42)
+    assert len(_video_ids_for_indices(video_to_indices, train)) == 49
+    assert len(_video_ids_for_indices(video_to_indices, val)) == 7
+    assert len(_video_ids_for_indices(video_to_indices, test)) == 14
+    assert (
+        len(_video_ids_for_indices(video_to_indices, train))
+        + len(_video_ids_for_indices(video_to_indices, val))
+        + len(_video_ids_for_indices(video_to_indices, test))
+        == 70
+    )
+
+
 def test_benchmark_holdout_puts_benchmark_videos_in_test():
     benchmark = {"0001.mp4", "0002.mp4"}
     with tempfile.TemporaryDirectory() as tmp:
@@ -48,6 +63,7 @@ def test_benchmark_holdout_puts_benchmark_videos_in_test():
         train, val, test = split_video_groups(
             video_to_indices,
             seed=42,
+            use_benchmark_test=True,
             benchmark_list_path=bench_file,
         )
 
@@ -60,54 +76,27 @@ def test_benchmark_holdout_puts_benchmark_videos_in_test():
         assert len(_video_ids_for_indices(video_to_indices, val)) == 1
 
 
-def test_finebadminton_70_10_20_video_counts():
-    """70 videos, 20 benchmark → ~43 train / 7 val / 20 test."""
-    benchmark = {f"{i:04d}.mp4" for i in range(1, 21)}
-    with tempfile.TemporaryDirectory() as tmp:
-        bench_file = Path(tmp) / "benchmark.txt"
-        bench_file.write_text("\n".join(sorted(benchmark)) + "\n", encoding="utf-8")
-
-        video_to_indices = {f"{i:04d}.mp4": [i] for i in range(1, 71)}
-        train, val, test = split_video_groups(
-            video_to_indices,
-            seed=42,
-            benchmark_list_path=bench_file,
-        )
-        assert len(_video_ids_for_indices(video_to_indices, test)) == 20
-        assert len(_video_ids_for_indices(video_to_indices, val)) == 7
-        assert len(_video_ids_for_indices(video_to_indices, train)) == 43
-
-
 def test_video_level_split_is_deterministic():
     samples = [{"video_path": f"/data/{v}"} for v in ("0001.mp4", "0003.mp4", "0004.mp4") for _ in range(2)]
-    a = video_level_split(samples, seed=42, use_benchmark_test=False)
-    b = video_level_split(samples, seed=42, use_benchmark_test=False)
+    a = video_level_split(samples, seed=42)
+    b = video_level_split(samples, seed=42)
     assert a == b
 
 
 def test_vlm_jsonl_matches_native_video_counts():
-    """70 videos, 20 benchmark → same ~43 train / 7 val / 20 test as native split."""
-    benchmark = {f"{i:04d}.mp4" for i in range(1, 21)}
-    with tempfile.TemporaryDirectory() as tmp:
-        bench_file = Path(tmp) / "benchmark.txt"
-        bench_file.write_text("\n".join(sorted(benchmark)) + "\n", encoding="utf-8")
-
-        rows = [{"video_stem": f"{i:04d}", "images": [f"img/{i:04d}_000.jpg"]} for i in range(1, 71)]
-        train, val, test = vlm_jsonl_video_level_split(
-            rows,
-            seed=42,
-            benchmark_list_path=bench_file,
-        )
-        train_vids = {rows[i]["video_stem"] for i in train}
-        val_vids = {rows[i]["video_stem"] for i in val}
-        test_vids = {rows[i]["video_stem"] for i in test}
-        assert len(test_vids) == 20
-        assert len(val_vids) == 7
-        assert len(train_vids) == 43
-        assert test_vids == {f"{i:04d}" for i in range(1, 21)}
+    """70 videos → same 49 / 7 / 14 as native split."""
+    rows = [{"video_stem": f"{i:04d}", "images": [f"img/{i:04d}_000.jpg"]} for i in range(1, 71)]
+    native = video_level_split(
+        [{"video_path": f"/data/{i:04d}.mp4"} for i in range(1, 71)],
+        seed=42,
+    )
+    vlm = vlm_jsonl_video_level_split(rows, seed=42, image_key="images")
+    assert len(vlm[0]) == len(native[0])
+    assert len(vlm[1]) == len(native[1])
+    assert len(vlm[2]) == len(native[2])
 
 
-def test_vlm_jsonl_uses_video_stem_for_benchmark_test():
+def test_vlm_jsonl_benchmark_holdout_optional():
     rows = [
         {"video_stem": "0001", "images": ["img/a.jpg"]},
         {"video_stem": "0003", "images": ["img/b.jpg"]},
@@ -118,6 +107,7 @@ def test_vlm_jsonl_uses_video_stem_for_benchmark_test():
         train, val, test = vlm_jsonl_video_level_split(
             rows,
             seed=42,
+            use_benchmark_test=True,
             benchmark_list_path=bench_file,
         )
         assert test == [0]
