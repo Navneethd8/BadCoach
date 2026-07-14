@@ -308,7 +308,7 @@ pip install -r backend/pipelines/vlm/common/requirements-unsloth-vlm.txt
 | `--finetune_language` / `--no-finetune_language` | `True` | |
 | `--r`, `--lora_alpha` | `16`, `16` | LoRA rank |
 | `--gradient_checkpointing` | `unsloth` | |
-| `--split_seed`, `--split_ratio` | `42`, `0.70` | Match native 70/10/20 split |
+| `--split_seed` | `42` | Native 43/7/20 video split (benchmark test holdout) |
 | `--no_val_split` | off | Train on all rows (no eval) |
 | `--max_eval_samples` | `500` | Cap val eval size |
 | `--dataloader_num_workers` | `0` | |
@@ -333,7 +333,6 @@ export ISOCOURT_TMUX_REPLACE=1
   --gradient_accumulation_steps 8 \
   --learning_rate 2e-4 \
   --split_seed 42 \
-  --split_ratio 0.70 \
   --max_eval_samples 500 \
   --output_dir backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_pose_lora
 ```
@@ -353,35 +352,67 @@ export ISOCOURT_TMUX_REPLACE=1
   --output_dir backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_nopose_lora
 ```
 
-### Qwen post-train val eval (optional)
+### Qwen post-train test eval (optional)
 
-After LoRA train finishes:
+After train finishes (6557 benchmark test hits):
 
 ```bash
 "${ISOCOURT_PYTHON}" backend/scripts/eval_vlm_stroke_checkpoint.py \
   --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
-  --lora_path backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_pose_lora/lora_adapter \
+  --split test \
+  --model_path backend/pipelines/vlm/qwen-8b/outputs/qwen3_vl_8b_16frame_pose_lora/lora_adapter \
   --pose_mode cache_text \
   --pose_cache_path backend/models/pose_cache_mediapipe.pt \
   --num_frames 16 \
   --frame_size 224 \
-  --prompt_mode classify \
-  --max_samples 200
+  --prompt_mode classify
 ```
 
 ---
 
 ## 7. OpenAI (eval only — not tmux training)
 
-Zero-shot API eval. Requires `OPENAI_API_KEY` and prepared JSONL (§2). **No gradient training.**
+Zero-shot API eval on the **benchmark test split** (6557 hits / 20 videos). Requires `OPENAI_API_KEY` and prepared JSONL (§2). **No gradient training.**
 
 There is **no** `--no-reasoning` flag. Reasoning is controlled by **`--reasoning_effort`** (or env `OPENAI_VLM_REASONING_EFFORT`). For one-line stroke classification on gpt-5.x, use **`none`** (already the default).
+
+### Session setup (paste once)
+
+```bash
+cd ~/IsoCourt
+mkdir -p logs backend/pipelines/vlm/openai/outputs
+
+export ISOCOURT_VENV="$HOME/miniconda3/envs/isocourt"
+export ISOCOURT_PYTHON="${ISOCOURT_PYTHON:-${ISOCOURT_VENV}/bin/python}"
+
+export OPENAI_API_KEY="sk-..."          # your key
+export OPENAI_VLM_MODEL="gpt-5.5"
+export OPENAI_VLM_REASONING_EFFORT="none"
+export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
+```
+
+### Sanity check (optional — expect test **6557**)
+
+```bash
+"${ISOCOURT_PYTHON}" -c "
+import json
+from pathlib import Path
+from core.split import vlm_jsonl_video_level_split
+rows = [json.loads(l) for l in Path('backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl').open() if l.strip()]
+t, v, te = vlm_jsonl_video_level_split(rows, image_key='images')
+print('train', len(t), 'val', len(v), 'test', len(te))
+"
+```
+
+Expected: `train 11844 val 2355 test 6557` (43/7/20 videos).
 
 ### All `eval_openai_stroke.py` flags
 
 | Flag | Default | Notes |
 | ---- | ------- | ----- |
 | `--jsonl` | *(required)* | |
+| `--split` | **`test`** | `test` \| `val` \| `train` — use **`test`** for paper numbers |
+| `--split_seed` | `42` | Match native split |
 | `--model` | `gpt-5.5` | Override via `OPENAI_VLM_MODEL` |
 | `--pose_mode` | `cache_text` | **`none`** = no-pose ablation |
 | `--pose_cache_path` | auto | `backend/models/pose_cache_mediapipe.pt` when `cache_text` |
@@ -390,7 +421,7 @@ There is **no** `--no-reasoning` flag. Reasoning is controlled by **`--reasoning
 | `--prompt_mode` | `classify` | `jsonl` = legacy open caption in JSONL |
 | `--reasoning_effort` | **`none`** | **`none`** \| `minimal` \| `low` — use `none` for classify |
 | `--max_completion_tokens` | `2048` | Bump to `4096` if gpt-5.x returns empty text |
-| `--max_samples` | all val rows | Smoke test with e.g. `50` |
+| `--max_samples` | all split rows | Smoke test with e.g. `50` |
 | `--cache_path` | off | Resume file (JSONL of predictions) |
 | `--resume` | off | Skip rows already in `--cache_path` |
 | `--dump_samples` | `0` | Print first N `(gt, pred, raw)` triples |
@@ -404,11 +435,14 @@ export OPENAI_VLM_REASONING_EFFORT="none"      # same as --reasoning_effort none
 export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
 ```
 
-### OpenAI + pose (recommended classify settings)
+### OpenAI + pose — benchmark test (foreground)
+
+**First run:** omit `--resume`. **After interrupt:** add `--resume`.
 
 ```bash
 "${ISOCOURT_PYTHON}" backend/pipelines/vlm/openai/eval_openai_stroke.py \
   --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
+  --split test \
   --model gpt-5.5 \
   --pose_mode cache_text \
   --pose_cache_path backend/models/pose_cache_mediapipe.pt \
@@ -417,15 +451,35 @@ export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
   --prompt_mode classify \
   --reasoning_effort none \
   --max_completion_tokens 4096 \
-  --cache_path backend/pipelines/vlm/openai/outputs/openai_val_pose_cache.jsonl \
-  --resume
+  --cache_path backend/pipelines/vlm/openai/outputs/openai_test_pose_cache.jsonl \
+  2>&1 | tee logs/openai-eval-test-pose.log
 ```
 
-### OpenAI no-pose ablation
+Resume after interrupt:
 
 ```bash
 "${ISOCOURT_PYTHON}" backend/pipelines/vlm/openai/eval_openai_stroke.py \
   --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
+  --split test \
+  --model gpt-5.5 \
+  --pose_mode cache_text \
+  --pose_cache_path backend/models/pose_cache_mediapipe.pt \
+  --num_frames 16 \
+  --frame_size 224 \
+  --prompt_mode classify \
+  --reasoning_effort none \
+  --max_completion_tokens 4096 \
+  --cache_path backend/pipelines/vlm/openai/outputs/openai_test_pose_cache.jsonl \
+  --resume \
+  2>&1 | tee -a logs/openai-eval-test-pose.log
+```
+
+### OpenAI no-pose ablation (test)
+
+```bash
+"${ISOCOURT_PYTHON}" backend/pipelines/vlm/openai/eval_openai_stroke.py \
+  --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
+  --split test \
   --model gpt-5.5 \
   --pose_mode none \
   --num_frames 16 \
@@ -433,31 +487,73 @@ export PYTHONPATH="${PWD}/backend:${PYTHONPATH:-}"
   --prompt_mode classify \
   --reasoning_effort none \
   --max_completion_tokens 4096 \
-  --cache_path backend/pipelines/vlm/openai/outputs/openai_val_nopose_cache.jsonl \
-  --resume
+  --cache_path backend/pipelines/vlm/openai/outputs/openai_test_nopose_cache.jsonl \
+  --resume \
+  2>&1 | tee logs/openai-eval-test-nopose.log
 ```
 
-### OpenAI in tmux (long val run)
+### OpenAI in tmux (long test run)
 
 ```bash
-export ISOCOURT_TMUX_SESSION=isocourt-openai-pose
+export ISOCOURT_TMUX_SESSION=isocourt-openai-pose-test
 export ISOCOURT_TMUX_REPLACE=1
+
 tmux new-session -ds "${ISOCOURT_TMUX_SESSION}" \
   "cd ~/IsoCourt && \
+   mkdir -p logs backend/pipelines/vlm/openai/outputs && \
+   export ISOCOURT_VENV=\"\$HOME/miniconda3/envs/isocourt\" && \
+   export ISOCOURT_PYTHON=\"\${ISOCOURT_PYTHON:-\${ISOCOURT_VENV}/bin/python}\" && \
    export OPENAI_API_KEY=\"${OPENAI_API_KEY}\" && \
+   export OPENAI_VLM_MODEL=\"${OPENAI_VLM_MODEL:-gpt-5.5}\" && \
+   export OPENAI_VLM_REASONING_EFFORT=\"${OPENAI_VLM_REASONING_EFFORT:-none}\" && \
    export PYTHONPATH=\${PWD}/backend:\${PYTHONPATH:-} && \
-   ${ISOCOURT_PYTHON} backend/pipelines/vlm/openai/eval_openai_stroke.py \
+   \${ISOCOURT_PYTHON} backend/pipelines/vlm/openai/eval_openai_stroke.py \
      --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
+     --split test \
      --model gpt-5.5 \
      --pose_mode cache_text \
      --pose_cache_path backend/models/pose_cache_mediapipe.pt \
+     --num_frames 16 \
+     --frame_size 224 \
      --prompt_mode classify \
      --reasoning_effort none \
      --max_completion_tokens 4096 \
-     --cache_path backend/pipelines/vlm/openai/outputs/openai_val_pose_cache.jsonl \
+     --cache_path backend/pipelines/vlm/openai/outputs/openai_test_pose_cache.jsonl \
      --resume \
-   2>&1 | tee logs/openai-eval-pose.log"
+   2>&1 | tee logs/openai-eval-test-pose.log"
+
+tmux attach -t "${ISOCOURT_TMUX_SESSION}"
 ```
+
+### OpenAI no-pose in tmux (test)
+
+```bash
+export ISOCOURT_TMUX_SESSION=isocourt-openai-nopose-test
+export ISOCOURT_TMUX_REPLACE=1
+
+tmux new-session -ds "${ISOCOURT_TMUX_SESSION}" \
+  "cd ~/IsoCourt && \
+   mkdir -p logs backend/pipelines/vlm/openai/outputs && \
+   export ISOCOURT_VENV=\"\$HOME/miniconda3/envs/isocourt\" && \
+   export ISOCOURT_PYTHON=\"\${ISOCOURT_PYTHON:-\${ISOCOURT_VENV}/bin/python}\" && \
+   export OPENAI_API_KEY=\"${OPENAI_API_KEY}\" && \
+   export PYTHONPATH=\${PWD}/backend:\${PYTHONPATH:-} && \
+   \${ISOCOURT_PYTHON} backend/pipelines/vlm/openai/eval_openai_stroke.py \
+     --jsonl backend/data/FineBadminton-20K/dataset/finebadminton_vlm_16frame.jsonl \
+     --split test \
+     --model gpt-5.5 \
+     --pose_mode none \
+     --num_frames 16 \
+     --frame_size 224 \
+     --prompt_mode classify \
+     --reasoning_effort none \
+     --max_completion_tokens 4096 \
+     --cache_path backend/pipelines/vlm/openai/outputs/openai_test_nopose_cache.jsonl \
+     --resume \
+   2>&1 | tee logs/openai-eval-test-nopose.log"
+```
+
+Final report should read: `stroke_type accuracy: …/6557 (…%) (test split)`.
 
 If you get **empty responses** from gpt-5.x: keep `--reasoning_effort none`, raise `--max_completion_tokens`, or switch `--model gpt-4o`.
 
