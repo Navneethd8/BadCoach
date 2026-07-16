@@ -104,6 +104,14 @@ def mlflow_log_params(params: Dict) -> None:
     mlflow.log_params(params)
 
 
+def mlflow_log_tag(key: str, value: str) -> None:
+    if mlflow_disabled():
+        return
+    import mlflow
+
+    mlflow.set_tag(key, value)
+
+
 def mlflow_log_metrics(metrics: Dict, step: Optional[int] = None) -> None:
     if mlflow_disabled():
         return

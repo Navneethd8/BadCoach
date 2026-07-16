@@ -40,8 +40,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-import mlflow
-
 from core.bst_finebadminton_data import get_bone_pairs_coco
 from core.bst_finebadminton_loader import FineBadmintonBSTCollatedDataset
 from core.model_registry import (
@@ -50,6 +48,12 @@ from core.model_registry import (
     resolve_training_save_path,
 )
 from core.seed_utils import set_seed
+from core.training_standards import (
+    mlflow_log_metrics,
+    mlflow_log_params,
+    mlflow_log_tag,
+    mlflow_training_context,
+)
 
 from model.tempose import TemPose_V
 
@@ -168,10 +172,9 @@ def main() -> None:
     _coll = os.path.normpath(os.path.abspath(args.collated_root))
     _coll_tag = "mmpose" if "mmpose" in _coll.lower() else "other"
 
-    mlflow.set_experiment("IsoCourt_Training_TemPose_Baseline")
-    with mlflow.start_run():
-        mlflow.set_tag("collated_data", _coll_tag)
-        mlflow.log_params({
+    with mlflow_training_context("IsoCourt_Training_TemPose_Baseline", _backend_root):
+        mlflow_log_tag("collated_data", _coll_tag)
+        mlflow_log_params({
             "epochs": args.epochs,
             "batch_size": args.batch_size,
             "lr": args.lr,
@@ -191,7 +194,7 @@ def main() -> None:
             tr_loss, tr_acc = train_one_epoch(model, train_loader, opt, device, criterion)
             va_loss, va_acc = evaluate(model, val_loader, device, criterion)
 
-            mlflow.log_metrics({
+            mlflow_log_metrics({
                 "train_loss": tr_loss,
                 "train_acc": tr_acc * 100,
                 "val_loss": va_loss,
