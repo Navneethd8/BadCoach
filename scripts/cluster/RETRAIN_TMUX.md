@@ -98,13 +98,18 @@ tmux attach -t "${ISOCOURT_TMUX_SESSION}"
 
 Use for **TemPose-V**, **ST-GCN**, and skeleton features in §4. Matches the BST paper pose pipeline (RTMPose at native resolution). Output layout is identical to MediaPipe collate.
 
-Requires MMPose in the `isocourt` env. One-time install (if `python -c "from mmpose.apis import MMPoseInferencer"` fails):
+**Do not install MMPose into `isocourt`.** That env uses torch 2.10+cu128, which has no reliable prebuilt `mmcv` wheels (and source builds often fail). Use a **separate conda env** for collate prep only:
 
 ```bash
-pip install 'numpy<2.0'
-pip install --no-cache-dir --force-reinstall xtcocotools
-pip install -r backend/requirements-bst-mmpose.txt
-mim install mmcv
+cd ~/IsoCourt
+chmod +x scripts/cluster/install_bst_mmpose.sh
+./scripts/cluster/install_bst_mmpose.sh
+```
+
+This creates `isocourt-mmpose` (python 3.10, torch 2.3.1+cu121 — same stack as the BST paper). Verify:
+
+```bash
+conda activate isocourt-mmpose
 python -c "from mmpose.apis import MMPoseInferencer; print('mmpose OK')"
 ```
 
@@ -119,10 +124,22 @@ Quick sanity check on cluster:
 ```bash
 ls -la backend/data
 test -f backend/data/transformed_combined_rounds_output_en_evals_translated.json && echo "labels OK"
+conda activate isocourt-mmpose
 python -c "from mmpose.apis import MMPoseInferencer; print('mmpose OK')"
 ```
 
+Run prep with the mmpose env python (output `.npy` works in `isocourt` for training).
+
+**Headless OpenCV + numpy pin (required on nd17):** after any `pip install` in this env:
+
 ```bash
+conda activate isocourt-mmpose
+chmod +x scripts/cluster/ensure_mmpose_env.sh
+./scripts/cluster/ensure_mmpose_env.sh
+```
+
+```bash
+export ISOCOURT_PYTHON="$HOME/miniconda3/envs/isocourt-mmpose/bin/python"
 export CUDA_VISIBLE_DEVICES=0
 export ISOCOURT_TMUX_SESSION=isocourt-bst-prep-mmpose-16
 export ISOCOURT_TMUX_REPLACE=1
@@ -132,6 +149,13 @@ export ISOCOURT_TMUX_REPLACE=1
   --output-dir backend/data/bst_finebadminton_collated_mmpose_16 \
   --sequence-length 16 \
   --pose-style JnB_bone
+```
+
+Prep **auto-uses** training JPEGs at `backend/data/FineBadminton-20K/dataset/image/` when present (same `{stem}_{frame}.jpg` as `FineBadmintonDataset`). Explicit path or native video:
+
+```bash
+  --image-dir backend/data/FineBadminton-20K/dataset/image   # optional; same as auto-detect
+  --prefer-video                                              # slow: mp4 seek @ native res
 ```
 
 ### BST collate — MediaPipe Lite (legacy; not for skeleton baselines)
@@ -266,6 +290,68 @@ export ISOCOURT_TMUX_REPLACE=1
   --epochs 60 \
   --batch-size 64
 ```
+
+### Test eval (after training — no MLflow)
+
+Runs `backend/scripts/eval_skeleton_baseline_checkpoint.py` on the collated **test** split only (not val). Default checkpoint: `backend/models/badminton_model_{bst,tempose,stgcn}.pth`.
+
+```bash
+unset ISOCOURT_PYTHON
+export ISOCOURT_VENV="$HOME/miniconda3/envs/isocourt"
+export ISOCOURT_COLLATED_ROOT=backend/data/bst_finebadminton_collated_mmpose_16
+
+# BST test accuracy
+export ISOCOURT_TMUX_SESSION=isocourt-bst-test
+export ISOCOURT_TMUX_REPLACE=1
+./scripts/cluster/run_eval_tmux.sh bst --per-class
+# override checkpoint if training saved a timestamped .pth:
+# export ISOCOURT_CHECKPOINT=backend/models/badminton_model_bst_20260715T120000Z.pth
+
+# TemPose test
+export ISOCOURT_TMUX_SESSION=isocourt-tempose-test
+export ISOCOURT_TMUX_REPLACE=1
+./scripts/cluster/run_eval_tmux.sh tempose --per-class
+
+# ST-GCN test
+export ISOCOURT_TMUX_SESSION=isocourt-stgcn-test
+export ISOCOURT_TMUX_REPLACE=1
+./scripts/cluster/run_eval_tmux.sh stgcn --per-class
+```
+
+Logs: `logs/eval-{model}-*.log`. Pass `--split val` only if you explicitly want val (default is always `test`).
+
+### Native baselines — test eval (CNN-LSTM, Conv3D, TimeSformer, JVC)
+
+Uses `backend/scripts/eval_native_baseline_checkpoint.py` on the **video-level test split** (14 test videos) with `pose_cache_mediapipe.pt`. No MLflow.
+
+```bash
+unset ISOCOURT_PYTHON
+export ISOCOURT_VENV="$HOME/miniconda3/envs/isocourt"
+export CUDA_VISIBLE_DEVICES=3
+export ISOCOURT_TMUX_REPLACE=1
+
+# CNN-LSTM (train_full)
+export ISOCOURT_CHECKPOINT=backend/models/badminton_model_20260714T030922Z.pth
+export ISOCOURT_TMUX_SESSION=isocourt-cnn-lstm-test
+./scripts/cluster/run_eval_tmux.sh cnn_lstm --per-class
+
+# Conv3D + pose
+export ISOCOURT_CHECKPOINT=backend/models/badminton_model_conv3d_pose_20260714T030509Z.pth
+export ISOCOURT_TMUX_SESSION=isocourt-conv3d-test
+./scripts/cluster/run_eval_tmux.sh conv3d --per-class
+
+# TimeSformer
+export ISOCOURT_CHECKPOINT=backend/models/badminton_model_timesformer_20260714T073004Z.pth
+export ISOCOURT_TMUX_SESSION=isocourt-timesformer-test
+./scripts/cluster/run_eval_tmux.sh timesformer --per-class
+
+# JVC (set your latest badminton_model_jvc_*.pth)
+export ISOCOURT_CHECKPOINT=backend/models/badminton_model_jvc_YYYYMMDDTHHMMSSZ.pth
+export ISOCOURT_TMUX_SESSION=isocourt-jvc-test
+./scripts/cluster/run_eval_tmux.sh jvc --per-class
+```
+
+Optional: `--tta-flip` for Conv3D / TimeSformer / JVC (horizontal flip TTA on RGB).
 
 ---
 
@@ -628,6 +714,8 @@ Or set `ISOCOURT_RSYNC_DEST` before training (§1) for automatic push on success
 | `bst`, `bst_baseline` | `train_bst_baseline.py` |
 | `tempose`, `tempose_baseline` | `train_tempose_baseline.py` |
 | `stgcn`, `stgcn_baseline` | `train_stgcn_baseline.py` |
+
+**Test eval (no MLflow):** `scripts/cluster/run_eval_tmux.sh` → skeleton or native eval scripts with `--split test`.
 | `qwen3_vl_8b`, `qwen_vl_8b` | `train_qwen3_vl_8b.py` |
 
 ---
@@ -660,4 +748,10 @@ Logs: `logs/train-UTC.log` (or `ISOCOURT_TRAIN_LOG` if set).
 | `No samples loaded` | Wrong `--data-root` / labels missing on volume | `ls backend/data/*.json`; rerun `setup_data_symlink.sh` if needed |
 | tmux session already exists | Same `ISOCOURT_TMUX_SESSION` | `export ISOCOURT_TMUX_REPLACE=1` or pick a new session name |
 | OpenAI empty responses | gpt-5.x reasoning ate token budget | `--reasoning_effort none --max_completion_tokens 4096` or `--model gpt-4o` |
-| `numpy.dtype size changed` / `xtcocotools._mask` on mmpose import | `xtcocotools` built against a different NumPy than runtime | `pip install 'numpy<2.0' && pip install --no-cache-dir --force-reinstall xtcocotools` then re-test import |
+| MMPose / mmcv install fails in `isocourt` | torch 2.10+cu128 has no mmcv wheels | Run `./scripts/cluster/install_bst_mmpose.sh`; use `ISOCOURT_PYTHON` for prep only |
+| `numpy.dtype size changed` / `Expected 96, got 88` | PyPI `xtcocotools` wheel is NumPy-2-built; env has NumPy 1.x | Pin `numpy==1.26.4` + build xtcocotools from source (`--no-build-isolation --no-binary`) |
+| `Failed to initialize NumPy` / still on numpy 2.2.6 with torch 2.1 | `opencv-python-headless` 5.x requires `numpy>=2` | `pip install numpy==1.26.4 opencv-python-headless==4.9.0.80` |
+| `Failed to build mmcv` / `No module named mmcv` | torch2.3 index only has mmcv 2.2.0; pip tries source build | Use torch 2.1+cu121 + `pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html --only-binary mmcv` |
+| `No module named 'mmcv'` after mmpose pip | mmcv never installed (build skipped) | Re-run `./scripts/cluster/install_bst_mmpose.sh`; verify `python -c "import mmcv"` before mmpose |
+| `libGL.so.1: cannot open shared object file` on `import cv2` | `opencv-python` needs display libs; cluster is headless | `./scripts/cluster/ensure_opencv_headless.sh` (after `conda activate isocourt-mmpose`) |
+| `chumpy` / `mmpose` pip build fails | abandoned dep; not needed for RTMPose collate | `pip install "mmpose>=1.3.0,<1.4.0" --no-deps` then `pip install json-tricks munkres pyyaml yapf rich termcolor colorama` |
