@@ -4,12 +4,12 @@ Build BST-collated .npy tensors for FineBadminton-20K using **MMPose** instead
 of MediaPipe — matching the BST paper's pose estimation pipeline.
 
 Uses ``MMPoseInferencer('human')`` (RTMPose top-down with built-in person
-detector) at native video resolution, producing dramatically cleaner COCO-17
-keypoints than MediaPipe Lite at 224x224.
+detector). By default reads pre-extracted training JPEGs (224×224, fast I/O);
+pass ``--prefer-video`` for native-resolution decode from ``.mp4``.
 
-**Speed strategy**: samples are grouped by source video so each video is opened
-once, unique frame indices are deduped, and MMPose processes the video in a
-single streaming pass. This cuts runtime from ~20+ hours to ~1-2 hours on a T4.
+**Frame set**: same 16 linspace indices per hit as ``FineBadmintonDataset`` /
+``--extract-training-frames``; unique (video, frame_index) pairs are deduped
+across clips. MMPose still runs once per unique frame (~200k+ on train).
 
 Output layout is identical to ``prepare_bst_finebadminton_collated.py``::
 
@@ -29,6 +29,7 @@ import argparse
 import os
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -48,7 +49,7 @@ from core.bst_finebadminton_data import (
     image_normalized_feet_pos,
     stack_pose_style,
 )
-from core.dataset import FineBadmintonDataset
+from core.dataset import FineBadmintonDataset, default_training_jpeg_dir
 from core.split import video_level_split
 
 
@@ -103,6 +104,50 @@ def _parse_preds(preds, w: float, h: float):
     return kps, pos
 
 
+def _infer_frame_poses(
+    video_path: str,
+    needed_frames: set,
+    inferencer,
+    image_dir: str | None,
+):
+    """Load frames from JPEG cache or mp4 seek, then run MMPose per frame."""
+    if image_dir:
+        return _process_frames_jpeg(video_path, needed_frames, inferencer, image_dir)
+    return _process_video(video_path, needed_frames, inferencer)
+
+
+def _process_frames_jpeg(
+    video_path: str,
+    needed_frames: set,
+    inferencer,
+    image_dir: str,
+):
+    """Read ``{stem}_{frame}.jpg`` training cache and run MMPose on each."""
+    stem = Path(video_path).stem
+    sorted_indices = sorted(needed_frames)
+    frame_poses = {}
+    vid_name = os.path.basename(video_path)
+    missing = 0
+
+    for fidx in tqdm(sorted_indices, desc=f"  {vid_name}", leave=False, unit="f"):
+        fp = os.path.join(image_dir, f"{stem}_{int(fidx)}.jpg")
+        bgr = cv2.imread(fp, cv2.IMREAD_COLOR)
+        if bgr is None or bgr.size == 0:
+            frame_poses[fidx] = (None, None)
+            missing += 1
+            continue
+        h, w = bgr.shape[:2]
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        result = next(inferencer(rgb, show=False))
+        preds = result.get("predictions", [[]])[0]
+        kps, pos = _parse_preds(preds, float(w), float(h))
+        frame_poses[fidx] = (kps, pos)
+
+    if missing:
+        print(f"  warning: {vid_name} missing {missing}/{len(sorted_indices)} JPEGs under {image_dir}")
+    return frame_poses
+
+
 def _process_video(
     video_path: str,
     needed_frames: set,
@@ -144,6 +189,7 @@ def _collect_split(
     inferencer,
     pose_style: PoseStyle,
     seq_len: int,
+    image_dir: str | None = None,
 ) -> dict:
     # --- Pass 1: group samples by video, collect needed frame indices --------
     video_to_clips = defaultdict(list)
@@ -168,6 +214,8 @@ def _collect_split(
         for _, fi, _ in video_to_clips[vp]:
             s.update(fi)
         total_unique += len(s)
+    source = f"JPEG ({image_dir})" if image_dir else "video (native resolution)"
+    print(f"Frame source: {source}")
     print(f"Total unique frames to process: {total_unique} across {len(video_order)} videos")
 
     frames_done = 0
@@ -181,7 +229,7 @@ def _collect_split(
                 results_by_idx[orig_i] = (None, label)
             continue
 
-        frame_poses = _process_video(vp, needed, inferencer)
+        frame_poses = _infer_frame_poses(vp, needed, inferencer, image_dir)
 
         for orig_i, frame_indices, label in clips:
             T = len(frame_indices)
@@ -250,10 +298,37 @@ def main() -> None:
         help="Optional override: train fraction on non-test videos (default: 70/10/20 policy).",
     )
     ap.add_argument(
+        "--image-dir",
+        default=None,
+        help="Training JPEG dir ({video_stem}_{frame}.jpg). Default: auto-detect under data-root.",
+    )
+    ap.add_argument(
+        "--prefer-video",
+        action="store_true",
+        help="Decode native-resolution frames from .mp4 instead of JPEG cache.",
+    )
+    ap.add_argument(
         "--pose2d", default="human",
         help="MMPoseInferencer model alias (default: 'human' = RTMPose).",
     )
+    ap.add_argument(
+        "--device", default="cuda:0",
+        help="MMPose device (cuda:0 or cpu). Use cpu if prebuilt mmcv CUDA ops fail on this GPU.",
+    )
     args = ap.parse_args()
+
+    image_dir = None
+    if not args.prefer_video:
+        if args.image_dir:
+            image_dir = os.path.abspath(args.image_dir)
+            if not os.path.isdir(image_dir):
+                raise SystemExit(f"--image-dir not found: {image_dir}")
+        else:
+            image_dir = default_training_jpeg_dir(args.data_root)
+        if image_dir:
+            print(f"Using training JPEGs: {image_dir}")
+        else:
+            print("No JPEG cache found; falling back to video decode (--prefer-video or set --image-dir).")
 
     from mmpose.apis import MMPoseInferencer
 
@@ -275,8 +350,8 @@ def main() -> None:
     train_idx, val_idx, test_idx = video_level_split(dataset.samples, **split_kw)
     print(f"Split: {len(train_idx)} train / {len(val_idx)} val / {len(test_idx)} test (seed={args.split_seed})")
 
-    print(f"Initializing MMPoseInferencer('{args.pose2d}')...")
-    inferencer = MMPoseInferencer(args.pose2d)
+    print(f"Initializing MMPoseInferencer('{args.pose2d}', device='{args.device}')...")
+    inferencer = MMPoseInferencer(args.pose2d, device=args.device)
 
     out_root = os.path.abspath(args.output_dir)
     os.makedirs(out_root, exist_ok=True)
@@ -285,7 +360,7 @@ def main() -> None:
         sub = os.path.join(out_root, name)
         os.makedirs(sub, exist_ok=True)
         bundle = _collect_split(
-            dataset, idx_list, inferencer, pose_style, args.sequence_length
+            dataset, idx_list, inferencer, pose_style, args.sequence_length, image_dir
         )
         np.save(os.path.join(sub, f"{pose_style}.npy"), bundle["human_pose"])
         np.save(os.path.join(sub, "pos.npy"), bundle["pos"])
@@ -297,7 +372,11 @@ def main() -> None:
     meta_path = os.path.join(out_root, "meta.txt")
     with open(meta_path, "w", encoding="utf-8") as f:
         f.write(f"pose_estimator=mmpose ({args.pose2d})\n")
-        f.write(f"resolution=native\n")
+        if image_dir:
+            f.write(f"resolution=jpeg_cache\n")
+            f.write(f"image_dir={image_dir}\n")
+        else:
+            f.write(f"resolution=native_video\n")
         f.write(f"list_file={os.path.abspath(args.list_file)}\n")
         f.write(f"sequence_length={args.sequence_length}\n")
         f.write(f"pose_style={pose_style}\n")

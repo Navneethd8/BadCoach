@@ -1,12 +1,13 @@
-# Optional: BST / TemPose / ST-GCN collate via prepare_bst_finebadminton_collated_mmpose.py
-# Install after torch (see scripts/cluster/bootstrap_cluster.sh).
-#
-#   pip install -r backend/requirements-bst-mmpose.txt
-#   mim install mmcv
+# Cluster nodes have no libGL — use headless only (never opencv-python).
+# After any pip install in isocourt-mmpose, run: ./scripts/cluster/ensure_opencv_headless.sh
 
-numpy<2.0
+setuptools>=68
+wheel
+numpy==1.26.4
+opencv-python-headless==4.9.0.80
+tqdm
 xtcocotools>=1.14
 openmim
-mmengine
-mmdet
-mmpose
+mmengine>=0.10.0
+mmdet>=3.2.0,<3.4.0
+mmpose>=1.3.0,<1.4.0
