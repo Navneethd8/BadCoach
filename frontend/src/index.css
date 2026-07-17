@@ -81,10 +81,10 @@
   --scrollbar-hover: #737373;
   --tabs-bg: #333333;
   --dropzone-border: #525252;
-  /* Same racket art as light mode — hero backdrop + rim stroke for contrast */
-  --racket-frame: #0a0a0a;
-  --racket-string: #1b4d3e;
-  --racket-outline: #2a2a2a;
+  /* Deep slate-teal frames the copy while staying inside the brand palette */
+  --racket-frame: #203937;
+  --racket-string: #285047;
+  --racket-outline: transparent;
 
   /* Split panels: visual column (pose / phone) — softer than pure black */
   --split-visual-bg: #303030;
@@ -1174,6 +1174,7 @@ select:focus-visible {
 
 .dark .figma-split__panel--pose {
   padding: clamp(1rem, 3vw, 2rem);
+  background-color: var(--surface-inset);
 }
 
 .dark .pixel-pose {
@@ -1225,7 +1226,7 @@ select:focus-visible {
 }
 
 .figma-final-cta {
-  background: linear-gradient(180deg, var(--page) 0%, var(--brand-muted) 100%);
+  background-color: var(--page);
 }
 
 .figma-final-sub {

@@ -11,7 +11,7 @@ function mix(from, to, amount) {
 }
 
 function isPoseGreen(r, g, b) {
-    return g > 48 && g > r * 1.35 && g > b * 1.2
+    return g - r > 5 && g > r * 1.25 && g > b * 1.15
 }
 
 function getNeutralNeighbor(pixels, width, height, x, y) {
