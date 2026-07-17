@@ -1120,24 +1120,81 @@ select:focus-visible {
   padding: clamp(1.25rem, 4vw, 2.5rem);
 }
 
-.figma-split-pose {
-  display: block;
-  width: auto;
-  max-width: min(100%, 24rem);
-  height: auto;
+.pixel-pose {
+  position: relative;
+  width: min(100%, 24rem);
   max-height: min(38rem, 75vh);
-  margin-inline: auto;
-  object-fit: contain;
-  object-position: center center;
+  margin: 0 auto;
+  aspect-ratio: 5 / 8;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.pixel-pose__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pixel-pose__hint {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--text-subtle);
+  font-family: 'Iosevka Charon Mono', ui-monospace, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+.pixel-pose__hint-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 0 0 var(--brand-ring);
+  animation: pixel-pose-hint-pulse 2s ease-out infinite;
+}
+
+@keyframes pixel-pose-hint-pulse {
+  50% {
+    box-shadow: 0 0 0 0.3rem transparent;
+  }
 }
 
 .dark .figma-split__panel--pose {
   padding: clamp(1rem, 3vw, 2rem);
 }
 
-.dark .figma-split-pose {
-  max-width: min(100%, 26rem);
+.dark .pixel-pose {
+  width: min(100%, 26rem);
   max-height: min(42rem, 85vh);
+}
+
+@media (hover: none) {
+  .pixel-pose__hint::after {
+    content: ' / drag';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-pose {
+    cursor: default;
+  }
+
+  .pixel-pose__hint-dot {
+    animation: none;
+  }
 }
 
 .figma-split__panel--video {
