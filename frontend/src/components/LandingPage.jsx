@@ -4,6 +4,7 @@ import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
 import HeroFigmaBackdrop from './HeroFigmaBackdrop'
+import InteractivePoseFigure from './InteractivePoseFigure'
 import LandingResultsPreview from './LandingResultsPreview'
 import StrokeTicker from './StrokeTicker'
 import ThemeToggle from './ThemeToggle'
@@ -239,11 +240,7 @@ export default function LandingPage() {
                     </div>
                 </div>
                 <div className="figma-split__panel figma-split__panel--visual figma-split__panel--pose">
-                    <img
-                        src="/marketing/pose-trace-hero.png"
-                        alt="Athlete mid-smash with pose skeleton overlay traced frame by frame"
-                        className="figma-split-pose"
-                    />
+                    <InteractivePoseFigure />
                 </div>
             </section>
 
