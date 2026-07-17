@@ -4,11 +4,6 @@ const STORAGE_KEY = 'isocourt-theme'
 
 const ThemeContext = createContext(null)
 
-function getSystemTheme() {
-    if (typeof window === 'undefined') return 'light'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 function readStoredTheme() {
     if (typeof window === 'undefined') return null
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -21,24 +16,12 @@ function applyTheme(theme) {
 }
 
 export function ThemeProvider({ children }) {
-    const [theme, setThemeState] = useState(() => readStoredTheme() ?? getSystemTheme())
+    const [theme, setThemeState] = useState(() => readStoredTheme() ?? 'light')
 
     useEffect(() => {
         applyTheme(theme)
         localStorage.setItem(STORAGE_KEY, theme)
     }, [theme])
-
-    useEffect(() => {
-        const stored = readStoredTheme()
-        if (stored) return
-
-        const mq = window.matchMedia('(prefers-color-scheme: dark)')
-        const onChange = () => {
-            if (!readStoredTheme()) setThemeState(mq.matches ? 'dark' : 'light')
-        }
-        mq.addEventListener('change', onChange)
-        return () => mq.removeEventListener('change', onChange)
-    }, [])
 
     const setTheme = useCallback((next) => {
         setThemeState(next === 'dark' ? 'dark' : 'light')
