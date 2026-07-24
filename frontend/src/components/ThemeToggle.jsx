@@ -1,4 +1,5 @@
 import { useTheme } from '../context/ThemeContext'
+import SvgIcon from './SvgIcon'
 
 export default function ThemeToggle({ className = '' }) {
     const { isDark, toggleTheme } = useTheme()
@@ -11,9 +12,7 @@ export default function ThemeToggle({ className = '' }) {
             aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={isDark ? 'Light mode' : 'Dark mode'}
         >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
-                {isDark ? 'light_mode' : 'dark_mode'}
-            </span>
+            <SvgIcon name={isDark ? 'light_mode' : 'dark_mode'} size={18} />
         </button>
     )
 }

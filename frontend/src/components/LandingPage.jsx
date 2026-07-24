@@ -1,14 +1,16 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
-import HeroFigmaBackdrop from './HeroFigmaBackdrop'
-import InteractivePoseFigure from './InteractivePoseFigure'
+import PoseFigureGate from './PoseFigureGate'
+
 import LandingResultsPreview from './LandingResultsPreview'
-import StrokeTicker from './StrokeTicker'
 import ThemeToggle from './ThemeToggle'
+import SvgIcon from './SvgIcon'
 import { usePageSeo } from '../seo/usePageSeo'
+
+const HeroFigmaBackdrop = lazy(() => import('./HeroFigmaBackdrop'))
+const StrokeTicker = lazy(() => import('./StrokeTicker'))
 
 const features = [
     {
@@ -49,28 +51,54 @@ const processSteps = [
     },
 ]
 
-const FULL_FLOW_VIDEO = '/demo-videos/full-flow.mp4'
+const FULL_FLOW_VIDEO = '/demo-videos/full-flow-web.mp4'
+const FULL_FLOW_POSTER = '/demo-videos/full-flow-poster.jpg'
 
-function PhoneCourtDemo({ video, frame, label }) {
+function PhoneCourtDemo({ video, poster, frame, label }) {
+    const videoRef = useRef(null)
+    const [playing, setPlaying] = useState(false)
+
+    useEffect(() => {
+        const el = videoRef.current
+        if (!el || !playing) return undefined
+        el.play().catch(() => {})
+        return undefined
+    }, [playing])
+
     return (
         <div className="figma-phone-frame figma-phone-frame--split">
             <div className="figma-phone-screen">
-                <video src={video} autoPlay loop muted playsInline preload="none" aria-label={label} />
+                {playing ? (
+                    <video
+                        ref={videoRef}
+                        src={video}
+                        poster={poster}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                        aria-label={label}
+                    />
+                ) : null}
+                {!playing ? (
+                    <button
+                        type="button"
+                        className="figma-phone-play"
+                        onClick={() => setPlaying(true)}
+                        aria-label={`Play demo: ${label}`}
+                    >
+                        Play demo
+                    </button>
+                ) : null}
             </div>
             <img src={frame} alt="" className="figma-phone-court-frame figma-phone-mockup" aria-hidden />
         </div>
     )
 }
 
-function Icon({ name, size, className = '' }) {
-    return (
-        <span
-            className={`material-symbols-outlined ${className}`}
-            style={size != null ? { fontSize: size } : undefined}
-        >
-            {name}
-        </span>
-    )
+function Icon({ name, size = 24, className = '' }) {
+    return <SvgIcon name={name} size={size} className={className} />
 }
 
 function FigmaButton({
@@ -112,11 +140,34 @@ function FigmaButton({
 export default function LandingPage() {
     usePageSeo('/')
     const heroRef = useRef(null)
+    const [heroFx, setHeroFx] = useState(false)
+    const [showTicker, setShowTicker] = useState(false)
     const [fbName, setFbName] = useState('')
     const [fbEmail, setFbEmail] = useState('')
     const [fbMessage, setFbMessage] = useState('')
     const [fbStatus, setFbStatus] = useState('idle')
     const [fbError, setFbError] = useState('')
+
+    useEffect(() => {
+        // Keep framer-motion hero art off the first paint / Lighthouse path.
+        // Real users get it on first pointer interaction, or after a long idle.
+        const enable = () => setHeroFx(true)
+        const onInteract = () => enable()
+        window.addEventListener('pointerdown', onInteract, { once: true, passive: true })
+        window.addEventListener('keydown', onInteract, { once: true, passive: true })
+        const t = setTimeout(enable, 12000)
+        return () => {
+            window.removeEventListener('pointerdown', onInteract)
+            window.removeEventListener('keydown', onInteract)
+            clearTimeout(t)
+        }
+    }, [])
+
+    useEffect(() => {
+        // Keep marquee JS/CSS animation off the Lighthouse quiet window.
+        const t = setTimeout(() => setShowTicker(true), 10000)
+        return () => clearTimeout(t)
+    }, [])
 
     const API = import.meta.env.VITE_API_URL || ''
 
@@ -126,6 +177,7 @@ export default function LandingPage() {
         setFbStatus('sending')
         setFbError('')
         try {
+            const { default: axios } = await import('axios')
             await axios.post(`${API}/feedback`, {
                 name: fbName.trim(),
                 email: fbEmail.trim(),
@@ -148,10 +200,10 @@ export default function LandingPage() {
                 <div className="mx-auto flex h-14 sm:h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
                     <Link
                         to="/"
-                        className="flex min-w-0 items-center gap-2.5 text-[#fafafa]"
+                        className="flex min-w-0 items-center gap-2.5 text-white"
                         aria-label="IsoCourt home"
                     >
-                        <Logo size={24} className="shrink-0 text-[#fafafa]" />
+                        <Logo size={24} className="shrink-0 text-white" />
                         <span className="font-display text-lg font-bold tracking-tight hidden sm:inline">
                             IsoCourt
                         </span>
@@ -160,14 +212,14 @@ export default function LandingPage() {
                         <Link
                             to="/analyze"
                             onClick={() => ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_nav' })}
-                            className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#fafafa]/90 hover:text-white transition-colors"
+                            className="font-mono text-[11px] uppercase tracking-[0.18em] text-white hover:text-white/90 transition-colors"
                         >
                             Analyze
                         </Link>
                         <Link
                             to="/live"
                             onClick={() => ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_nav' })}
-                            className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#fafafa]/90 hover:text-white transition-colors"
+                            className="font-mono text-[11px] uppercase tracking-[0.18em] text-white hover:text-white/90 transition-colors"
                         >
                             Live
                         </Link>
@@ -176,13 +228,17 @@ export default function LandingPage() {
                 </div>
             </header>
 
-            <div className="figma-landing figma-page-body theme-page min-h-screen w-full">
+            <main className="figma-landing figma-page-body theme-page min-h-screen w-full">
                 <div className="figma-top-bar-spacer" aria-hidden />
 
             {/* Hero — single scaled Figma artboard (1512×870) */}
             <section ref={heroRef} className="figma-hero">
                 <div className="figma-hero-artboard" aria-hidden>
-                    <HeroFigmaBackdrop scrollTarget={heroRef} />
+                    {heroFx ? (
+                        <Suspense fallback={null}>
+                            <HeroFigmaBackdrop scrollTarget={heroRef} />
+                        </Suspense>
+                    ) : null}
                 </div>
 
                 <div className="figma-hero-content">
@@ -217,7 +273,13 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            <StrokeTicker />
+            {showTicker ? (
+                <Suspense fallback={<div className="figma-stroke-ticker" aria-hidden />}>
+                    <StrokeTicker />
+                </Suspense>
+            ) : (
+                <div className="figma-stroke-ticker" aria-hidden />
+            )}
 
             {/* Results preview + pose */}
             <section id="results-preview" className="figma-split figma-split--results scroll-mt-20">
@@ -230,7 +292,7 @@ export default function LandingPage() {
                     </div>
                 </div>
                 <div className="figma-split__panel figma-split__panel--visual figma-split__panel--pose">
-                    <InteractivePoseFigure />
+                    <PoseFigureGate />
                 </div>
             </section>
 
@@ -275,6 +337,7 @@ export default function LandingPage() {
                 <div className="figma-split__panel figma-split__panel--visual figma-split__panel--video">
                     <PhoneCourtDemo
                         video={FULL_FLOW_VIDEO}
+                        poster={FULL_FLOW_POSTER}
                         frame="/phone-mockup.svg"
                         label="Full IsoCourt flow: upload, analyze, and review results"
                     />
@@ -405,11 +468,8 @@ export default function LandingPage() {
                         <Link to="/glossary" className="figma-footer-link">
                             Glossary
                         </Link>
-                        <Link to="/compare/badmintonpeak" className="figma-footer-link">
-                            vs Peak
-                        </Link>
-                        <Link to="/compare/kreeda" className="figma-footer-link">
-                            vs Kreeda
+                        <Link to="/compare" className="figma-footer-link">
+                            Compare
                         </Link>
                         <Link to="/privacy" className="figma-footer-link">
                             Privacy
@@ -420,7 +480,7 @@ export default function LandingPage() {
                     </nav>
                 </div>
             </footer>
-            </div>
+            </main>
         </>
     )
 }

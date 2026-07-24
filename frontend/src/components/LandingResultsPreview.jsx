@@ -1,4 +1,5 @@
 /** Static marketing preview — matches analyze results UI. */
+import SvgIcon from './SvgIcon'
 
 const TACTICAL = [
     { icon: 'pan_tool_alt', label: 'Backhand', pct: 54, tone: 'blue' },
@@ -19,11 +20,7 @@ const COACH_TIPS = [
 ]
 
 function Icon({ name, size = 14 }) {
-    return (
-        <span className="material-symbols-outlined" style={{ fontSize: size }}>
-            {name}
-        </span>
-    )
+    return <SvgIcon name={name} size={size} />
 }
 
 export default function LandingResultsPreview() {
@@ -33,7 +30,7 @@ export default function LandingResultsPreview() {
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <span className="text-xs text-[var(--text-subtle)] block mb-1">Execution Quality</span>
-                        <div className="text-xl font-bold text-cyan-400">Proficient</div>
+                        <div className="text-xl font-bold text-cyan-700 dark:text-cyan-300">Proficient</div>
                     </div>
                     <div className="text-right">
                         <span className="text-xs font-mono text-[var(--text-subtle)] block mb-1">Score</span>

@@ -3,6 +3,8 @@ import ReactGA from 'react-ga4'
 import AppShell from './AppShell'
 import { usePageSeo } from '../seo/usePageSeo'
 
+import '@fontsource-variable/material-symbols-outlined/standard.css'
+
 function Icon({ name, size = 20, className = '' }) {
     return (
         <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>

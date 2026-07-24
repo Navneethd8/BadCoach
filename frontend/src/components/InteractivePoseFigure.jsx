@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-const SOURCE = '/marketing/pose-trace-hero.png'
+const SOURCE = '/marketing/pose-trace-hero.webp'
 const SAMPLE_STEP = 5
 const ALPHA_THRESHOLD = 28
 const INFLUENCE_RADIUS = 84

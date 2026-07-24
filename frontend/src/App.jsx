@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import AppShell from './components/AppShell'
 import { useDropzone } from 'react-dropzone'
+import '@fontsource-variable/material-symbols-outlined/standard.css'
 import axios from 'axios'
 import ReactGA from 'react-ga4'
 import { usePageSeo } from './seo/usePageSeo'

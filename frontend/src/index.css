@@ -23,7 +23,7 @@
   --page: #fafafa;
   --hero-title: #000000;
   --hero-sub: #525252;
-  --top-bar-fg: #fafafa;
+  --top-bar-fg: #ffffff;
   --shadow-color: rgba(0, 0, 0, 0.06);
   --shadow-md: rgba(0, 0, 0, 0.12);
 
@@ -685,8 +685,9 @@ select:focus-visible {
   z-index: 1;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  background-color: var(--brand);
-  color: #fafafa;
+  /* brand-darker + white clears WCAG AA (brand/#fafafa was 3.61:1) */
+  background-color: var(--brand-darker);
+  color: #fff;
   overflow: hidden;
 }
 
@@ -736,6 +737,9 @@ select:focus-visible {
 .figma-stroke-ticker__track {
   display: flex;
   width: max-content;
+}
+
+.figma-stroke-ticker--animate .figma-stroke-ticker__track {
   animation: figma-stroke-ticker-scroll var(--ticker-duration) linear infinite;
 }
 
@@ -851,7 +855,10 @@ select:focus-visible {
   left: 0;
   right: 0;
   z-index: 200;
-  background-color: var(--brand);
+  /* Darker than --brand so white nav text clears WCAG AA (4.5:1) */
+  background-color: var(--brand-darker);
+  color: #fff;
+  --top-bar-fg: #fff;
   box-shadow: 0 1px 0 var(--shadow-color);
 }
 
@@ -941,7 +948,9 @@ select:focus-visible {
   top: 6.85%;
   bottom: 6.95%;
   overflow: hidden;
-  background-color: var(--surface-inset);
+  background-color: var(--brand-darker);
+  background-size: cover;
+  background-position: top center;
 }
 
 .figma-phone-screen video {
@@ -950,6 +959,30 @@ select:focus-visible {
   height: 100%;
   object-fit: cover;
   object-position: top center;
+}
+
+.figma-phone-play {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 0;
+  background: linear-gradient(160deg, var(--brand-darker), var(--brand-dark));
+  color: #fff;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.figma-phone-play:hover,
+.figma-phone-play:focus-visible {
+  background: rgba(6, 95, 70, 0.62);
+  outline: none;
 }
 
 .figma-phone-court-frame {
@@ -1122,19 +1155,32 @@ select:focus-visible {
 
 .pixel-pose {
   position: relative;
-  width: min(100%, 24rem);
-  max-height: min(38rem, 75vh);
+  width: min(100%, 24rem, calc(min(38rem, 75vh) * 390 / 640));
   margin: 0 auto;
-  aspect-ratio: 5 / 8;
+  aspect-ratio: 390 / 640;
+  height: auto;
   overflow: hidden;
   cursor: crosshair;
   user-select: none;
+}
+
+.pixel-pose__static-btn {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .pixel-pose__canvas {
   display: block;
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .pixel-pose__hint {
@@ -1178,8 +1224,7 @@ select:focus-visible {
 }
 
 .dark .pixel-pose {
-  width: min(100%, 26rem);
-  max-height: min(42rem, 85vh);
+  width: min(100%, 26rem, calc(min(42rem, 85vh) * 390 / 640));
 }
 
 @media (hover: none) {
@@ -1306,9 +1351,13 @@ select:focus-visible {
 }
 
 .figma-footer-link {
-  color: var(--brand);
+  color: var(--brand-darker);
   text-decoration: none;
   transition: opacity 0.15s ease;
+}
+
+.dark .figma-footer-link {
+  color: var(--brand-accent);
 }
 
 .figma-footer-link:hover {
@@ -1354,8 +1403,8 @@ select:focus-visible {
 }
 
 .figma-cta--primary {
-  background-color: var(--brand);
-  color: #fafafa;
+  background-color: var(--brand-darker);
+  color: #fff;
 }
 
 .figma-cta--primary:hover:not(:disabled):not(.figma-cta--loading) {
@@ -1930,7 +1979,11 @@ select:focus-visible {
   margin-bottom: 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--brand);
+  color: var(--brand-darker);
+}
+
+.dark .app-coach-panel__title {
+  color: var(--brand-accent);
 }
 
 .app-coach-panel__item {
