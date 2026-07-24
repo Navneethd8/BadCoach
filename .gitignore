@@ -67,7 +67,14 @@ frontend/.vite/
 mlruns/
 mlflow.db
 *.log
+logs/
 training_output.txt
+
+# Local SEO / Lighthouse dumps (keep curated notes like .seo/data/analytics.md)
+.seo/data/lh-*
+.seo/data/lighthouse-*
+.seo/data/*.report.json
+.seo/data/*.report.html
 
 # Training artifacts (keep only final models in LFS)
 backend/models/*_epoch_*.pth

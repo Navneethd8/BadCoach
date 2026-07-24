@@ -1,58 +1,63 @@
-# GA4 snapshot — BadCoach property
+# GA4 data — BadCoach property
 
-Source: `~/Desktop/Reports_snapshot.csv`  
-Property: BadCoach (Firebase default account)  
-Range: 2026-01-01 → 2026-07-23 (~7 months)  
+Range: 2026-01-01 → 2026-07-23  
+Sources: `Reports_snapshot.csv`, `Events_Event_name.csv`, `Pages_and_screens_Page_path_and_screen_class.csv`  
 Pulled: 2026-07-23
 
 ## Headline
 | Metric | Value |
 |--------|------:|
-| Active users | 413 |
-| New users | 413 |
-| Avg engagement time / active user | ~106s |
-| Event count | 4,631 |
+| Active / new users | 413 / 413 |
+| Avg engagement / active user | ~106s |
+| Total events | 4,631 |
 
-## Pages (by title — not path)
-| Title | Views | Active users | Bounce rate |
-|-------|------:|-------------:|------------:|
-| IsoCourt · AI Badminton Coach | 916 | 214 | 42% |
-| IsoCourt — AI Badminton Coach | 418 | 179 | 59% |
-| BadCoach | 67 | 27 | 57% |
-| IsoCourt | 5 | 1 | 0% |
-| IsoCourt · AIバドミントンコーチ | 2 | 1 | 0% |
+## Pages by path
+| Path | Views | Users | Avg engagement / user | Bounce signal |
+|------|------:|------:|----------------------:|---------------|
+| `/` | 1,052 | 412 | ~43s | Main entry |
+| `/analyze` | 258 | 108 | ~205s | Deep engagement |
+| `/live` | 76 | 40 | ~91s | Secondary product |
+| `/privacy` | 11 | 6 | ~26s | Thin |
+| `/terms` | 7 | 5 | ~3s | Thin |
+| `/theme-preview` | 4 | 1 | — | Dev leftover; noindex/remove |
 
-Note: two title variants split the same site. Per-route titles after SEO deploy should fix this.
+Funnel approx: home users 412 → analyze 108 (~26%) → Stream Started 67 → Stream Complete 46 → Clip Analyzed 26 (legacy path).
 
-## Acquisition — first user
-| Source / medium | Active users |
-|-----------------|-------------:|
-| (direct) / (none) | 310 |
-| google / organic | 32 |
-| reddit.com / referral | 31 |
-| linkedin.com / referral | 22 |
-| chatgpt.com / ai-assistant | 4 |
-| bing / organic | 3 |
+## Top events
+| Event | Count | Users |
+|-------|------:|------:|
+| page_view | 1,408 | 413 |
+| session_start | 699 | 413 |
+| user_engagement | 486 | 141 |
+| scroll | 441 | 176 |
+| Stream Window Received | 281 | 47 |
+| Stream Started | 265 | 67 |
+| Analyze_click | 150 | 84 |
+| Stream Complete | 106 | 46 |
+| Analysis Failed | 97 | 20 |
+| Session Start Attempt (live) | 67 | 15 |
+| Session Started (live) | 58 | 11 |
+| Stream Error | 49 | 27 |
+| Live_coaching_click | 48 | 31 |
+| Clip Analyzed | 26 | 9 |
+| Validation Failed | 14 | 4 |
+| Feedback_sent | 9 | 2 |
+| Camera Recording Captured | 6 | 4 |
+| Capacity Reached | 1 | 1 |
 
-## Sessions
-| Source / medium | Sessions |
-|-----------------|---------:|
-| (direct) / (none) | 449 |
-| google / organic | 76 |
-| reddit.com / referral | 48 |
-| linkedin.com / referral | 30 |
-| claude.ai / referral | 28 |
-| vercel.com / referral | 19 |
-| chatgpt.com / ai-assistant | 14 |
-| navneethd.me / referral | 9 |
+## Acquisition (from snapshot)
+| Source | First users | Sessions |
+|--------|------------:|---------:|
+| Direct | 310 | 449 |
+| Google organic | 32 | 76 |
+| Reddit | 31 | 48 |
+| LinkedIn | 22 | 30 |
+| Claude.ai | — | 28 |
+| ChatGPT | ~6 | ~16 |
+| Bing organic | 3 | 3 |
 
-## Geo (top)
-Seattle 81, Council Bluffs 32, Ashburn 14, Aspen 12, San Jose 11, New York 10, Singapore 9, Bengaluru 8, Boardman 7.  
-Council Bluffs / Ashburn / Boardman look like cloud/datacenter noise.
-
-## Gaps in this export
-- No page path (/analyze vs / vs /live)
-- No event names (Clip Analyzed, etc.)
-- No device breakdown
-- No landing page report
-- No Search Console queries (separate product)
+## Notes
+- Event naming is inconsistent (`Analyze_click` vs `analyze_click` in code comments; `Live_coaching_click` vs lowercase). Standardize later.
+- Analysis Failed (97) vs Stream Complete (106) is a high failure rate for people who start streams.
+- Live: 48 clicks → 15 session attempts → 11 started (drop-off at camera/capacity).
+- No `/faq`, `/glossary`, `/compare/*` traffic yet (pre-deploy / new pages).
