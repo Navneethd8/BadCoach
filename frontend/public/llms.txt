@@ -11,6 +11,8 @@ Coach persona: Birdzo
 - https://www.isocourt.fit/live — real-time camera coaching
 - https://www.isocourt.fit/faq — product FAQ
 - https://www.isocourt.fit/glossary — badminton / product terms
+- https://www.isocourt.fit/compare/badmintonpeak — IsoCourt vs BadmintonPeak
+- https://www.isocourt.fit/compare/kreeda — IsoCourt vs Kreeda
 - https://www.isocourt.fit/privacy — privacy summary
 - https://www.isocourt.fit/terms — terms of use
 

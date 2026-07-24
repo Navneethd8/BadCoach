@@ -9,12 +9,15 @@ Based on `.seo/foundations.md`. No GSC/Ahrefs yet; priorities are zero-to-one di
 4. Homepage entity clarity (IsoCourt / Birdzo) and remove em dashes in feature blurbs
 5. Voice guide committed
 
-## Next pass (needs your OK or GSC data)
-1. `/compare/badmintonpeak` and `/compare/kreeda`
-2. `/what-is-ai-badminton-stroke-analysis`
-3. Author/about page with verifiable links
-4. 1200×630 OG PNG
-5. Prerender homepage for crawlers (`vite-plugin-prerender` or similar)
+## Shipped
+- FAQ, glossary, technical SEO, compare pages (`/compare/badmintonpeak`, `/compare/kreeda`)
+
+## Next pass
+1. `/what-is-ai-badminton-stroke-analysis`
+2. Author/about page with verifiable links
+3. 1200×630 OG PNG
+4. Prerender homepage for crawlers
+5. `/seo-briefing` once GA4 + GSC access is available
 
 ## Keyword clusters
 - Primary: AI badminton coach, badminton stroke analysis, badminton video analysis

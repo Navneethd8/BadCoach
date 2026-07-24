@@ -30,6 +30,7 @@
     { "source": "/live", "destination": "/index.html" },
     { "source": "/faq", "destination": "/index.html" },
     { "source": "/glossary", "destination": "/index.html" },
+    { "source": "/compare/:slug", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/terms", "destination": "/index.html" }
   ]

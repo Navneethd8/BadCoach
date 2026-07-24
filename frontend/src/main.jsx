@@ -14,6 +14,8 @@ const PrivacyPage = lazy(() => import('./components/PrivacyPage.jsx'))
 const TermsPage = lazy(() => import('./components/TermsPage.jsx'))
 const FaqPage = lazy(() => import('./components/FaqPage.jsx'))
 const GlossaryPage = lazy(() => import('./components/GlossaryPage.jsx'))
+const CompareBadmintonPeakPage = lazy(() => import('./components/CompareBadmintonPeakPage.jsx'))
+const CompareKreedaPage = lazy(() => import('./components/CompareKreedaPage.jsx'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage.jsx'))
 
 ReactGA.initialize('G-TET6JN36Q4')
@@ -38,6 +40,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         <Route path="/live" element={<LiveSession />} />
                         <Route path="/faq" element={<FaqPage />} />
                         <Route path="/glossary" element={<GlossaryPage />} />
+                        <Route path="/compare/badmintonpeak" element={<CompareBadmintonPeakPage />} />
+                        <Route path="/compare/kreeda" element={<CompareKreedaPage />} />
                         <Route path="/privacy" element={<PrivacyPage />} />
                         <Route path="/terms" element={<TermsPage />} />
                         <Route path="*" element={<NotFoundPage />} />

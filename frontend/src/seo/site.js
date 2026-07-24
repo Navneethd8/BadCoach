@@ -88,6 +88,20 @@ export const ROUTE_SEO = {
         path: '/glossary',
         ogType: 'website',
     },
+    '/compare/badmintonpeak': {
+        title: 'IsoCourt vs BadmintonPeak · AI Badminton Analysis',
+        description:
+            'Compare IsoCourt and BadmintonPeak for AI badminton video analysis: pose timelines, live camera coaching, courses, pricing, and who each tool fits.',
+        path: '/compare/badmintonpeak',
+        ogType: 'website',
+    },
+    '/compare/kreeda': {
+        title: 'IsoCourt vs Kreeda · AI Badminton Coaching',
+        description:
+            'Compare IsoCourt and Kreeda for AI badminton coaching: browser live analysis vs phone app metrics, communities, coaches, and who each product fits.',
+        path: '/compare/kreeda',
+        ogType: 'website',
+    },
     '/404': {
         title: 'Page Not Found · IsoCourt',
         description: 'This page does not exist on IsoCourt.',
@@ -102,4 +116,14 @@ export function seoForPath(pathname) {
     return ROUTE_SEO[clean] || ROUTE_SEO['/404']
 }
 
-export const INDEXABLE_PATHS = ['/', '/analyze', '/live', '/faq', '/glossary', '/privacy', '/terms']
+export const INDEXABLE_PATHS = [
+    '/',
+    '/analyze',
+    '/live',
+    '/faq',
+    '/glossary',
+    '/compare/badmintonpeak',
+    '/compare/kreeda',
+    '/privacy',
+    '/terms',
+]

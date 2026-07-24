@@ -37,6 +37,8 @@ export default function LegalLayout({ title, lead, hero = false, children }) {
                     <nav className="mt-12 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--text-muted)]" aria-label="Learn">
                         <Link to="/faq" className="hover:text-brand transition-colors">FAQ</Link>
                         <Link to="/glossary" className="hover:text-brand transition-colors">Glossary</Link>
+                        <Link to="/compare/badmintonpeak" className="hover:text-brand transition-colors">vs Peak</Link>
+                        <Link to="/compare/kreeda" className="hover:text-brand transition-colors">vs Kreeda</Link>
                         <Link to="/privacy" className="hover:text-brand transition-colors">Privacy</Link>
                         <Link to="/terms" className="hover:text-brand transition-colors">Terms</Link>
                     </nav>

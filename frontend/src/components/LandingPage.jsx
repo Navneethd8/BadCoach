@@ -405,6 +405,12 @@ export default function LandingPage() {
                         <Link to="/glossary" className="figma-footer-link">
                             Glossary
                         </Link>
+                        <Link to="/compare/badmintonpeak" className="figma-footer-link">
+                            vs Peak
+                        </Link>
+                        <Link to="/compare/kreeda" className="figma-footer-link">
+                            vs Kreeda
+                        </Link>
                         <Link to="/privacy" className="figma-footer-link">
                             Privacy
                         </Link>
