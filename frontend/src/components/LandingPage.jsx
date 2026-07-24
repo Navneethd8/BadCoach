@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import ReactGA from 'react-ga4'
 import Logo from './Logo'
@@ -8,6 +8,7 @@ import InteractivePoseFigure from './InteractivePoseFigure'
 import LandingResultsPreview from './LandingResultsPreview'
 import StrokeTicker from './StrokeTicker'
 import ThemeToggle from './ThemeToggle'
+import { usePageSeo } from '../seo/usePageSeo'
 
 const features = [
     {
@@ -20,13 +21,13 @@ const features = [
         icon: 'query_stats',
         title: 'Stroke reads',
         description:
-            'What you hit, where it went, and how clean it looked — across ten real-world strokes, not textbook labels.',
+            'What you hit, where it went, and how clean it looked: across ten real-world strokes, not textbook labels.',
     },
     {
         icon: 'tips_and_updates',
         title: 'Coaching notes',
         description:
-            'Short, specific cues you can take to the hall: what to try on the next rep, not generic “keep practising.”',
+            'Short, specific cues you can take to the hall: what to try on the next rep, not generic "keep practising."',
     },
 ]
 
@@ -54,7 +55,7 @@ function PhoneCourtDemo({ video, frame, label }) {
     return (
         <div className="figma-phone-frame figma-phone-frame--split">
             <div className="figma-phone-screen">
-                <video src={video} autoPlay loop muted playsInline aria-label={label} />
+                <video src={video} autoPlay loop muted playsInline preload="none" aria-label={label} />
             </div>
             <img src={frame} alt="" className="figma-phone-court-frame figma-phone-mockup" aria-hidden />
         </div>
@@ -109,7 +110,7 @@ function FigmaButton({
 }
 
 export default function LandingPage() {
-    const navigate = useNavigate()
+    usePageSeo('/')
     const heroRef = useRef(null)
     const [fbName, setFbName] = useState('')
     const [fbEmail, setFbEmail] = useState('')
@@ -118,16 +119,6 @@ export default function LandingPage() {
     const [fbError, setFbError] = useState('')
 
     const API = import.meta.env.VITE_API_URL || ''
-
-    const goAnalyze = (label) => {
-        ReactGA.event({ category: 'Navigation', action: 'analyze_click', label })
-        navigate('/analyze')
-    }
-
-    const goLive = (label) => {
-        ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label })
-        navigate('/live')
-    }
 
     const handleFeedbackSubmit = async (e) => {
         e.preventDefault()
@@ -155,9 +146,8 @@ export default function LandingPage() {
         <>
             <header className="figma-top-bar">
                 <div className="mx-auto flex h-14 sm:h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
-                    <button
-                        type="button"
-                        onClick={() => goAnalyze('landing_nav_logo')}
+                    <Link
+                        to="/"
                         className="flex min-w-0 items-center gap-2.5 text-[#fafafa]"
                         aria-label="IsoCourt home"
                     >
@@ -165,22 +155,22 @@ export default function LandingPage() {
                         <span className="font-display text-lg font-bold tracking-tight hidden sm:inline">
                             IsoCourt
                         </span>
-                    </button>
+                    </Link>
                     <nav className="flex items-center gap-3 sm:gap-5" aria-label="Primary">
-                        <button
-                            type="button"
-                            onClick={() => goAnalyze('landing_nav')}
+                        <Link
+                            to="/analyze"
+                            onClick={() => ReactGA.event({ category: 'Navigation', action: 'analyze_click', label: 'landing_nav' })}
                             className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#fafafa]/90 hover:text-white transition-colors"
                         >
                             Analyze
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => goLive('landing_nav')}
+                        </Link>
+                        <Link
+                            to="/live"
+                            onClick={() => ReactGA.event({ category: 'Navigation', action: 'live_coaching_click', label: 'landing_nav' })}
                             className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#fafafa]/90 hover:text-white transition-colors"
                         >
                             Live
-                        </button>
+                        </Link>
                         <ThemeToggle />
                     </nav>
                 </div>
@@ -205,7 +195,7 @@ export default function LandingPage() {
                         on court.
                     </h1>
                     <p className="figma-hero-sub">
-                        Upload a rally or single stroke. IsoCourt reads footwork, contact, and shot type — fast, specific, zero fluff.
+                        Upload a rally or single stroke. IsoCourt&apos;s Birdzo coach reads footwork, contact, and shot type. Fast, specific, zero fluff.
                     </p>
 
                     <div className="figma-hero-ctas">
@@ -408,7 +398,13 @@ export default function LandingPage() {
                             Iso<span className="figma-brand-accent">Court</span>
                         </span>
                     </div>
-                    <nav className="figma-footer-nav flex flex-wrap justify-center gap-x-6 gap-y-2" aria-label="Legal">
+                    <nav className="figma-footer-nav flex flex-wrap justify-center gap-x-6 gap-y-2" aria-label="Learn and legal">
+                        <Link to="/faq" className="figma-footer-link">
+                            FAQ
+                        </Link>
+                        <Link to="/glossary" className="figma-footer-link">
+                            Glossary
+                        </Link>
                         <Link to="/privacy" className="figma-footer-link">
                             Privacy
                         </Link>

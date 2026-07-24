@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import ReactGA from 'react-ga4'
 import AppShell from './AppShell'
+import { usePageSeo } from '../seo/usePageSeo'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -17,6 +18,7 @@ function getActiveFullscreenElement() {
 }
 
 export default function LiveSession() {
+    usePageSeo('/live')
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
     const wsBase = apiUrl.replace(/^http/, 'ws')
 
@@ -332,7 +334,7 @@ export default function LiveSession() {
                             <p className="font-semibold text-amber-300 mb-0.5">Live sessions at capacity</p>
                             <p className="text-xs text-amber-200/80">{errorMsg}</p>
                         </div>
-                        <button onClick={() => { setStatus('idle'); setErrorMsg(null) }} className="ml-auto text-amber-400 hover:text-amber-200"><Icon name="close" size={16} /></button>
+                        <button type="button" onClick={() => { setStatus('idle'); setErrorMsg(null) }} className="ml-auto text-amber-400 hover:text-amber-200" aria-label="Dismiss capacity notice"><Icon name="close" size={16} /></button>
                     </div>
                 )}
                 {(status === 'error' || cameraError) && (
@@ -342,7 +344,7 @@ export default function LiveSession() {
                             <p className="font-semibold text-red-300 mb-0.5">Something went wrong</p>
                             <p className="text-xs text-red-200/80">{cameraError || errorMsg}</p>
                         </div>
-                        <button onClick={() => { setStatus('idle'); setErrorMsg(null); setCameraError(null) }} className="ml-auto text-red-400 hover:text-red-200"><Icon name="close" size={16} /></button>
+                        <button type="button" onClick={() => { setStatus('idle'); setErrorMsg(null); setCameraError(null) }} className="ml-auto text-red-400 hover:text-red-200" aria-label="Dismiss error notice"><Icon name="close" size={16} /></button>
                     </div>
                 )}
 

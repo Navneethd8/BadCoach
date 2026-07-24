@@ -1,6 +1,8 @@
 import LegalLayout from './LegalLayout'
+import { usePageSeo } from '../seo/usePageSeo'
 
 export default function TermsPage() {
+    usePageSeo('/terms')
     return (
         <LegalLayout title="Terms of use">
             <p>

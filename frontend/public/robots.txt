@@ -1,0 +1,5 @@
+# IsoCourt — https://www.isocourt.fit (apex redirects here)
+User-agent: *
+Allow: /
+
+Sitemap: https://www.isocourt.fit/sitemap.xml

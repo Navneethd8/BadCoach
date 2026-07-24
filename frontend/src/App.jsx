@@ -1,10 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import Logo from './components/Logo';
-import AppShell from './components/AppShell';
+import AppShell from './components/AppShell'
 import { useDropzone } from 'react-dropzone'
-import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import ReactGA from "react-ga4"
+import ReactGA from 'react-ga4'
+import { usePageSeo } from './seo/usePageSeo'
 
 function Icon({ name, size = 20, className = '' }) {
     return (
@@ -18,7 +17,7 @@ function Icon({ name, size = 20, className = '' }) {
 }
 
 export default function App() {
-    const navigate = useNavigate()
+    usePageSeo('/analyze')
     const [file, setFile] = useState(null)
     const [result, setResult] = useState(null)
     const [loading, setLoading] = useState(false)
@@ -712,7 +711,12 @@ export default function App() {
                             <p className="font-semibold text-amber-300 mb-0.5">IsoCourt is fully loaded right now 🏸</p>
                             <p className="text-xs text-amber-200/80">We're popular! Please try again in ~{capacityError}s. Your clip is worth the wait.</p>
                         </div>
-                        <button onClick={() => setCapacityError(null)} className="ml-auto text-amber-400 hover:text-amber-200">
+                        <button
+                            type="button"
+                            onClick={() => setCapacityError(null)}
+                            className="ml-auto text-amber-400 hover:text-amber-200"
+                            aria-label="Dismiss capacity notice"
+                        >
                             <Icon name="close" size={16} />
                         </button>
                     </div>

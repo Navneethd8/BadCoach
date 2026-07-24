@@ -1,5 +1,6 @@
-/* Self-hosted fonts: Inter + Iosevka Charon Mono + Material Symbols Outlined (full icon set) */
-@import "@fontsource-variable/material-symbols-outlined/full.css";
+/* Self-hosted fonts: Inter + Iosevka Charon Mono + Material Symbols Outlined */
+/* standard.css (~1.5MB) instead of full.css (~3.8MB) for better LCP */
+@import "@fontsource-variable/material-symbols-outlined/standard.css";
 
 @font-face {
   font-family: 'Inter';

@@ -1,6 +1,8 @@
 import LegalLayout from './LegalLayout'
+import { usePageSeo } from '../seo/usePageSeo'
 
 export default function PrivacyPage() {
+    usePageSeo('/privacy')
     return (
         <LegalLayout title="Privacy">
             <p>

@@ -1,0 +1,19 @@
+# IsoCourt
+> AI badminton stroke analysis and live coaching in the browser.
+
+Canonical: https://www.isocourt.fit
+Product: IsoCourt
+Coach persona: Birdzo
+
+## Key pages
+- https://www.isocourt.fit/ — product overview
+- https://www.isocourt.fit/analyze — upload or record a clip
+- https://www.isocourt.fit/live — real-time camera coaching
+- https://www.isocourt.fit/faq — product FAQ
+- https://www.isocourt.fit/glossary — badminton / product terms
+- https://www.isocourt.fit/privacy — privacy summary
+- https://www.isocourt.fit/terms — terms of use
+
+## Notes
+IsoCourt analyzes badminton video for pose tracing, stroke labels, quality scores, and short coaching tips.
+Tips are training insight only, not a substitute for a qualified coach or medical advice.

@@ -18,8 +18,8 @@ IsoCourt is a state-of-the-art action recognition and coaching platform designed
 
 IsoCourt operates as a continuous **Sliding Window** pipeline. The backend loops through the video in 1.5s segments with a 0.75s overlap, ensuring every frame is processed with temporal context and high-fidelity coaching feedback.
 
-### 1. The Frontend (React/Next.js)
-Users upload their badminton footage through a sleek, responsive interface. The frontend handles the large file transfers and provides a real-time **Match Timeline**. Once analysis is complete, it renders a synchronized view of action labels, confidence scores, and frame-by-frame **Skeleton Analysis**.
+### 1. The Frontend (Vite + React)
+Users upload their badminton footage through a Vite-powered React SPA (`frontend/`). The app handles large file transfers and provides a real-time **Match Timeline**. Once analysis is complete, it renders a synchronized view of action labels, confidence scores, and frame-by-frame **Skeleton Analysis**. SEO uses static `public/robots.txt` / `sitemap.xml` (rewritten on build when `VITE_SITE_URL` is set), plus per-route head updates via `src/seo/`.
 
 ### 2. The Backend (FastAPI)
 The heart of the system processes the video through a sophisticated pipeline:
