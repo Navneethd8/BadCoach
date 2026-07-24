@@ -5,8 +5,7 @@
   <url><loc>https://www.isocourt.fit/live</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
   <url><loc>https://www.isocourt.fit/faq</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.isocourt.fit/glossary</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://www.isocourt.fit/compare/badmintonpeak</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.isocourt.fit/compare/kreeda</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.isocourt.fit/compare</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.isocourt.fit/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://www.isocourt.fit/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

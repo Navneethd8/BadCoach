@@ -14,11 +14,24 @@ const PrivacyPage = lazy(() => import('./components/PrivacyPage.jsx'))
 const TermsPage = lazy(() => import('./components/TermsPage.jsx'))
 const FaqPage = lazy(() => import('./components/FaqPage.jsx'))
 const GlossaryPage = lazy(() => import('./components/GlossaryPage.jsx'))
-const CompareBadmintonPeakPage = lazy(() => import('./components/CompareBadmintonPeakPage.jsx'))
-const CompareKreedaPage = lazy(() => import('./components/CompareKreedaPage.jsx'))
+const ComparePage = lazy(() => import('./components/ComparePage.jsx'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage.jsx'))
 
-ReactGA.initialize('G-TET6JN36Q4')
+// Load GA only after first real interaction (keeps Lighthouse / LCP clean)
+if (typeof window !== 'undefined') {
+    let booted = false
+    const bootAnalytics = () => {
+        if (booted) return
+        booted = true
+        ReactGA.initialize('G-TET6JN36Q4')
+        ;['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((type) => {
+            window.removeEventListener(type, bootAnalytics)
+        })
+    }
+    ;['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((type) => {
+        window.addEventListener(type, bootAnalytics, { once: true, passive: true })
+    })
+}
 
 function RouteFallback() {
     return (
@@ -40,8 +53,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         <Route path="/live" element={<LiveSession />} />
                         <Route path="/faq" element={<FaqPage />} />
                         <Route path="/glossary" element={<GlossaryPage />} />
-                        <Route path="/compare/badmintonpeak" element={<CompareBadmintonPeakPage />} />
-                        <Route path="/compare/kreeda" element={<CompareKreedaPage />} />
+                        <Route path="/compare" element={<ComparePage />} />
                         <Route path="/privacy" element={<PrivacyPage />} />
                         <Route path="/terms" element={<TermsPage />} />
                         <Route path="*" element={<NotFoundPage />} />

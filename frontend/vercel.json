@@ -25,12 +25,16 @@
       ]
     }
   ],
+  "redirects": [
+    { "source": "/compare/badmintonpeak", "destination": "/compare", "permanent": true },
+    { "source": "/compare/kreeda", "destination": "/compare", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/analyze", "destination": "/index.html" },
     { "source": "/live", "destination": "/index.html" },
     { "source": "/faq", "destination": "/index.html" },
     { "source": "/glossary", "destination": "/index.html" },
-    { "source": "/compare/:slug", "destination": "/index.html" },
+    { "source": "/compare", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/terms", "destination": "/index.html" }
   ]

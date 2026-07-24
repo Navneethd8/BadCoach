@@ -9,8 +9,7 @@ const INDEXABLE = [
   { path: '/live', changefreq: 'weekly', priority: '0.9' },
   { path: '/faq', changefreq: 'monthly', priority: '0.8' },
   { path: '/glossary', changefreq: 'monthly', priority: '0.7' },
-  { path: '/compare/badmintonpeak', changefreq: 'monthly', priority: '0.8' },
-  { path: '/compare/kreeda', changefreq: 'monthly', priority: '0.8' },
+  { path: '/compare', changefreq: 'monthly', priority: '0.8' },
   { path: '/privacy', changefreq: 'yearly', priority: '0.3' },
   { path: '/terms', changefreq: 'yearly', priority: '0.3' },
 ]

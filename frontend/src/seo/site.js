@@ -88,18 +88,11 @@ export const ROUTE_SEO = {
         path: '/glossary',
         ogType: 'website',
     },
-    '/compare/badmintonpeak': {
-        title: 'IsoCourt vs BadmintonPeak · AI Badminton Analysis',
+    '/compare': {
+        title: 'IsoCourt vs BadmintonPeak vs Kreeda · AI Badminton Tools',
         description:
-            'Compare IsoCourt and BadmintonPeak for AI badminton video analysis: pose timelines, live camera coaching, courses, pricing, and who each tool fits.',
-        path: '/compare/badmintonpeak',
-        ogType: 'website',
-    },
-    '/compare/kreeda': {
-        title: 'IsoCourt vs Kreeda · AI Badminton Coaching',
-        description:
-            'Compare IsoCourt and Kreeda for AI badminton coaching: browser live analysis vs phone app metrics, communities, coaches, and who each product fits.',
-        path: '/compare/kreeda',
+            'Compare IsoCourt, BadmintonPeak, and Kreeda for AI badminton coaching: browser pose analysis and live camera vs courses vs phone match metrics.',
+        path: '/compare',
         ogType: 'website',
     },
     '/404': {
@@ -122,8 +115,7 @@ export const INDEXABLE_PATHS = [
     '/live',
     '/faq',
     '/glossary',
-    '/compare/badmintonpeak',
-    '/compare/kreeda',
+    '/compare',
     '/privacy',
     '/terms',
 ]

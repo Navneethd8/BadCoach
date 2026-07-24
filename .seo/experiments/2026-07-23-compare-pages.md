@@ -1,16 +1,14 @@
-# Experiment: Competitor comparison pages
+# Experiment: alternatives compare page
 
 Date: 2026-07-23
-Review by: 2026-09-23
 
-## Changes
-- `/compare/badmintonpeak` and `/compare/kreeda`
-- FAQPage + WebPage JSON-LD on each
-- Footer + Learn nav links; sitemap + Vercel rewrite `/compare/:slug`
+## Change
+- Single `/compare` page: IsoCourt vs BadmintonPeak vs Kreeda (3-column table)
+- Old routes `/compare/badmintonpeak` and `/compare/kreeda` permanently redirect to `/compare`
 
-## Expected impact
-- Capture "X alternative" / "IsoCourt vs …" intent
-- Clear wedge vs course apps (Peak) and phone athletic apps (Kreeda)
+## Hypothesis
+One consolidated alternatives page is easier to maintain and still captures “vs X” intent without splitting authority across two thin URLs.
 
-## Baseline
-- No GSC data yet for these URLs
+## Measure
+- GSC impressions/clicks for `/compare` once data exists
+- GA page views on `/compare`

@@ -10,7 +10,7 @@ Based on `.seo/foundations.md`. No GSC/Ahrefs yet; priorities are zero-to-one di
 5. Voice guide committed
 
 ## Shipped
-- FAQ, glossary, technical SEO, compare pages (`/compare/badmintonpeak`, `/compare/kreeda`)
+- FAQ, glossary, technical SEO, compare page (`/compare`)
 
 ## Next pass
 1. `/what-is-ai-badminton-stroke-analysis`
