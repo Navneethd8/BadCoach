@@ -1,25 +1,30 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 
 const InteractivePoseFigure = lazy(() => import('./InteractivePoseFigure'))
 
-function StaticPose({ onActivate }) {
+/** PNG is deployed everywhere; webp is optional once shipped. */
+const SOURCE = '/marketing/pose-trace-hero.png'
+
+function StaticPose({ onPointer }) {
     return (
         <figure className="pixel-pose">
             <button
                 type="button"
                 className="pixel-pose__static-btn"
-                onPointerEnter={onActivate}
-                onFocus={onActivate}
+                onPointerEnter={onPointer}
+                onPointerMove={onPointer}
+                onFocus={onPointer}
                 aria-label="Interactive pose figure. Activate to hover-trace the skeleton."
             >
                 <img
-                    src="/marketing/pose-trace-hero.webp"
+                    src={SOURCE}
                     alt=""
                     className="pixel-pose__canvas"
                     width={390}
                     height={640}
                     decoding="async"
-                    loading="lazy"
+                    loading="eager"
+                    fetchPriority="low"
                 />
             </button>
             <figcaption className="pixel-pose__hint" aria-hidden>
@@ -36,14 +41,22 @@ function StaticPose({ onActivate }) {
  */
 export default function PoseFigureGate() {
     const [interactive, setInteractive] = useState(false)
+    const pointerRef = useRef(null)
+
+    const onPointer = useCallback((event) => {
+        if (event?.clientX != null) {
+            pointerRef.current = { clientX: event.clientX, clientY: event.clientY }
+        }
+        setInteractive(true)
+    }, [])
 
     if (!interactive) {
-        return <StaticPose onActivate={() => setInteractive(true)} />
+        return <StaticPose onPointer={onPointer} />
     }
 
     return (
-        <Suspense fallback={<StaticPose onActivate={() => {}} />}>
-            <InteractivePoseFigure />
+        <Suspense fallback={<StaticPose onPointer={onPointer} />}>
+            <InteractivePoseFigure pointerSeedRef={pointerRef} />
         </Suspense>
     )
 }

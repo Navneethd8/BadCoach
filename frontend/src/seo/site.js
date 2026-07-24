@@ -95,6 +95,13 @@ export const ROUTE_SEO = {
         path: '/compare',
         ogType: 'website',
     },
+    '/what-is-ai-badminton-stroke-analysis': {
+        title: 'What Is AI Badminton Stroke Analysis? · IsoCourt',
+        description:
+            'AI badminton stroke analysis explains how computer vision reads your rallies: pose tracing, stroke labels, scores, and coaching tips. How IsoCourt does it, and what it cannot do.',
+        path: '/what-is-ai-badminton-stroke-analysis',
+        ogType: 'article',
+    },
     '/404': {
         title: 'Page Not Found · IsoCourt',
         description: 'This page does not exist on IsoCourt.',
@@ -108,14 +115,3 @@ export function seoForPath(pathname) {
     const clean = (pathname || '/').replace(/\/$/, '') || '/'
     return ROUTE_SEO[clean] || ROUTE_SEO['/404']
 }
-
-export const INDEXABLE_PATHS = [
-    '/',
-    '/analyze',
-    '/live',
-    '/faq',
-    '/glossary',
-    '/compare',
-    '/privacy',
-    '/terms',
-]

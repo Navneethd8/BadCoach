@@ -1,4 +1,4 @@
-import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
+import { LazyMotion, domAnimation, m, useReducedMotion, useScroll, useTransform } from 'framer-motion'
 import HeroRacketSvg from './HeroRacketSvg'
 
 /**
@@ -27,7 +27,7 @@ export default function HeroFigmaBackdrop({ scrollTarget }) {
     const racketStyle = reduceMotion ? undefined : { rotate, opacity }
 
     return (
-        <>
+        <LazyMotion features={domAnimation} strict>
             <div className="figma-layer-net" aria-hidden>
                 <img src="/net-shenanigans.svg" alt="" width={3648} height={4188} decoding="async" />
             </div>
@@ -35,10 +35,10 @@ export default function HeroFigmaBackdrop({ scrollTarget }) {
             <div className="figma-layer-racket-glass" aria-hidden />
 
             <div className="figma-layer-racket" aria-hidden>
-                <motion.div className="figma-layer-racket-rot" style={racketStyle}>
+                <m.div className="figma-layer-racket-rot" style={racketStyle}>
                     <HeroRacketSvg />
-                </motion.div>
+                </m.div>
             </div>
-        </>
+        </LazyMotion>
     )
 }

@@ -1164,6 +1164,20 @@ select:focus-visible {
   user-select: none;
 }
 
+/* Hide crawler-only HTML until JS removes the node (avoids flash under the app). */
+#seo-static {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+
 .pixel-pose__static-btn {
   display: block;
   width: 100%;
@@ -1179,6 +1193,10 @@ select:focus-visible {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* object-fit only on the static <img> — it breaks <canvas> bitmap mapping / hover trace */
+img.pixel-pose__canvas {
   object-fit: contain;
   object-position: center;
 }

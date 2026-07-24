@@ -8,15 +8,16 @@ export default function NotFoundPage() {
 
     return (
         <div className="theme-page min-h-screen">
-            <header className="figma-top-bar px-5 py-4">
-                <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
-                    <Link to="/" className="flex items-center gap-2 text-[#fafafa]" aria-label="IsoCourt home">
-                        <Logo size={22} className="shrink-0 text-[#fafafa]" />
+            <header className="figma-top-bar">
+                <div className="mx-auto flex h-14 sm:h-16 max-w-2xl items-center justify-between gap-4 px-5 sm:px-8">
+                    <Link to="/" className="flex items-center gap-2 text-white" aria-label="IsoCourt home">
+                        <Logo size={22} className="shrink-0 text-white" />
                         <span className="font-display text-sm font-bold tracking-tight">IsoCourt</span>
                     </Link>
                     <ThemeToggle />
                 </div>
             </header>
+            <div className="figma-top-bar-spacer" aria-hidden />
             <main className="px-5 py-16 sm:px-8">
                 <div className="mx-auto max-w-2xl text-center">
                     <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)] mb-4">404</p>

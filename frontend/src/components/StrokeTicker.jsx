@@ -12,8 +12,8 @@ const STROKES = [
 function TickerRow() {
     return (
         <>
-            {STROKES.map((label, i) => (
-                <span key={i} className="figma-stroke-ticker__label">
+            {STROKES.map((label) => (
+                <span key={label} className="figma-stroke-ticker__label">
                     {label}
                     {i < STROKES.length - 1 ? (
                         <span className="figma-stroke-ticker__sep" aria-hidden>
@@ -32,8 +32,8 @@ export default function StrokeTicker() {
         <div className="figma-stroke-ticker figma-stroke-ticker--animate" aria-hidden>
             <div className="figma-stroke-ticker__viewport">
                 <div className="figma-stroke-ticker__track" style={{ '--ticker-copies': 3 }}>
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="figma-stroke-ticker__inner">
+                    {['a', 'b', 'c'].map((copyId) => (
+                        <div key={copyId} className="figma-stroke-ticker__inner">
                             <TickerRow />
                         </div>
                     ))}

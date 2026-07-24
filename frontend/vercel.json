@@ -35,6 +35,7 @@
     { "source": "/faq", "destination": "/index.html" },
     { "source": "/glossary", "destination": "/index.html" },
     { "source": "/compare", "destination": "/index.html" },
+    { "source": "/what-is-ai-badminton-stroke-analysis", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/terms", "destination": "/index.html" }
   ]

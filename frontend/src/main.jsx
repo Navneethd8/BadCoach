@@ -15,6 +15,7 @@ const TermsPage = lazy(() => import('./components/TermsPage.jsx'))
 const FaqPage = lazy(() => import('./components/FaqPage.jsx'))
 const GlossaryPage = lazy(() => import('./components/GlossaryPage.jsx'))
 const ComparePage = lazy(() => import('./components/ComparePage.jsx'))
+const WhatIsStrokeAnalysisPage = lazy(() => import('./components/WhatIsStrokeAnalysisPage.jsx'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage.jsx'))
 
 // Load GA only after first real interaction (keeps Lighthouse / LCP clean)
@@ -41,6 +42,9 @@ function RouteFallback() {
     )
 }
 
+// Static prerender sibling (see scripts/prerender-static.mjs) — never mount React into it
+document.getElementById('seo-static')?.remove()
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <ThemeProvider>
@@ -54,6 +58,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         <Route path="/faq" element={<FaqPage />} />
                         <Route path="/glossary" element={<GlossaryPage />} />
                         <Route path="/compare" element={<ComparePage />} />
+                        <Route
+                            path="/what-is-ai-badminton-stroke-analysis"
+                            element={<WhatIsStrokeAnalysisPage />}
+                        />
                         <Route path="/privacy" element={<PrivacyPage />} />
                         <Route path="/terms" element={<TermsPage />} />
                         <Route path="*" element={<NotFoundPage />} />

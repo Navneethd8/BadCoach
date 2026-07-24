@@ -10,6 +10,7 @@ const INDEXABLE = [
   { path: '/faq', changefreq: 'monthly', priority: '0.8' },
   { path: '/glossary', changefreq: 'monthly', priority: '0.7' },
   { path: '/compare', changefreq: 'monthly', priority: '0.8' },
+  { path: '/what-is-ai-badminton-stroke-analysis', changefreq: 'monthly', priority: '0.85' },
   { path: '/privacy', changefreq: 'yearly', priority: '0.3' },
   { path: '/terms', changefreq: 'yearly', priority: '0.3' },
 ]

@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-const SOURCE = '/marketing/pose-trace-hero.webp'
+/** Prefer PNG — production currently 404s the webp until that asset is deployed. */
+const SOURCE = '/marketing/pose-trace-hero.png'
 const SAMPLE_STEP = 5
 const ALPHA_THRESHOLD = 28
 const INFLUENCE_RADIUS = 84
@@ -37,8 +38,9 @@ function getNeutralNeighbor(pixels, width, height, x, y) {
     return null
 }
 
-export default function InteractivePoseFigure() {
+export default function InteractivePoseFigure({ pointerSeedRef = null }) {
     const canvasRef = useRef(null)
+    const [showCanvas, setShowCanvas] = useState(false)
 
     useEffect(() => {
         const canvas = canvasRef.current
@@ -55,12 +57,27 @@ export default function InteractivePoseFigure() {
         let ready = false
         let reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+        const queueDraw = () => {
+            cancelAnimationFrame(frameId)
+            frameId = requestAnimationFrame(draw)
+        }
+
+        const applyPointerClient = (clientX, clientY, strength = 1) => {
+            const rect = canvas.getBoundingClientRect()
+            pointer.x = clientX - rect.left
+            pointer.y = clientY - rect.top
+            pointer.target = strength
+            queueDraw()
+        }
+
         const draw = () => {
             if (!ready) return
 
             const rect = canvas.getBoundingClientRect()
             const width = rect.width
             const height = rect.height
+            if (width < 1 || height < 1) return
+
             const dpr = Math.min(window.devicePixelRatio || 1, 2)
 
             if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
@@ -109,22 +126,43 @@ export default function InteractivePoseFigure() {
             }
         }
 
-        const queueDraw = () => {
-            cancelAnimationFrame(frameId)
-            frameId = requestAnimationFrame(draw)
-        }
-
         const updatePointer = (event) => {
-            const rect = canvas.getBoundingClientRect()
-            pointer.x = event.clientX - rect.left
-            pointer.y = event.clientY - rect.top
-            pointer.target = 1
-            queueDraw()
+            if (pointerSeedRef) {
+                pointerSeedRef.current = { clientX: event.clientX, clientY: event.clientY }
+            }
+            applyPointerClient(event.clientX, event.clientY, 1)
         }
 
         const releasePointer = () => {
             pointer.target = 0
             queueDraw()
+        }
+
+        const syncSeededPointer = () => {
+            const seed = pointerSeedRef?.current
+            if (!seed) return
+            const rect = canvas.getBoundingClientRect()
+            const over =
+                seed.clientX >= rect.left &&
+                seed.clientX <= rect.right &&
+                seed.clientY >= rect.top &&
+                seed.clientY <= rect.bottom
+            if (over) applyPointerClient(seed.clientX, seed.clientY, 1)
+        }
+
+        const onWindowPointerMove = (event) => {
+            if (pointerSeedRef) {
+                pointerSeedRef.current = { clientX: event.clientX, clientY: event.clientY }
+            }
+            if (!ready) return
+            const rect = canvas.getBoundingClientRect()
+            const over =
+                event.clientX >= rect.left &&
+                event.clientX <= rect.right &&
+                event.clientY >= rect.top &&
+                event.clientY <= rect.bottom
+            if (over) updatePointer(event)
+            else if (pointer.target > 0 || pointer.strength > 0) releasePointer()
         }
 
         const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -134,53 +172,65 @@ export default function InteractivePoseFigure() {
         }
 
         image.onload = () => {
-            sourceCanvas.width = image.naturalWidth
-            sourceCanvas.height = image.naturalHeight
-            sourceContext.drawImage(image, 0, 0)
-            const pixels = sourceContext.getImageData(
-                0,
-                0,
-                image.naturalWidth,
-                image.naturalHeight,
-            ).data
+            try {
+                if (!image.naturalWidth || !image.naturalHeight) return
 
-            for (let y = 0; y < image.naturalHeight; y += SAMPLE_STEP) {
-                for (let x = 0; x < image.naturalWidth; x += SAMPLE_STEP) {
-                    const index = (y * image.naturalWidth + x) * 4
-                    const alpha = pixels[index + 3]
-                    if (alpha < ALPHA_THRESHOLD) continue
+                sourceCanvas.width = image.naturalWidth
+                sourceCanvas.height = image.naturalHeight
+                sourceContext.drawImage(image, 0, 0)
+                const pixels = sourceContext.getImageData(
+                    0,
+                    0,
+                    image.naturalWidth,
+                    image.naturalHeight,
+                ).data
 
-                    const sourceR = pixels[index]
-                    const sourceG = pixels[index + 1]
-                    const sourceB = pixels[index + 2]
-                    const poseGreen = isPoseGreen(sourceR, sourceG, sourceB)
-                    const neutral = poseGreen
-                        ? getNeutralNeighbor(
-                              pixels,
-                              image.naturalWidth,
-                              image.naturalHeight,
-                              x,
-                              y,
-                          )
-                        : null
+                for (let y = 0; y < image.naturalHeight; y += SAMPLE_STEP) {
+                    for (let x = 0; x < image.naturalWidth; x += SAMPLE_STEP) {
+                        const index = (y * image.naturalWidth + x) * 4
+                        const alpha = pixels[index + 3]
+                        if (alpha < ALPHA_THRESHOLD) continue
 
-                    if (poseGreen && !neutral) continue
+                        const sourceR = pixels[index]
+                        const sourceG = pixels[index + 1]
+                        const sourceB = pixels[index + 2]
+                        const poseGreen = isPoseGreen(sourceR, sourceG, sourceB)
+                        const neutral = poseGreen
+                            ? getNeutralNeighbor(
+                                  pixels,
+                                  image.naturalWidth,
+                                  image.naturalHeight,
+                                  x,
+                                  y,
+                              )
+                            : null
 
-                    particles.push({
-                        x,
-                        y,
-                        r: neutral?.r ?? sourceR,
-                        g: neutral?.g ?? sourceG,
-                        b: neutral?.b ?? sourceB,
-                        a: neutral?.a ?? alpha / 255,
-                    })
+                        if (poseGreen && !neutral) continue
+
+                        particles.push({
+                            x,
+                            y,
+                            r: neutral?.r ?? sourceR,
+                            g: neutral?.g ?? sourceG,
+                            b: neutral?.b ?? sourceB,
+                            a: neutral?.a ?? alpha / 255,
+                        })
+                    }
                 }
-            }
 
-            ready = true
-            resizeObserver = new ResizeObserver(queueDraw)
-            resizeObserver.observe(canvas)
-            queueDraw()
+                ready = true
+                setShowCanvas(true)
+                resizeObserver = new ResizeObserver(queueDraw)
+                resizeObserver.observe(canvas)
+                syncSeededPointer()
+                queueDraw()
+            } catch (err) {
+                console.error('InteractivePoseFigure: failed to build particles', err)
+            }
+        }
+
+        image.onerror = () => {
+            console.error('InteractivePoseFigure: failed to load', SOURCE)
         }
 
         image.src = SOURCE
@@ -190,6 +240,7 @@ export default function InteractivePoseFigure() {
         canvas.addEventListener('pointerleave', releasePointer)
         canvas.addEventListener('pointerup', releasePointer)
         canvas.addEventListener('pointercancel', releasePointer)
+        window.addEventListener('pointermove', onWindowPointerMove, { passive: true })
         motionQuery.addEventListener('change', handleMotionPreference)
 
         return () => {
@@ -201,18 +252,31 @@ export default function InteractivePoseFigure() {
             canvas.removeEventListener('pointerleave', releasePointer)
             canvas.removeEventListener('pointerup', releasePointer)
             canvas.removeEventListener('pointercancel', releasePointer)
+            window.removeEventListener('pointermove', onWindowPointerMove)
             motionQuery.removeEventListener('change', handleMotionPreference)
             image.onload = null
+            image.onerror = null
         }
-    }, [])
+    }, [pointerSeedRef])
 
     return (
         <figure className="pixel-pose">
+            {!showCanvas ? (
+                <img
+                    src={SOURCE}
+                    alt=""
+                    className="pixel-pose__canvas"
+                    width={390}
+                    height={640}
+                    decoding="async"
+                />
+            ) : null}
             <canvas
                 ref={canvasRef}
                 className="pixel-pose__canvas"
                 role="img"
                 aria-label="Pixelated athlete mid-smash with pose skeleton overlay"
+                style={showCanvas ? undefined : { position: 'absolute', inset: 0, opacity: 0 }}
             />
             <figcaption className="pixel-pose__hint" aria-hidden>
                 <span className="pixel-pose__hint-dot" />
