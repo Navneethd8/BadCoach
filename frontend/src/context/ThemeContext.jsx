@@ -10,13 +10,19 @@ function readStoredTheme() {
     return stored === 'light' || stored === 'dark' ? stored : null
 }
 
+function preferDark() {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
 function applyTheme(theme) {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     document.documentElement.style.colorScheme = theme
 }
 
 export function ThemeProvider({ children }) {
-    const [theme, setThemeState] = useState(() => readStoredTheme() ?? 'light')
+    // Match index.html FOUC script — don't snap dark OS users to light on first paint.
+    const [theme, setThemeState] = useState(() => readStoredTheme() ?? (preferDark() ? 'dark' : 'light'))
 
     useEffect(() => {
         applyTheme(theme)

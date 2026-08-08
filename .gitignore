@@ -93,3 +93,7 @@ scripts/*.pem
 scripts/ec2.env
 scripts/cluster.env
 logs/.isocourt_tmux_inner.sh
+
+# Google OAuth / ADC secrets
+client_secret*.json
+**/oauth-client.json

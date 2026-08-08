@@ -43,6 +43,11 @@
       }
     })();
   </script>
+  <!-- Paint page color before the CSS bundle so boot never flashes raw white -->
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #fafafa; }
+    html.dark, html.dark body { background: #171717; }
+  </style>
 </head>
 
 <body>

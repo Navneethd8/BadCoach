@@ -1164,7 +1164,8 @@ select:focus-visible {
   user-select: none;
 }
 
-/* Hide crawler-only HTML until JS removes the node (avoids flash under the app). */
+/* Crawler-only HTML: stay in the DOM for bots, never paint for humans.
+   Removed by ClearSeoStatic after the SPA paints (see main.jsx). */
 #seo-static {
   position: absolute;
   width: 1px;
@@ -1176,6 +1177,7 @@ select:focus-visible {
   white-space: nowrap;
   border: 0;
   pointer-events: none;
+  visibility: hidden;
 }
 
 .pixel-pose__static-btn {

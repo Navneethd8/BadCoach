@@ -1,7 +1,8 @@
 /**
  * Post-build static HTML for crawlers / AI bots that weakly execute SPA JS.
  * Injects into #seo-static (sibling of #root) so React never mounts over it.
- * main.jsx removes #seo-static as soon as the client boots.
+ * Keep the node hidden until main.jsx removes it after the SPA is ready —
+ * never delete it with an inline script (that blanks the page before React paints).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -133,10 +134,11 @@ async function main() {
       process.exit(1)
     }
     if (page.body) {
-      // pointer-events:none + immediate remove so SPA interactivity never fights crawler HTML.
+      // hidden + CSS clip: crawlers still see the markup; humans never get a blank flash
+      // when the SPA takes over. main.jsx removes the node after first paint.
       html = html.replace(
         '<div id="root"></div>',
-        `<div id="root"></div>\n  <div id="seo-static" style="pointer-events:none">${page.body}</div>\n  <script>document.getElementById("seo-static")?.remove()</script>`,
+        `<div id="root"></div>\n  <div id="seo-static" hidden aria-hidden="true">${page.body}</div>`,
       )
     }
 

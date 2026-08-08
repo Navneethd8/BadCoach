@@ -12,7 +12,7 @@ const STROKES = [
 function TickerRow() {
     return (
         <>
-            {STROKES.map((label) => (
+            {STROKES.map((label, i) => (
                 <span key={label} className="figma-stroke-ticker__label">
                     {label}
                     {i < STROKES.length - 1 ? (

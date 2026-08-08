@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
 import ReactGA from 'react-ga4'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
@@ -6,8 +6,9 @@ import './fonts.css'
 import './index.css'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import JsonLd from './seo/JsonLd.jsx'
+// Homepage is the critical path — keep it in the main bundle so / never waits on a lazy chunk.
+import LandingPage from './components/LandingPage.jsx'
 
-const LandingPage = lazy(() => import('./components/LandingPage.jsx'))
 const App = lazy(() => import('./App.jsx'))
 const LiveSession = lazy(() => import('./components/LiveSession.jsx'))
 const PrivacyPage = lazy(() => import('./components/PrivacyPage.jsx'))
@@ -42,14 +43,22 @@ function RouteFallback() {
     )
 }
 
-// Static prerender sibling (see scripts/prerender-static.mjs) — never mount React into it
-document.getElementById('seo-static')?.remove()
+/** Drop crawler-only HTML after the SPA has painted — never before. */
+function ClearSeoStatic() {
+    useEffect(() => {
+        const drop = () => document.getElementById('seo-static')?.remove()
+        const id = window.requestAnimationFrame(drop)
+        return () => window.cancelAnimationFrame(id)
+    }, [])
+    return null
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <ThemeProvider>
             <BrowserRouter>
                 <JsonLd />
+                <ClearSeoStatic />
                 <Suspense fallback={<RouteFallback />}>
                     <Routes>
                         <Route path="/" element={<LandingPage />} />
