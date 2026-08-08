@@ -71,6 +71,14 @@ class TestRootEndpoint:
             body = r.json()
             assert "status" in body
 
+    def test_robots_txt_disallows_crawlers(self, app_client):
+        r = app_client.get("/robots.txt")
+        assert r.status_code == 200
+        assert "text/plain" in r.headers.get("content-type", "")
+        body = r.text
+        assert "User-agent: *" in body
+        assert "Disallow: /" in body
+
 
 # ---------------------------------------------------------------------------
 # /analyze — valid uploads

@@ -7,7 +7,7 @@ import json
 import os
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -19,6 +19,15 @@ from api.temp_video import safe_unlink, write_video_bytes_to_tempfile
 
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 FEEDBACK_TO_EMAIL = os.getenv("FEEDBACK_TO_EMAIL", "")
+
+# HF Space is the inference API only — keep crawlers off it. Public SEO lives on www.
+_ROBOTS_TXT = """\
+# IsoCourt API (Hugging Face Space) — not the marketing site
+User-agent: *
+Disallow: /
+
+# Public site: https://www.isocourt.fit/robots.txt
+"""
 
 router = APIRouter(tags=["legacy"])
 
@@ -35,6 +44,11 @@ async def health():
         "live_sessions_active": len(state._live_sessions),
         "max_queued_clips": MAX_QUEUED_JOBS,
     }
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    return _ROBOTS_TXT
 
 
 @router.get("/")
